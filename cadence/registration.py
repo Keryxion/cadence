@@ -12,7 +12,7 @@ import json
 import threading
 from . import serving
 
-LOG=logging.getLogger('heartbeat2')
+LOG=logging.getLogger('cadence')
 _RUNTIMES={}
 _GUARD=threading.RLock()
 HOOKS=('pre_gateway_dispatch','gateway_platform_event','pre_llm_call',
@@ -97,12 +97,12 @@ class Runtime:
 
     def get_engine(self):
         with self._engine_lock:
-            if self.closed: raise RuntimeError('heartbeat2 runtime unloaded')
+            if self.closed: raise RuntimeError('cadence runtime unloaded')
             if self._engine is None:
                 from .store import Store
                 from .poller import Poller
                 with home_scope(self.home):
-                    store=Store(self.home/'plugin-data/heartbeat2/pulse.db',self.clock)
+                    store=Store(self.home/'plugin-data/cadence/pulse.db',self.clock)
                     try:
                         self._engine=Poller(self.ctx,store,self.policy(),self.clock,boot_at=self.boot_at)
                         if store.get_meta('settings_error')!=self.settings_error:
@@ -139,7 +139,7 @@ class Runtime:
                 if name in EVENTS: return intake.event(EVENTS[name],**kwargs)
                 return getattr(intake,name)(**kwargs)
         except Exception:
-            LOG.warning('heartbeat2 hook adapter %s failed',name,exc_info=True)
+            LOG.warning('cadence hook adapter %s failed',name,exc_info=True)
             return None
 
     def tool(self,args,**kwargs):
@@ -148,12 +148,12 @@ class Runtime:
             if reason: return json.dumps({'error':'engine_unavailable','reason':reason})
             with home_scope(self.home): return json.dumps(self.get_engine().tool.handle(args,**kwargs),ensure_ascii=False)
         except Exception:
-            LOG.warning('heartbeat2 tool adapter failed',exc_info=True)
+            LOG.warning('cadence tool adapter failed',exc_info=True)
             return json.dumps({'error':'engine_unavailable'})
 
     def command(self,raw_args):
         reason=self.inactive()
-        if reason: return f'HeartBeat 2.0 is inactive here: {reason}.'
+        if reason: return f'Cadence is inactive here: {reason}.'
         with home_scope(self.home):
             from .commands import handle
             return handle(raw_args,self)
@@ -163,7 +163,7 @@ class Runtime:
             if self.closed or self._thread and self._thread.is_alive(): return
             stop=threading.Event()
             self._stop=stop
-            self._thread=threading.Thread(target=self._bootstrap,args=(stop,),name='heartbeat2-bootstrap',daemon=True)
+            self._thread=threading.Thread(target=self._bootstrap,args=(stop,),name='cadence-bootstrap',daemon=True)
             self._threads.append(self._thread)
             self._started_monotonic=self.clock.monotonic()
             self._thread.start()
@@ -229,7 +229,7 @@ class Runtime:
             self._last_bootstrap_error=type(exc).__name__
             if self._engine:
                 self._engine.store.set_meta('last_error',self._last_bootstrap_error)
-            LOG.warning('heartbeat2 bootstrap stopped',exc_info=True)
+            LOG.warning('cadence bootstrap stopped',exc_info=True)
         finally:
             if runner: runner.close()
 
@@ -258,19 +258,19 @@ def _register_surfaces(ctx,runtime):
     # RecordingContext audits registration without ever invoking these adapters.
     def tool(args,**kwargs):
         return runtime.tool(args,**kwargs) if runtime else json.dumps({'error':'engine_unavailable'})
-    ctx.register_tool(name='pulse',toolset='heartbeat2',schema=SCHEMA,handler=tool,description=DESCRIPTION)
+    ctx.register_tool(name='pulse',toolset='cadence',schema=SCHEMA,handler=tool,description=DESCRIPTION)
     for name in HOOKS:
         def callback(_name=name,**kwargs):
             return runtime.hook(_name,**kwargs) if runtime else None
         ctx.register_hook(name,callback)
     ctx.register_command(name='pulse',handler=lambda args:runtime.command(args) if runtime else 'Error: no profile runtime.',
-                         description='HeartBeat 2.0 wakes and watchers',args_hint='<action>')
+                         description='Cadence wakes and watchers',args_hint='<action>')
     skill=getattr(ctx,'register_skill',None)
     if skill:
-        skill('heartbeat2-usage',Path(__file__).resolve().parents[1]/'skills/heartbeat2-usage/SKILL.md',
+        skill('cadence-usage',Path(__file__).resolve().parents[1]/'skills/cadence-usage/SKILL.md',
               'Your own time in this chat: roles you own, follow-ups, watchers and own-time turns, within the owner\'s budgets.')
-        skill('heartbeat2-report-problem',Path(__file__).resolve().parents[1]/'skills/heartbeat2-report-problem/SKILL.md',
-              'HeartBeat 2.0: report a bug or problem')
+        skill('cadence-report-problem',Path(__file__).resolve().parents[1]/'skills/cadence-report-problem/SKILL.md',
+              'Cadence: report a bug or problem')
 
 
 def register(ctx,**options):

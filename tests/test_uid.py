@@ -6,7 +6,7 @@ import random
 
 import pytest
 
-from heartbeat2 import intake
+from cadence import intake
 from test_engine import KEY, engine, session
 from test_u11c import hermes_origin, humans
 

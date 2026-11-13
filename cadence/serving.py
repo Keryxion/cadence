@@ -10,7 +10,7 @@ served set changes at runtime, so callers ask on every step.
 """
 import logging
 
-LOG=logging.getLogger('heartbeat2')
+LOG=logging.getLogger('cadence')
 SERVED,FOREIGN,UNKNOWN,NO_GATEWAY='served','foreign','unknown','no_gateway'
 REASONS={FOREIGN:'this gateway does not serve this profile',
          UNKNOWN:'cannot tell whether this gateway serves this profile',
@@ -38,7 +38,7 @@ def state(manager):
         key=str(getattr(manager,'scope_key',''))
         if key not in _WARNED:
             _WARNED.add(key)
-            LOG.warning('heartbeat2 cannot tell whether this gateway serves %s; staying inactive',key,exc_info=True)
+            LOG.warning('cadence cannot tell whether this gateway serves %s; staying inactive',key,exc_info=True)
         return UNKNOWN
 
 

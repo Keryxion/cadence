@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import re
 from bench.live.round3 import set_claim
-from heartbeat2.schedule import parse_duration
+from cadence.schedule import parse_duration
 from .evidence import decoded, display
 from .schedule import build, canonical, digest, smoke_schedule
 

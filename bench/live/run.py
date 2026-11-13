@@ -75,13 +75,13 @@ def tool_arguments(call):
 def prearm(rig, spec):
     """Create through the session-bound plugin engine without a gateway turn."""
     from types import SimpleNamespace
-    from heartbeat2.clock import SystemClock
-    from heartbeat2.policy import Policy
-    from heartbeat2.poller import Poller
-    from heartbeat2.store import Store
+    from cadence.clock import SystemClock
+    from cadence.policy import Policy
+    from cadence.poller import Poller
+    from cadence.store import Store
 
     cfg = yaml.safe_load((rig.gateway.hermes_home / 'config.yaml').read_text())
-    entry = cfg['plugins']['entries']['heartbeat2']
+    entry = cfg['plugins']['entries']['cadence']
     ctx = SimpleNamespace(_manager=SimpleNamespace(home_path=rig.gateway.hermes_home),
                           _gateway_injection_allowed=lambda: entry.get('allow_gateway_injection') is True)
     session = rig.session()
@@ -152,7 +152,7 @@ def cell(args, scenario, rep):
     upstream.scenario, upstream.rep, upstream.path = scenario['id'], rep, args.path
     director = LiveDirector(upstream, scenario['forward'])
     rig = PulseRig(f'{args.path}-{scenario["id"]}-{rep}', args.pin, director=director,
-                   config={'model': {'streaming': False}, 'plugins': {'entries': {'heartbeat2': {
+                   config={'model': {'streaming': False}, 'plugins': {'entries': {'cadence': {
                        'settings': scenario.get('settings', {})}}}})
     def terminate(signum, frame):
         upstream.quota = True
@@ -179,7 +179,7 @@ def cell(args, scenario, rep):
             import hermes_yaml
             cfg_path = rig.gateway.hermes_home / 'config.yaml'
             cfg = hermes_yaml.safe_load(cfg_path.read_text())
-            cfg['plugins']['entries']['heartbeat2']['settings']['probe_commands'] = fixtures['status command']
+            cfg['plugins']['entries']['cadence']['settings']['probe_commands'] = fixtures['status command']
             cfg_path.write_text(hermes_yaml.safe_dump(cfg))
     scenario['history'] = [{k: resolve(v, time.time(), 'UTC', fixtures) for k, v in pair.items()} for pair in scenario['history']]
     install(rig, scenario['facts'])
@@ -263,8 +263,8 @@ def cell(args, scenario, rep):
                 if 'changed' in arm['probe']:
                     probe.write_text(arm['probe']['changed'])
             if 'event' in arm:
-                from heartbeat2.clock import SystemClock
-                from heartbeat2.store import Store
+                from cadence.clock import SystemClock
+                from cadence.store import Store
                 store = Store(rig.pulse_db, SystemClock())
                 try:
                     store.add_event(arm['event']['kind'], f'bench-{rep}', arm['event']['payload'],
@@ -276,10 +276,10 @@ def cell(args, scenario, rep):
             before = rig.visible_ids()  # owner stop acknowledgement is not a wake delivery.
             rig.tick_barrier(arm['observe_seconds'])
             rig.gateway.wait_idle(timeout=30)
-            rig.owner('/pulse status', 'HeartBeat 2.0:')
+            rig.owner('/pulse status', 'Cadence:')
         else:
             rig.settled(wid)
-        texts = [t for t in rig.new_visible(before) if not t.startswith('HeartBeat 2.0:')]
+        texts = [t for t in rig.new_visible(before) if not t.startswith('Cadence:')]
         result.update(status='COMPLETE', delivered=texts, occurrence=rig.occurrence(wid),
                       wake_set=rig.rows('wakes'), session=rig.session(), tool_errors=[])
         try:

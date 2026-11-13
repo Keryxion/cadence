@@ -6,14 +6,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from heartbeat2.intake import marker
+from cadence.intake import marker
 from test_group_marker import claim, group
 from test_engine import engine
 
 
 def test_real_sender_prefix_authorizes_tagged_group_wake(group):
-    if os.environ.get('HEARTBEAT2_REQUIRE_HERMES') != '1':
-        pytest.skip('set HEARTBEAT2_REQUIRE_HERMES for pinned wire acceptance')
+    if os.environ.get('CADENCE_REQUIRE_HERMES') != '1':
+        pytest.skip('set CADENCE_REQUIRE_HERMES for pinned wire acceptance')
     inbound = importlib.import_module('gateway.run_inbound')
     session = importlib.import_module('gateway.session')
     prefix = getattr(inbound.GatewayInboundMixin, '_prefix_inbound_sender_context', None)

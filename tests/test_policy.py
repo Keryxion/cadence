@@ -4,8 +4,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from heartbeat2.model import Wake
-from heartbeat2.policy import Policy
+from cadence.model import Wake
+from cadence.policy import Policy
 
 
 def make_wake(**changes):
@@ -54,7 +54,7 @@ def registered(monkeypatch):
 
 
 def test_plugin_adapter_registered_with_the_gateway_is_a_messaging_platform(registered, clock):
-    from heartbeat2.policy import gateway_platform
+    from cadence.policy import gateway_platform
     assert gateway_platform("converse") and gateway_platform("telegram")
     assert not gateway_platform("made_up") and not gateway_platform("")
     p = Policy.from_settings({}, clock=clock)
@@ -68,7 +68,7 @@ def test_plugin_adapter_registered_with_the_gateway_is_a_messaging_platform(regi
 def test_registration_never_admits_a_non_gateway_surface(platform, monkeypatch, clock):
     import sys
     import types
-    from heartbeat2.policy import gateway_platform
+    from cadence.policy import gateway_platform
     registry = types.SimpleNamespace(is_registered=lambda name: True)
     monkeypatch.setitem(sys.modules, "gateway", types.ModuleType("gateway"))
     monkeypatch.setitem(sys.modules, "gateway.platform_registry",
@@ -82,7 +82,7 @@ def test_registration_never_admits_a_non_gateway_surface(platform, monkeypatch, 
 def test_gateway_that_cannot_answer_admits_only_built_in_platforms(monkeypatch):
     import sys
     import types
-    from heartbeat2.policy import gateway_platform
+    from cadence.policy import gateway_platform
 
     def broken(name):
         raise RuntimeError("registry unavailable")
@@ -112,7 +112,7 @@ def test_I11_I15_I18_I20_creation_gate(changes, reason, clock):
     verdict = Policy.from_settings({}, clock=clock).creation_gate(**kwargs)
     assert not verdict.allowed and verdict.reason == reason
     if reason == "injection_disabled":
-        assert "plugins:\n  entries:\n    heartbeat2:\n      allow_gateway_injection: true" in verdict.detail
+        assert "plugins:\n  entries:\n    cadence:\n      allow_gateway_injection: true" in verdict.detail
 
 
 @pytest.mark.parametrize("settings,allowed,reason,status", [

@@ -20,10 +20,10 @@ export HERMES_DISABLE_LAZY_INSTALLS=1 PYTHONDONTWRITEBYTECODE=1
 uv venv --python 3.14 .e2e-venvs/v0.21.6
 uv pip install --python .e2e-venvs/v0.21.6/bin/python \
   -e "$HERMES_PIN[messaging]" pytest pytest-xdist pytest-timeout pyyaml croniter psutil
-TMPDIR=/tmp HEARTBEAT2_E2E_HERMES="$HERMES_PIN" \
-  HEARTBEAT2_E2E_RESULTS=/tmp/heartbeat2-results \
+TMPDIR=/tmp CADENCE_E2E_HERMES="$HERMES_PIN" \
+  CADENCE_E2E_RESULTS=/tmp/cadence-results \
   .e2e-venvs/v0.21.6/bin/python -m pytest tests/e2e -q -n 4 \
-  -p no:cacheprovider --junitxml=/tmp/heartbeat2-e2e.xml
+  -p no:cacheprovider --junitxml=/tmp/cadence-e2e.xml
 ```
 
 Repeat with the matching label and venv for the other pins. Python 3.14 is
@@ -38,7 +38,7 @@ scenario deadline; the CI job has a 30-minute deadline. Serial pytest works too.
 
 The fixture copies only the plugin's production files into the temporary home.
 It enables gateway injection, disables quiet hours, lowers supported scheduling
-floors, disables streaming, and restricts tools to `heartbeat2`. Tool Search is
+floors, disables streaming, and restricts tools to `cadence`. Tool Search is
 explicitly off so the scripted direct `pulse` calls are offered and executed.
 E2's default Telegram display keeps tool progress/reasoning off; its second cell
 sets `display.platforms.telegram.tool_progress: new` and `show_reasoning: true`.
@@ -55,7 +55,7 @@ because the upstream helper's connected predicate remains true across restarts.
 The gateway's
 `sitecustomize` and pytest fixture deny non-loopback DNS/connect/sendto traffic.
 No clock shim, DB write, fake gateway, or production plugin patch is used. E6
-installs a separate test-only hook barrier before heartbeat2's `pre_llm_call`.
+installs a separate test-only hook barrier before cadence's `pre_llm_call`.
 Busy input is sent by `Script` at provider request arrival, and held there until
 the adapter acknowledges it or logs queue admission (queue text has no visible
 ack). Queue debounce is explicitly zero. E9 uses real compaction and an earlier owner ORIGIN
@@ -77,7 +77,7 @@ they are not soak claims.
 
 Every rig retains `gateway.log`, its temporary home (including `pulse.db`),
 `visible.json`, `requests.json`, `aux.json`, and `pulse-state.json` in TMPDIR.
-Failures print the evidence directory. Setting `HEARTBEAT2_E2E_RESULTS` adds
+Failures print the evidence directory. Setting `CADENCE_E2E_RESULTS` adds
 per-worker JSONL receipts with outcome, phase duration, and evidence path. CI
 uploads temporary rigs, receipts, XML, and the full test log on failure.
 
@@ -88,13 +88,13 @@ scenario must have an exact skip reason; skips do not prove that path.
 
 E11 records the provider's visible failure copy without failing on it. Its strict
 xfail covers the separate observed settlement gap: after an HTTP 500, backoff is
-recorded and the gateway is idle, but the occurrence stays started and heartbeat2
+recorded and the gateway is idle, but the occurrence stays started and cadence
 keeps the session busy pending the `HERMES_AGENT_TIMEOUT` fallback (30 minutes by
 default; this suite does not wait for it). E14 proves that one wake API error
 yields exactly one coalesced API-error watcher occurrence, held by the real
 provider backoff. A self-loop across backoff periods is not covered here.
 E10's separate strict xfail records native startup auto-resume replaying the old
-wake marker even though heartbeat2 has recovered the occurrence as interrupted.
+wake marker even though cadence has recovered the occurrence as interrupted.
 Both xfails require the named signature; unrelated failures still fail the run.
 
 Passing this suite establishes **local-e2e-proof against these pins**. It does
@@ -116,10 +116,10 @@ at the first observed match; designed gate holds are included. No latency
 threshold gates these cells yet; retain stdout to collect the samples.
 
 `test_upstream.py` separately reproduces automatic background review after a
-stock plugin injects a turn. It disables heartbeat2, enables memory/skill tools,
+stock plugin injects a turn. It disables cadence, enables memory/skill tools,
 sets both nudge intervals to one, and leaves background review at its default.
 An owner-text control proves the detector against the selected pin's own review
 prompts. Only the named `Finding` is expected to fail; no review within the
 30-second window is a strict XPASS. Run this file serially with the matching
-pin/venv. `HEARTBEAT2_E2E_RESULTS` receives `requests.json` (bodies and timing,
+pin/venv. `CADENCE_E2E_RESULTS` receives `requests.json` (bodies and timing,
 without headers/auth) and `summary.json` with hook metadata and review sizes.

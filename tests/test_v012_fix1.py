@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from heartbeat2 import cache, commands, governor
-from heartbeat2.schedule import local_day
+from cadence import cache, commands, governor
+from cadence.schedule import local_day
 from test_engine import engine, arm, pending, session, start, end, admit, KEY
 from test_v012 import hermes_helpers
 
@@ -227,7 +227,7 @@ def test_N4_cache_line_floor_at_edge_says_wakes_cold(engine, hermes_helpers, mon
 @pytest.mark.parametrize('reason,label', [('held_unanswered', "you hadn't replied"), ('held_daily_cap', 'daily cap'),
                                           ('held_paused', 'wake was paused')])
 def test_released_hold_text_names_its_reason(engine, reason, label):
-    from heartbeat2.wake_text import render_wake
+    from cadence.wake_text import render_wake
     w = arm(engine, 'subagent_done')
     o = pending(engine, w, 'e:x')
     engine.store.update_occurrence(w.id, o.dedupe_key, 'pending', held_since=engine.clock.now(), held_reason=reason, held_matches=1)
@@ -290,7 +290,7 @@ def test_N8_docs_upgrade_cost_routes_and_final_mute():
     root = Path(__file__).resolve().parents[1]
     security = (root/'SECURITY.md').read_text()
     assert '≈tokens' not in security and 'warm/cold wake counts and estimated cost' in security
-    for path in ('README.md', 'skills/heartbeat2-usage/SKILL.md'):
+    for path in ('README.md', 'skills/cadence-usage/SKILL.md'):
         text = (root/path).read_text()
         assert 'OpenAI API routes' in text and 'Codex OAuth' in text and 'unknown until learned' in text
     assert "Wakes you armed always fire; agent watchers wait for your reply; agent one-time reminders are dropped; the agent's recurring work keeps running, with its messages held." in (root/'plugin.yaml').read_text()

@@ -113,9 +113,9 @@ class WakeDirector(Director):
 
 class PulseRig:
     def __init__(self, name, pin, *, busy="queue", loud=False, barrier=False, config=None,
-                 heartbeat2=True, director=None, poke=False, replace_settings=None):
+                 cadence=True, director=None, poke=False, replace_settings=None):
         self.name, self.pin, self.busy = name, pin, busy
-        self.heartbeat2 = heartbeat2
+        self.cadence = cadence
         self.root = Path(tempfile.mkdtemp(prefix="hb-e2e-"))
         self.driver = TelegramDriver()
         self.director = director or WakeDirector()
@@ -123,7 +123,7 @@ class PulseRig:
         self.driver.start()
         self.llm.start()
         cfg = _deep_merge(self.driver.gateway_config(), {
-            "plugins": {"enabled": ["heartbeat2"], "entries": {"heartbeat2": {
+            "plugins": {"enabled": ["cadence"], "entries": {"cadence": {
                 "enabled": True, "allow_gateway_injection": True, "settings": {
                     "quiet_hours": "", "timezone": "UTC", "wake_spacing_minutes": 0,
                     "min_interval_minutes": 1, "agent_ungated_floor_minutes": 1,
@@ -138,29 +138,29 @@ class PulseRig:
             "streaming": {"enabled": False}, "compression": {"enabled": False},
             "logging": {"level": "DEBUG"},
             "tools": {"tool_search": {"enabled": "off"}},
-            "platform_toolsets": {"telegram": ["heartbeat2"]},
+            "platform_toolsets": {"telegram": ["cadence"]},
             "agent": {"api_max_retries": 1, "max_turns": 12},
         })
         cfg = _deep_merge(cfg, config or {})
         replace_plugin_settings(cfg, replace_settings)
-        if not heartbeat2:
+        if not cadence:
             cfg["plugins"] = {"enabled": [], "entries": {}}
         env = {**self.driver.gateway_env(), "PYTHONDONTWRITEBYTECODE": "1",
                "PYTHONPATH_PREPEND": str(Path(__file__).parent),
-               "HEARTBEAT2_E2E_CHILD": "1", "HERMES_GATEWAY_EXTERNAL_SUPERVISOR": "1"}
+               "CADENCE_E2E_CHILD": "1", "HERMES_GATEWAY_EXTERNAL_SUPERVISOR": "1"}
         self.gateway = FreshGateway(self.root, llm_base_url=self.llm.base_url, config=cfg,
                                         env=env, ready=self.driver.connected)
         self.gateway.standin = self.driver.standin
-        plugin = self.gateway.hermes_home / "plugins/heartbeat2"
-        if heartbeat2:
+        plugin = self.gateway.hermes_home / "plugins/cadence"
+        if cadence:
             plugin.mkdir(parents=True)
-        for part in (("plugin.yaml", "__init__.py", "heartbeat2", "skills") if heartbeat2 else ()):
+        for part in (("plugin.yaml", "__init__.py", "cadence", "skills") if cadence else ()):
             src = ROOT / part
             if src.is_dir():
                 shutil.copytree(src, plugin / part, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
             else:
                 shutil.copyfile(src, plugin / part)
-        self.pulse_db = self.gateway.hermes_home / "plugin-data/heartbeat2/pulse.db"
+        self.pulse_db = self.gateway.hermes_home / "plugin-data/cadence/pulse.db"
         if barrier:
             self.install_barrier()
         if poke:
@@ -195,8 +195,8 @@ class PulseRig:
 
         path = self.gateway.hermes_home / "config.yaml"
         cfg = yaml.safe_load(path.read_text())
-        # Loader insertion order: barrier must precede heartbeat2 pre_llm_call.
-        cfg["plugins"]["enabled"] = ["e2e-barrier", "heartbeat2"]
+        # Loader insertion order: barrier must precede cadence pre_llm_call.
+        cfg["plugins"]["enabled"] = ["e2e-barrier", "cadence"]
         cfg["plugins"]["entries"]["e2e-barrier"] = {"enabled": True}
         path.write_text(yaml.safe_dump(cfg, sort_keys=False))
 
@@ -207,7 +207,7 @@ class PulseRig:
         assert helper.REPO_ROOT.resolve() == self.pin
         self.gateway._env["PWD"] = str(self.gateway.home)
         self.gateway.start(timeout=50)
-        if self.heartbeat2:
+        if self.cadence:
             self.wait(lambda: self.pulse_db.exists(), "plugin database created", 20)
         if bootstrap:
             self.owner("hello [in:bootstrap]", "reply to bootstrap")
@@ -289,7 +289,7 @@ class PulseRig:
     def injections(self):
         """Gateway dispatches, including repeated dispatches of the same marker."""
         log = self.gateway.hermes_home / "logs/gateway.log"
-        return log.read_text().count("Plugin message injection dispatched: plugin=heartbeat2")
+        return log.read_text().count("Plugin message injection dispatched: plugin=cadence")
 
     def arm(self, note="e2e-wake", delay="1m"):
         before = {r["id"] for r in self.rows("wakes")}
@@ -322,7 +322,7 @@ class PulseRig:
         row = self.wait(terminal, f"{wid} settles as {states}", 110)
         self.gateway.wait_idle(timeout=30)
         # /pulse status orders behind final send without changing human accounting.
-        self.owner("/pulse status", "HeartBeat 2.0:")
+        self.owner("/pulse status", "Cadence:")
         return row
 
     def human_once(self, before_events, before_human):

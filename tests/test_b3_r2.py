@@ -8,7 +8,7 @@ import random
 import subprocess
 import sys
 import pytest
-from heartbeat2.model import Wake
+from cadence.model import Wake
 from bench.soak import schedule
 from bench.soak.evidence import frozen_state
 from bench.soak.runner import epoch, Runner
@@ -263,9 +263,9 @@ def test_absolute_owner_requested_minimum_and_fail_precedence():
 
 
 def test_hermes_revision_and_entry_are_frozen(tmp_path,monkeypatch):
-    plugin=tmp_path/'plugins/heartbeat2';plugin.mkdir(parents=True)
+    plugin=tmp_path/'plugins/cadence';plugin.mkdir(parents=True)
     (plugin/'plugin.yaml').write_text('version: 0.1.15\n')
-    cfg=tmp_path/'config.yaml';cfg.write_text('plugins: {entries: {heartbeat2: {allow_gateway_injection: true}}}\n')
+    cfg=tmp_path/'config.yaml';cfg.write_text('plugins: {entries: {cadence: {allow_gateway_injection: true}}}\n')
     version=tmp_path/'version.txt';version.write_text('1.0\n')
     monkeypatch.setattr(subprocess,'run',lambda *a,**kw:subprocess.CompletedProcess(a,0,'a'*40+'\n'))
     a=frozen_state(tmp_path,tmp_path,version)
@@ -284,7 +284,7 @@ def test_runtime_revision_change_aborts(tmp_path,monkeypatch):
 
 
 def test_runner_reads_only_configured_chat_and_readonly_sqlite(tmp_path,monkeypatch):
-    from heartbeat2.model import Session
+    from cadence.model import Session
     from bench.soak.evidence import Pulse,Transcript
     import sqlite3
     r,c,store,e=rig(tmp_path,'N')

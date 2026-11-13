@@ -9,10 +9,10 @@ from types import SimpleNamespace as NS
 import pytest
 from test_engine import engine, arm, session, KEY, GatewayCtx, admit
 from test_u11 import event, llm, wake, origin, count, ORIGIN, GOALS
-from heartbeat2 import tool
-from heartbeat2.poller import Poller
-from heartbeat2.policy import Policy
-from heartbeat2.store import Store
+from cadence import tool
+from cadence.poller import Poller
+from cadence.policy import Policy
+from cadence.store import Store
 
 AUTH = NS(_is_user_authorized_for_source=lambda src: True)
 STEER_OPEN = '[OUT-OF-BAND USER MESSAGE — the user sent this while you were working; it is not a tool result]'
@@ -102,7 +102,7 @@ def test_dm_thread_message_counts_under_its_own_session(tmp_path, clock, monkeyp
     env = {'HERMES_SESSION_PLATFORM': 'telegram', 'HERMES_SESSION_CHAT_TYPE': 'dm',
            'HERMES_SESSION_CHAT_ID': 'unit', 'HERMES_SESSION_ID': 'sid9'}
     monkeypatch.setattr(tool, 'session_env', lambda name: env.get(name, ''))
-    from heartbeat2.model import Session
+    from cadence.model import Session
     store = Store(tmp_path / 'pulse.db', clock)
     store.upsert_session(Session(KEY, 'telegram', 'dm', 'unit', 'sid', clock.now(), clock.now(), 'episode'))
     e = Poller(GatewayCtx(tmp_path), store, Policy(clock=clock, quiet_hours='', timezone='UTC'), clock,

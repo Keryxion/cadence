@@ -16,7 +16,7 @@ The bars below are frozen once this file merges. The soak code that runs them co
 
 - **Profile:**
   - a test Hermes profile with a Telegram DM to the owner's account;
-  - HeartBeat 2.0 at **v0.1.15 or later**, with `plugins.entries.heartbeat2.allow_gateway_injection: true` (required for any wake to be armed) and plugin settings at their defaults except `timezone`;
+  - Cadence at **v0.1.15 or later**, with `plugins.entries.cadence.allow_gateway_injection: true` (required for any wake to be armed) and plugin settings at their defaults except `timezone`;
   - the profile's normal model; the model and provider are recorded at the start.
 - **Frozen during the soak:** the plugin version, the plugin's entry (settings and `allow_gateway_injection`), the model, the gateway's plugin set, and the Hermes version and commit. A change aborts the run (see Voids).
 - **Baseline before day 1** (logged as setup):

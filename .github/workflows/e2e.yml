@@ -25,8 +25,8 @@ jobs:
       HERMES_DISABLE_LAZY_INSTALLS: '1'
       PYTHONDONTWRITEBYTECODE: '1'
       TMPDIR: /tmp
-      HEARTBEAT2_E2E_HERMES: ${{ github.workspace }}/hermes
-      HEARTBEAT2_E2E_RESULTS: ${{ github.workspace }}/e2e-results
+      CADENCE_E2E_HERMES: ${{ github.workspace }}/hermes
+      CADENCE_E2E_RESULTS: ${{ github.workspace }}/e2e-results
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -54,16 +54,16 @@ jobs:
         run: |
           pwd
           git rev-parse HEAD
-          mkdir -p "$HEARTBEAT2_E2E_RESULTS"
+          mkdir -p "$CADENCE_E2E_RESULTS"
           set +e
           ../hermes/.venv/bin/python -m pytest tests/e2e -q -n 4 \
-            -p no:cacheprovider --durations=0 --junitxml="$HEARTBEAT2_E2E_RESULTS/results.xml" \
-            > "$HEARTBEAT2_E2E_RESULTS/full.log" 2>&1
+            -p no:cacheprovider --durations=0 --junitxml="$CADENCE_E2E_RESULTS/results.xml" \
+            > "$CADENCE_E2E_RESULTS/full.log" 2>&1
           result=$?
-          cat "$HEARTBEAT2_E2E_RESULTS/full.log"
+          cat "$CADENCE_E2E_RESULTS/full.log"
           [ "$result" = 0 ] || exit "$result"
           # A run where every scenario skipped is not a proof.
-          python3 - "$HEARTBEAT2_E2E_RESULTS/results.xml" <<'PY'
+          python3 - "$CADENCE_E2E_RESULTS/results.xml" <<'PY'
           import sys, xml.etree.ElementTree as ET
           cases = list(ET.parse(sys.argv[1]).getroot().iter("testcase"))
           # junitxml reports strict xfails as <skipped type="pytest.xfail">.
@@ -76,7 +76,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: heartbeat2-e2e-${{ matrix.pin }}
+          name: cadence-e2e-${{ matrix.pin }}
           include-hidden-files: true
           path: |
             e2e-results/

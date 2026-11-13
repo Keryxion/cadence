@@ -1,6 +1,6 @@
 """Scheduling acceptance is distinct from model start and delivery."""
 import re
-from heartbeat2.intake import marker
+from cadence.intake import marker
 
 class FakeInjector:
     def __init__(self, gateway, profile):

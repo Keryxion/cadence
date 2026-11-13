@@ -6,7 +6,7 @@ import sqlite3
 
 import pytest
 
-from heartbeat2.model import Occurrence, Wake
+from cadence.model import Occurrence, Wake
 from bench.soak.client import ClientError
 from bench.soak.evidence import display, hermes_revision
 from bench.soak.runner import Runner, epoch
@@ -461,7 +461,7 @@ def test_r5_preflight_version_and_registered_settings(tmp_path):
         r,c,store,e=shape_rig(tmp_path/setting,'N')
         try:
             if setting=='version':
-                (r.home/'plugins/heartbeat2/plugin.yaml').write_text('version: 0.1.14\n')
+                (r.home/'plugins/cadence/plugin.yaml').write_text('version: 0.1.14\n')
             elif setting=='max_messages_per_day':
                 config=r.home/'config.yaml'
                 config.write_text(config.read_text().replace('timezone: Asia/Tokyo',

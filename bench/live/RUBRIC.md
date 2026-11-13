@@ -43,7 +43,7 @@ Round 1 is final as recorded; these changes apply only to later rounds.
 
 Rounds 1–2 script the arming step: every wake is armed by the harness. Round 3 also measures **arming capture**, meaning whether the model arms a wake when the owner asks for one and only then. It also tightens the round-1/2 bars. The bars below are frozen once this section merges. The harness that runs them comes later and may not loosen them. Until the first real round-3 run, a reviewed PR may tighten a bar to close a loophole (never loosen one); each such amendment is listed under "Amendments" below with its date and PR.
 
-**Plugin version.** Round 3 runs on HeartBeat 2.0 **v0.1.14 or later**:
+**Plugin version.** Round 3 runs on Cadence **v0.1.14 or later**:
 - v0.1.13 adds the `pulse` tool's `owner_asked` parameter, stored as `owner_requested` (#55);
 - v0.1.14 refuses a wake that cannot fire before its expiry and adds the `receipt` line (#56).
 A run on an earlier version is not a round-3 run.
@@ -182,7 +182,7 @@ None yet. Tightening only, and only before the first real round-3 run.
 - `system_prompt`: the first `system` message of the first measured request, verbatim;
 - `pulse_parameters`: the `pulse` tool's `parameters` object from that request's tools array.
 
-The measured owner turn is the request whose latest user message is the owner message, alone or followed by the plugin's turn context after a blank line. Round 4 required an exact match, so the N7 packets (whose owner message carries "HeartBeat 2.0: 1 armed; …") had no tool results; this applies to Round-4 rescoring too and changes no Round-4 score.
+The measured owner turn is the request whose latest user message is the owner message, alone or followed by the plugin's turn context after a blank line. Round 4 required an exact match, so the N7 packets (whose owner message carries "Cadence: 1 armed; …") had no tool results; this applies to Round-4 rescoring too and changes no Round-4 score.
 
 Round-4 packets keep their exact shape. The packets CLI defaults to round 4; round-5 runs pass `--round 5`.
 

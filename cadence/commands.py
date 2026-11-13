@@ -242,7 +242,7 @@ def handle(raw_args, runtime):
                 role_today = {w.id: _role_today(engine,w) for w in active if w.role}  # read once: header and rows agree
                 next_due = min((x for w in active if w.status=='active' and not _resting(engine,w,role_today.get(w.id))
                                 for x in (w.next_due_at,w.deadline_at) if x is not None),default=None)
-                lines = [f'HeartBeat 2.0: {"on" if session.enabled and engine.policy.enabled else "off"} · poller {status["state"]}'
+                lines = [f'Cadence: {"on" if session.enabled and engine.policy.enabled else "off"} · poller {status["state"]}'
                          + (f' ({status["reason"]})' if status.get('reason') else ''),
                          f'allow_gateway_injection: {str(engine.injection_allowed()).lower()}',
                          f'Local time: {_time(engine,engine.clock.now())} · quiet: {quiet_label}',
@@ -294,7 +294,7 @@ def handle(raw_args, runtime):
                 if not engine.store.cas_session(key, {'enabled':session.enabled}, enabled=action=='on'):
                     raise ValueError('concurrent session change')
                 engine.signal()
-                return f'HeartBeat 2.0 {action} for this chat.'
+                return f'Cadence {action} for this chat.'
             if action == 'quiet':
                 if rest=='default':
                     engine.store.connection.execute('DELETE FROM meta WHERE key=?',('quiet:'+key,))
@@ -342,7 +342,7 @@ def handle(raw_args, runtime):
     except (ValueError, TypeError, KeyError, OverflowError) as exc:
         return 'Error: '+str(exc)
     except Exception:
-        return 'Error: HeartBeat 2.0 is unavailable.'
+        return 'Error: Cadence is unavailable.'
 
 
 def _transition(engine,session,wake,action,seconds):

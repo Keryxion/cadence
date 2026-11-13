@@ -14,7 +14,7 @@ configuration, not a reproduction of upstream implementation or all versions:
 """
 from pathlib import Path
 import re
-from heartbeat2.schedule import parse_at, parse_duration
+from cadence.schedule import parse_at, parse_duration
 from bench.sim.model import ScriptedModel
 
 LABEL='naive heartbeat-1.0 emulator built from documented failure reports; not current OpenClaw (which retired HEARTBEAT.md in 2026.8.1)'

@@ -1,8 +1,8 @@
 """0.3.4: a running wake turn shows as a message in progress, not a sent one; summaries are asked for in plain words."""
 from types import SimpleNamespace
 
-from heartbeat2 import commands
-from heartbeat2.desk import render_desk
+from cadence import commands
+from cadence.desk import render_desk
 from test_engine import KEY, arm, end, engine, pending, start
 
 

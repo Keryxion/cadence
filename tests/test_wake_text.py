@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from heartbeat2.model import Wake, Occurrence, Session
-from heartbeat2.wake_text import render_wake
+from cadence.model import Wake, Occurrence, Session
+from cadence.wake_text import render_wake
 
 
 def records(clock):
@@ -30,7 +30,7 @@ def test_snapshot(clock, held_by, after_restart, why):
     result = render_wake(wake, occ, session, clock=clock, timezone="UTC",
                          recent_outcomes=["no_change", "progress"], messages_today=1,
                          max_messages=6, held_by=held_by, after_restart=after_restart)
-    assert result == '''⟦pulse o:w_abcdefgh/t:100 a:2⟧ [HeartBeat 2.0 · wake w_abcdefgh · Build · armed by you 1h ago]
+    assert result == '''⟦pulse o:w_abcdefgh/t:100 a:2⟧ [Cadence · wake w_abcdefgh · Build · armed by you 1h ago]
 Local time: Sun 12 Oct 16:05 (UTC) · owner last wrote 2h 03m ago · fire 2 of 4
 Why: Follow up
 Your note: Check whether the build finished.
@@ -81,7 +81,7 @@ def refused(*args, **kwargs):
     raise AssertionError("network is forbidden")
 socket.socket.connect = refused
 socket.create_connection = refused
-name = "hermes_plugins_test.heartbeat2"
+name = "hermes_plugins_test.cadence"
 spec = importlib.util.spec_from_file_location(name, {root!r}, submodule_search_locations=[{str(Path(root).parent)!r}])
 module = importlib.util.module_from_spec(spec)
 sys.modules["hermes_plugins_test"] = type(sys)("hermes_plugins_test")

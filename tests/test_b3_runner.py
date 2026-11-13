@@ -4,8 +4,8 @@ import json
 import re
 import sqlite3
 import pytest
-from heartbeat2.model import Session, Wake, Occurrence
-from heartbeat2.store import Store
+from cadence.model import Session, Wake, Occurrence
+from cadence.store import Store
 from bench.soak.client import ClientError
 from bench.soak.evidence import Transcript, Pulse
 from bench.soak.runner import Runner, epoch
@@ -50,7 +50,7 @@ class FakeClient:
                 w=self.store.get_wake(text.split()[-1]);self.store.cas_wake(w.id,w.status,status='cancelled')
                 reply=w.id+' cancelled · fixture wake'
             elif text == '/pulse on':
-                self.store.cas_session('chat',{'enabled':self.store.get_session('chat').enabled},enabled=True);reply='HeartBeat 2.0 on for this chat.'
+                self.store.cas_session('chat',{'enabled':self.store.get_session('chat').enabled},enabled=True);reply='Cadence on for this chat.'
             else: raise AssertionError(text)
             self.message(reply,False,now+1);return m
         self.row('user',text,now,m['id']+9000);result=None
@@ -101,9 +101,9 @@ class FakeClient:
 def rig(tmp_path, kind):
     s = build(date(2026, 10, 15), 'Asia/Tokyo'); e = deepcopy(next(e for e in s['episodes'] if e['kind'] == kind))
     s['episodes'] = [e]; s['start'] = datetime.fromisoformat(e['sends'][0]['at']).date().isoformat(); s['sha256'] = digest({k: v for k, v in s.items() if k != 'sha256'})
-    home = tmp_path/'profile'; plugin = home/'plugins/heartbeat2'; plugin.mkdir(parents=True)
+    home = tmp_path/'profile'; plugin = home/'plugins/cadence'; plugin.mkdir(parents=True)
     (plugin/'plugin.yaml').write_text('version: 0.1.15\n')
-    (home/'config.yaml').write_text('model: {default: fake, provider: fake}\nplugins: {entries: {heartbeat2: {enabled: true, allow_gateway_injection: true, timezone: Asia/Tokyo}}}\n')
+    (home/'config.yaml').write_text('model: {default: fake, provider: fake}\nplugins: {entries: {cadence: {enabled: true, allow_gateway_injection: true, timezone: Asia/Tokyo}}}\n')
     state = home/'state.db'
     with sqlite3.connect(state) as db:
         db.execute('CREATE TABLE sessions (id TEXT PRIMARY KEY,session_key TEXT,started_at REAL,ended_at REAL)')
@@ -194,7 +194,7 @@ def test_voids(tmp_path, reason):
 
 def test_abort_resume_requeue_hours_and_dryrun(tmp_path, capsys):
     r, c, store, e = rig(tmp_path/'abort', 'N')
-    r.clock.callback = lambda: (r.home/'plugins/heartbeat2/plugin.yaml').write_text('version: 0.1.16\n')
+    r.clock.callback = lambda: (r.home/'plugins/cadence/plugin.yaml').write_text('version: 0.1.16\n')
     assert r.run() == 3
     assert r.rows[-1]['kind'] in ('snapshot', 'abort')
     store.close()

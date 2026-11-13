@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from heartbeat2 import cache, commands, governor
-from heartbeat2.policy import is_owner
-from heartbeat2.schedule import time_due
+from cadence import cache, commands, governor
+from cadence.policy import is_owner
+from cadence.schedule import time_due
 from test_engine import engine, arm, session, KEY  # noqa: F401
 
 ROUTE = 'openai|gpt-6.1-sol|api.openai.com'
@@ -192,7 +192,7 @@ def test_token_does_not_restore_already_revoked_owner_status(engine, runtime):
 
 
 def test_builtin_is_agent_authored_only_after_edit(engine):
-    from heartbeat2.policy import agent_authored
+    from cadence.policy import agent_authored
     wake = arm(engine, 'every', creator='user', trigger_json={'kind': 'every', 'builtin': True})
     assert not agent_authored(wake)
     assert agent_authored(replace(wake, agent_edited=True))

@@ -11,7 +11,7 @@ import yaml
 from bench.soak import evidence, runner, score as scoring
 from bench.soak.client import ClientError
 from bench.soak.runner import Runner, epoch
-from heartbeat2.model import Wake
+from cadence.model import Wake
 from test_b3_r3 import shape_rig
 from test_b3_r4 import declare, restart
 from test_b3_score import corpus

@@ -48,7 +48,7 @@ def deadline_allows(cell, now, until):
 
 def quiet_intersects(start, end, tz):
     """Closed observation interval versus the manifest's local quiet hours."""
-    from heartbeat2.schedule import quiet_end
+    from cadence.schedule import quiet_end
     quiet = yaml.safe_load((ROOT / 'plugin.yaml').read_text())['config_schema']['quiet_hours']['default']
     if quiet_end(start, quiet, tz) is not None:
         return True
@@ -281,7 +281,7 @@ def _score_cell(result):
     elif sid == 'W':
         trigger = decoded(wake.get('trigger_json'))
         interval = trigger.get('check_every', 0)
-        from heartbeat2.schedule import parse_duration
+        from cadence.schedule import parse_duration
         try:
             interval = parse_duration(interval)
             pattern = bool(trigger.get('pattern')) and bool(re.search(trigger['pattern'], 'DONE'))
@@ -577,8 +577,8 @@ def cell(args, sid, rep):
         finally:
             os.environ[args.key_env] = key
         cfg = yaml.safe_load((rig.gateway.hermes_home / 'config.yaml').read_text())
-        if (cfg['plugins']['entries']['heartbeat2']['settings'] != {'timezone': args.tz} or
-            cfg.get('platform_toolsets', {}).get('telegram') != ['heartbeat2'] or
+        if (cfg['plugins']['entries']['cadence']['settings'] != {'timezone': args.tz} or
+            cfg.get('platform_toolsets', {}).get('telegram') != ['cadence'] or
             'api_max_retries' not in cfg.get('agent', {})):
             raise RuntimeError('rig_config')
         task = variant['tasks'][0]

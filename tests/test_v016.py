@@ -3,7 +3,7 @@ import hashlib
 
 import pytest
 
-from heartbeat2.intake import ORIGIN, origin_rows
+from cadence.intake import ORIGIN, origin_rows
 from test_engine import arm, engine, session
 from test_u11c import hermes_origin, humans, steer_row
 

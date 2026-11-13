@@ -17,9 +17,9 @@ import pytest
 from conftest import FakeCtx
 from test_engine import admit, engine, arm, KEY, start, end, session
 from test_commands import runtime
-from heartbeat2 import commands, governor, probes, registration
-from heartbeat2.model import Wake
-from heartbeat2.policy import Policy, INJECTION_CONFIG
+from cadence import commands, governor, probes, registration
+from cadence.model import Wake
+from cadence.policy import Policy, INJECTION_CONFIG
 
 _CONNECT = socket.socket.connect
 _DNS = socket.getaddrinfo
@@ -315,7 +315,7 @@ def test_R3_R9_event_docs():
 
 def test_R3_R9_file_skill():
     root=Path(__file__).resolve().parents[1]
-    skill=(root/'skills/heartbeat2-usage/SKILL.md').read_text()
+    skill=(root/'skills/cadence-usage/SKILL.md').read_text()
     assert 'relative paths resolve against the profile home' in skill
     for block in re.findall(r'```json\n(.*?)\n```',skill,re.S):
         trigger=json.loads(block).get('trigger',{})
@@ -327,7 +327,7 @@ def test_R3_R10_recording_context_registers_everything(fake_ctx):
     assert set(fake_ctx.tools)=={'pulse'}
     assert set(fake_ctx.hooks)==set(registration.HOOKS)
     assert set(fake_ctx.commands)=={'pulse'}
-    assert set(fake_ctx.skills)=={'heartbeat2-usage','heartbeat2-report-problem'}
+    assert set(fake_ctx.skills)=={'cadence-usage','cadence-report-problem'}
 
 
 def test_R3_R11_slow_probes_alive_no_false_notice(engine):
@@ -349,13 +349,13 @@ def test_R3_R11_slow_probes_alive_no_false_notice(engine):
 def test_R3_R10_required_hermes_fails_not_skips(monkeypatch,tmp_path,clock):
     from integration import test_real_loader as loader
     monkeypatch.setitem(sys.modules,'hermes_cli.plugins',None)
-    monkeypatch.setenv('HEARTBEAT2_REQUIRE_HERMES','1')
+    monkeypatch.setenv('CADENCE_REQUIRE_HERMES','1')
     try:
         loader.test_real_loader_worker_registration_and_same_session_silence(tmp_path,monkeypatch,clock)
     except pytest.fail.Exception: pass
     except pytest.skip.Exception: pytest.fail('required Hermes was skipped')
     else: pytest.fail('missing required Hermes did not fail')
-    assert "HEARTBEAT2_REQUIRE_HERMES: '1'" in (Path(__file__).resolve().parents[1]/'.github/workflows/ci.yml').read_text()
+    assert "CADENCE_REQUIRE_HERMES: '1'" in (Path(__file__).resolve().parents[1]/'.github/workflows/ci.yml').read_text()
 
 
 def test_R3_B1_startup_preserves_future_recurring_deadline(engine):
@@ -366,7 +366,7 @@ def test_R3_B1_startup_preserves_future_recurring_deadline(engine):
 
 
 def test_R3_B1_restart_preserves_future_recurring_deadline(engine):
-    from heartbeat2.poller import Poller
+    from cadence.poller import Poller
     e=engine;e.acquire()
     w=arm(e,'every',next_due_at=e.clock.now()+3600,trigger_json={'every':'1h'})
     e.close();e.clock.advance(60)

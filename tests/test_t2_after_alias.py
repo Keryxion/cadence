@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from heartbeat2.tool import DESCRIPTION
+from cadence.tool import DESCRIPTION
 from test_engine import engine
 from test_v0113 import owner_turn
 from test_v0114 import create, receipt

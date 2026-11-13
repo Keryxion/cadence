@@ -13,20 +13,20 @@ import time
 import pytest
 
 ROOT=Path(__file__).resolve().parents[1]
-CAS=('heartbeat2/store.py',"WHERE wake_id=? AND dedupe_key=? AND state='pending'\"\"\",\n                (epoch","WHERE wake_id=? AND dedupe_key=?\"\"\",\n                (epoch")
-FLOCK=('heartbeat2/poller.py','            fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)','            pass')
+CAS=('cadence/store.py',"WHERE wake_id=? AND dedupe_key=? AND state='pending'\"\"\",\n                (epoch","WHERE wake_id=? AND dedupe_key=?\"\"\",\n                (epoch")
+FLOCK=('cadence/poller.py','            fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)','            pass')
 MUTANTS={
-    'governor_pause_off':[('heartbeat2/governor.py','    if rule: pause(engine,w,rule)','    if False: pause(engine,w,rule)')],
-    'caps_off':[('heartbeat2/poller.py',"        if cap and not (cap=='daily_message_cap' and message_held) and not (owner_class(w) and one_shot(w)):",'        if False:')],
-    'mute_class_regress':[('heartbeat2/policy.py','unanswered_count >= self.max_unanswered and not owner_class(wake)', 'unanswered_count >= self.max_unanswered and not is_owner(wake)')],
-    'dm_only_off':[('heartbeat2/policy.py','        if self.dm_only and chat_type != "dm":','        if False:')],
-    'replay_slots':[('heartbeat2/poller.py',"                        s.add_occurrence(w.id,due.dedupe_key,state=due.state)\n", "                        s.add_occurrence(w.id,due.dedupe_key,state=due.state)\n                    if w.kind in RECURRING_KINDS and due.state=='pending':\n                        k=due.scheduled_for+w.eff_interval_s\n                        while k<=now:\n                            s.add_occurrence(w.id,f't:{k:.17g}'); k+=w.eff_interval_s\n")],
+    'governor_pause_off':[('cadence/governor.py','    if rule: pause(engine,w,rule)','    if False: pause(engine,w,rule)')],
+    'caps_off':[('cadence/poller.py',"        if cap and not (cap=='daily_message_cap' and message_held) and not (owner_class(w) and one_shot(w)):",'        if False:')],
+    'mute_class_regress':[('cadence/policy.py','unanswered_count >= self.max_unanswered and not owner_class(wake)', 'unanswered_count >= self.max_unanswered and not is_owner(wake)')],
+    'dm_only_off':[('cadence/policy.py','        if self.dm_only and chat_type != "dm":','        if False:')],
+    'replay_slots':[('cadence/poller.py',"                        s.add_occurrence(w.id,due.dedupe_key,state=due.state)\n", "                        s.add_occurrence(w.id,due.dedupe_key,state=due.state)\n                    if w.kind in RECURRING_KINDS and due.state=='pending':\n                        k=due.scheduled_for+w.eff_interval_s\n                        while k<=now:\n                            s.add_occurrence(w.id,f't:{k:.17g}'); k+=w.eff_interval_s\n")],
     'claim_cas_off':[CAS], 'flock_off':[FLOCK], 'flock_and_claim_off':[FLOCK,CAS],
-    'fencing_off':[('heartbeat2/intake.py',"if f.invalid or not o or o.state!='started' or o.attempt!=f.attempt: return '[SILENT]'", "if f.invalid or not o or o.state!='started' or o.attempt!=f.attempt: return None")],
-    'estop_off':[('heartbeat2/poller.py','if not self.policy.enabled or self.paused(): return','if not self.policy.enabled: return'),('heartbeat2/poller.py','if self.paused() or not self.policy.enabled: return','if not self.policy.enabled: return'),('heartbeat2/intake.py','not session.enabled or e.paused() or','not session.enabled or')],
-    'transform_raw':[('heartbeat2/intake.py',"        if not f or turn_id and f.turn_id and f.turn_id!=turn_id: return None\n        with s.atomic():\n            o=s.get_occurrence(f.wake_id,f.dedupe_key)\n            if f.owner_replied", "        return None\n        with s.atomic():\n            o=s.get_occurrence(f.wake_id,f.dedupe_key)\n            if f.owner_replied")],
-    'cancel_on_reply_off':[('heartbeat2/intake.py',"if w.cancel_on_reply and w.status in {'active','paused','proposed'}:", 'if False:')],
-    'silenced_human':[('heartbeat2/intake.py',"        if not f or turn_id and f.turn_id and f.turn_id!=turn_id: return None\n        with s.atomic():\n            o=s.get_occurrence(f.wake_id,f.dedupe_key)\n            if f.owner_replied", "        if not f or turn_id and f.turn_id and f.turn_id!=turn_id: return '[SILENT]'\n        with s.atomic():\n            o=s.get_occurrence(f.wake_id,f.dedupe_key)\n            if f.owner_replied")],
+    'fencing_off':[('cadence/intake.py',"if f.invalid or not o or o.state!='started' or o.attempt!=f.attempt: return '[SILENT]'", "if f.invalid or not o or o.state!='started' or o.attempt!=f.attempt: return None")],
+    'estop_off':[('cadence/poller.py','if not self.policy.enabled or self.paused(): return','if not self.policy.enabled: return'),('cadence/poller.py','if self.paused() or not self.policy.enabled: return','if not self.policy.enabled: return'),('cadence/intake.py','not session.enabled or e.paused() or','not session.enabled or')],
+    'transform_raw':[('cadence/intake.py',"        if not f or turn_id and f.turn_id and f.turn_id!=turn_id: return None\n        with s.atomic():\n            o=s.get_occurrence(f.wake_id,f.dedupe_key)\n            if f.owner_replied", "        return None\n        with s.atomic():\n            o=s.get_occurrence(f.wake_id,f.dedupe_key)\n            if f.owner_replied")],
+    'cancel_on_reply_off':[('cadence/intake.py',"if w.cancel_on_reply and w.status in {'active','paused','proposed'}:", 'if False:')],
+    'silenced_human':[('cadence/intake.py',"        if not f or turn_id and f.turn_id and f.turn_id!=turn_id: return None\n        with s.atomic():\n            o=s.get_occurrence(f.wake_id,f.dedupe_key)\n            if f.owner_replied", "        if not f or turn_id and f.turn_id and f.turn_id!=turn_id: return '[SILENT]'\n        with s.atomic():\n            o=s.get_occurrence(f.wake_id,f.dedupe_key)\n            if f.owner_replied")],
 }
 SCENARIOS={'replay_slots':['sleep-62294','hermes-scale-zero'],'claim_cas_off':['duplicates-59703'],
            'flock_off':['duplicates-59703'],'flock_and_claim_off':['duplicates-59703'],
@@ -35,7 +35,7 @@ SCENARIOS={'replay_slots':['sleep-62294','hermes-scale-zero'],'claim_cas_off':['
 SCENARIOS.update(governor_pause_off=['ignored-ladder'], caps_off=['caps-owner-bypass'],
                  mute_class_regress=['mute-classes'], dm_only_off=['dm-only'])
 CONTROL_SCENARIOS = sorted({scenario for mutant in MUTANTS for scenario in SCENARIOS[mutant]})
-GATE_ORDER_MUTANT=[('heartbeat2/poller.py',
+GATE_ORDER_MUTANT=[('cadence/poller.py',
     '        from .commands import quiet_until\n        quiet=quiet_until(self,s.session_key,urgent=w.urgent)',
     '        mute=self.policy.unanswered_gate(w,s.unanswered_count)\n        if mute: return mute,False,None\n        from .commands import quiet_until\n        quiet=quiet_until(self,s.session_key,urgent=w.urgent)')]
 GATE_ORDER_DRIVER='''import json,tempfile
@@ -70,7 +70,7 @@ print(json.dumps({k:v for k,v in failures.items() if v}))
 
 
 def scratch_run(tmp_path,mutations,driver=DRIVER):
-    for name in ('heartbeat2','bench'):
+    for name in ('cadence','bench'):
         shutil.copytree(ROOT/name,tmp_path/name,ignore=shutil.ignore_patterns('__pycache__','results'))
     for path,old,new in mutations:
         p=tmp_path/path; text=p.read_text()
@@ -116,9 +116,9 @@ def test_R6_E1_E2_E3_mutant_gate(tmp_path,mutant,control):
 
 @pytest.mark.parametrize('mutant', ['shell','timeout'])
 def test_R6_E15_command_contract_mutants(tmp_path,mutant):
-    mutation=('heartbeat2/probes.py','shell=False','shell=True') if mutant=='shell' else ('heartbeat2/probes.py','COMMAND_DEADLINE_S = 30.0','COMMAND_DEADLINE_S = 3000.0')
+    mutation=('cadence/probes.py','shell=False','shell=True') if mutant=='shell' else ('cadence/probes.py','COMMAND_DEADLINE_S = 30.0','COMMAND_DEADLINE_S = 3000.0')
     driver='''import json,sys,tempfile
-from heartbeat2 import probes
+from cadence import probes
 with tempfile.TemporaryDirectory() as home:
     rc,body=probes._run_command([sys.executable,'-c','import sys,json;print(json.dumps(sys.argv[1:]))','a b'],home)
 print(json.dumps(probes.COMMAND_DEADLINE_S==30 and rc==0 and body.strip()==b'["a b"]'))

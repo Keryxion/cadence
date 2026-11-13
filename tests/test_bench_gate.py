@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import pytest
 from bench.run import main, runtime_budget
-from heartbeat2.intake import Intake
+from cadence.intake import Intake
 
 
 def test_bench_gate(tmp_path):
@@ -18,7 +18,7 @@ def test_bench_gate_rejects_raw_transform(tmp_path,monkeypatch,capsys):
     monkeypatch.setattr(Intake,'transform_llm_output',lambda self,response_text='',**kw:response_text)
     assert main(['--scenario','sentinel-17646','--gate','--out',str(tmp_path)])!=0
     result=json.loads(next(tmp_path.glob('*.json')).read_text())
-    assert result['scenarios'][0]['heartbeat2']['metrics']['sentinel_leaks']>0
+    assert result['scenarios'][0]['cadence']['metrics']['sentinel_leaks']>0
     assert 'sentinel_leaks' in capsys.readouterr().out
 
 
@@ -59,6 +59,6 @@ def test_bench_drained_human_finalizes_after_its_output(tmp_path,monkeypatch):
 
 @pytest.mark.parametrize('value', ['nan', 'inf', '-1', '0', 'fast'])
 def test_runtime_budget_rejects_non_finite_or_non_positive(monkeypatch, value):
-    monkeypatch.setenv('HEARTBEAT2_BENCH_RUNTIME_BUDGET_S', value)
+    monkeypatch.setenv('CADENCE_BENCH_RUNTIME_BUDGET_S', value)
     with pytest.raises(SystemExit, match='positive number of seconds'):
         runtime_budget()

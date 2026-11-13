@@ -5,9 +5,9 @@ import os
 
 import pytest
 
-from heartbeat2.model import KINDS, PROBE_KINDS, EVENT_KINDS
-from heartbeat2.policy import Policy
-from heartbeat2.registration import Runtime
+from cadence.model import KINDS, PROBE_KINDS, EVENT_KINDS
+from cadence.policy import Policy
+from cadence.registration import Runtime
 from test_engine import engine, arm, session, pending, start, end, KEY
 from test_v014a import bind
 from test_engine import GatewayCtx
@@ -15,8 +15,8 @@ from test_engine import GatewayCtx
 
 NUMERIC_FIELDS = tuple(f.name for f in fields(Policy)
                        if type(getattr(Policy(), f.name)) in (int, float))
-# The widest value per field runs by default; HEARTBEAT2_FUZZ_FULL=1 adds the rest.
-FUZZ_VALUES = (10**6, 10**9, 10**12, 10**18) if os.environ.get('HEARTBEAT2_FUZZ_FULL') else (10**18,)
+# The widest value per field runs by default; CADENCE_FUZZ_FULL=1 adds the rest.
+FUZZ_VALUES = (10**6, 10**9, 10**12, 10**18) if os.environ.get('CADENCE_FUZZ_FULL') else (10**18,)
 BOUNDS = {'ledger_days': 36500, 'min_interval_minutes': 525600, 'agent_ungated_floor_minutes': 525600, 'noop_backoff_factor': 100, 'noop_max_backoff_hours': 8760, 'probe_floor_seconds': 604800, 'max_lifetime_days': 3650, 'checkin_after_hours': 8760}
 
 

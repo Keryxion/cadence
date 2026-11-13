@@ -18,13 +18,13 @@ import pytest
 
 from test_engine import engine, admit, arm, session, start, end, KEY
 from test_commands import runtime
-from heartbeat2 import commands, probes
-from heartbeat2.wake_text import render_wake
+from cadence import commands, probes
+from cadence.wake_text import render_wake
 from bench.run import load_scenarios
 from bench.sim.runner import simulate
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL = ROOT / 'skills/heartbeat2-usage/SKILL.md'
+SKILL = ROOT / 'skills/cadence-usage/SKILL.md'
 
 
 def inbound(mid='owner-1', **extras):
@@ -203,11 +203,11 @@ from conftest import FakeClock, install_probe_helpers
 from pytest import MonkeyPatch
 install_probe_helpers(MonkeyPatch())
 from test_engine import GatewayCtx, KEY
-from heartbeat2.model import Session
-from heartbeat2.store import Store
-from heartbeat2.poller import Poller
-from heartbeat2.policy import Policy
-from heartbeat2 import probes
+from cadence.model import Session
+from cadence.store import Store
+from cadence.poller import Poller
+from cadence.policy import Policy
+from cadence import probes
 home=Path(sys.argv[2]); home.mkdir(parents=True, exist_ok=True)
 clock=FakeClock(); store=Store(home/'pulse.db',clock)
 store.upsert_session(Session(KEY,'telegram','dm','unit','sid',clock.now(),clock.now(),'episode'))
@@ -313,7 +313,7 @@ def test_R10_A6_off_stops_probes_and_preserves_due(runtime, route):
 
 def test_agent_cannot_turn_a_chat_off(engine):
     """Turning a chat off is the owner's command. The agent pauses or cancels specific wakes."""
-    from heartbeat2.tool import PARAMETERS
+    from cadence.tool import PARAMETERS
     assert 'off' not in PARAMETERS['properties']['action']['enum']
     assert engine.tool.handle({'action':'off'}).get('error')
     assert engine.store.get_session(KEY).enabled

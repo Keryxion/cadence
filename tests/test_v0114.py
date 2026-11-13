@@ -7,10 +7,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from heartbeat2 import commands, governor
-from heartbeat2.model import Wake
-from heartbeat2.schedule import parse_at
-from heartbeat2.tool import DESCRIPTION, Infeasible
+from cadence import commands, governor
+from cadence.model import Wake
+from cadence.schedule import parse_at
+from cadence.tool import DESCRIPTION, Infeasible
 from test_engine import engine, session, KEY, arm
 from test_v0113 import owner_turn
 
@@ -341,7 +341,7 @@ def test_docs_and_version():
     root = Path(__file__).resolve().parents[1]
     assert 'Results include a receipt line; tell the owner what it says, not a promise of your own.' in DESCRIPTION
     assert '## 0.1.15 — 2026-10-14' in (root/'CHANGELOG.md').read_text()
-    skill = (root/'skills/heartbeat2-usage/SKILL.md').read_text()
+    skill = (root/'skills/cadence-usage/SKILL.md').read_text()
     assert 'receipt' in skill and 'awaiting your OK' in skill
     readme = (root/'README.md').read_text()
     assert 'receipt' in readme

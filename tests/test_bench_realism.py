@@ -59,14 +59,14 @@ def test_naive_and_hb2_use_identical_token_model(tmp_path):
     scenario.update(calls_per_turn=3, context_tokens=17, output_tokens_per_call=11,
                     cache_ttl_s=4000)
     rows = {arm: simulate(scenario, tmp_path / arm, baseline=arm == 'baseline')
-            for arm in ('heartbeat2', 'baseline')}
+            for arm in ('cadence', 'baseline')}
     for result in rows.values():
         m = result['metrics']
         assert m['est_tokens'] == m['est_input_tokens'] == m['model_wakes'] * 3 * 17
         assert m['est_output_tokens'] == m['model_wakes'] * 3 * 11
         assert m['est_input_tokens'] == m['est_cache_read_tokens'] + m['est_cache_write_tokens']
-    total = totals([{'id': 'test', **rows}], 'heartbeat2')
-    assert total['est_input_tokens'] == rows['heartbeat2']['metrics']['est_input_tokens']
+    total = totals([{'id': 'test', **rows}], 'cadence')
+    assert total['est_input_tokens'] == rows['cadence']['metrics']['est_input_tokens']
 
 
 def test_token_model_owner_touch_and_profile_isolation():

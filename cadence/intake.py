@@ -72,7 +72,7 @@ def fail_open(fn):
             return fn(self,*args,**kwargs)
         except Exception:
             # No hook payload or raw exception text in log messages.
-            self.engine.log.warning('heartbeat2 hook %s failed',fn.__name__,exc_info=True)
+            self.engine.log.warning('cadence hook %s failed',fn.__name__,exc_info=True)
             return None
     return call
 
@@ -601,7 +601,7 @@ class Intake:
             if e.policy.presence_line and (armed or proposed):
                 # A proposal is not armed until /pulse ok; say so, as its receipt does.
                 counts=', '.join(([f'{armed} armed'] if armed else [])+([f'{proposed} awaiting /pulse ok'] if proposed else []))
-                lines.append(f'HeartBeat 2.0: {counts}; /pulse shows status.')
+                lines.append(f'Cadence: {counts}; /pulse shows status.')
             for w in s.list_wakes(key):
                 card=s.get_meta('card:'+w.id)
                 if card:
@@ -612,7 +612,7 @@ class Intake:
             fingerprint=hashlib.sha256(json.dumps(limits,sort_keys=True).encode()).hexdigest()
             session=s.get_session(key)
             if session.limits_fingerprint and session.limits_fingerprint!=fingerprint:
-                lines.append('HeartBeat 2.0 limits changed outside /pulse; current bounds now apply.')
+                lines.append('Cadence limits changed outside /pulse; current bounds now apply.')
             s.cas_session(key,{'limits_fingerprint':session.limits_fingerprint},limits_fingerprint=fingerprint)
             return {'context':'\n'.join(lines)} if lines else None
 

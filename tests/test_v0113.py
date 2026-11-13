@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from heartbeat2 import commands, policy
-from heartbeat2.model import Wake, agent_authored
-from heartbeat2.store import Store, _SCHEMA, _encode
-from heartbeat2.tool import PARAMETERS, DESCRIPTION
+from cadence import commands, policy
+from cadence.model import Wake, agent_authored
+from cadence.store import Store, _SCHEMA, _encode
+from cadence.tool import PARAMETERS, DESCRIPTION
 from test_engine import engine, session, KEY, admit, arm, pending, start
 
 
@@ -231,7 +231,7 @@ def test_old_schema_migration_never_backfills_intent(tmp_path, clock):
 
 
 def test_requested_text_and_command_rendering(engine, command):
-    from heartbeat2.wake_text import render_wake
+    from cadence.wake_text import render_wake
     owner_turn(engine)
     w, _ = create(engine)
     text = render_wake(w, pending(engine, w), engine.store.get_session(KEY), clock=engine.clock)

@@ -141,9 +141,9 @@ def test_packet_first_measured_system_prompt_and_parameters_verbatim(round, wake
 
 @pytest.mark.parametrize('suffix,measured', [
     ('', True),
-    ('\n\nHeartBeat 2.0: 1 armed; /pulse shows status, /pulse off stops checks.', True),
+    ('\n\nCadence: 1 armed; /pulse shows status, /pulse off stops checks.', True),
     (' later', False),
-    ('\nHeartBeat 2.0: 1 armed;', False),
+    ('\nCadence: 1 armed;', False),
 ])
 def test_owner_turn_with_plugin_context_is_measured(suffix, measured):
     # N7 arms a wake before the owner speaks, so the plugin appends its status line to the owner message.

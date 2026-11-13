@@ -1,6 +1,6 @@
 """v0.1.11 (#43): deadline and urgency changes by the agent count as agent edits."""
-from heartbeat2 import commands
-from heartbeat2.policy import is_owner
+from cadence import commands
+from cadence.policy import is_owner
 from test_engine import engine  # noqa: F401
 from test_o12 import runtime, owner_add, update  # noqa: F401
 

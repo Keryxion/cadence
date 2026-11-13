@@ -4,9 +4,9 @@ import sqlite3
 
 import pytest
 
-from heartbeat2.intake import Intake
-from heartbeat2.poller import LOCAL_EPOCHS, Poller
-from heartbeat2.store import Store
+from cadence.intake import Intake
+from cadence.poller import LOCAL_EPOCHS, Poller
+from cadence.store import Store
 from test_engine import engine, arm, session, start, end, admit, KEY
 from test_v013b import replay
 
@@ -182,7 +182,7 @@ def test_session_reset_clears_busy_and_epoch(busy_engine, builtin):
 def test_timed_out_unload_still_retires_the_engine_epoch(tmp_path, clock):
     """Runtime.close() skips engine.close() under a still-running tick; ownership must still end."""
     import threading
-    from heartbeat2.registration import Runtime
+    from cadence.registration import Runtime
     from test_engine import GatewayCtx
     r = Runtime(GatewayCtx(tmp_path), clock=clock)
     e = r.get_engine()

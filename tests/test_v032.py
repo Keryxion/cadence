@@ -1,7 +1,7 @@
 """0.3.2: /pulse status agrees with the desk about a role that has spent today's budget."""
 from types import SimpleNamespace
 
-from heartbeat2 import commands
+from cadence import commands
 from test_engine import KEY, arm, end, engine, pending, start
 
 

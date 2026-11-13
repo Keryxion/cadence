@@ -40,12 +40,12 @@ def test_injected_turn_spawns_background_review(make_rig):
               "skills": {"creation_nudge_interval": 1},
               "platform_toolsets": {"telegram": ["memory", "skills"]}}
     rigs = {}
-    summary = {"heartbeat2_enabled": False, "observation_seconds": 30}
-    dest = Path(os.environ.get("HEARTBEAT2_E2E_RESULTS", str(Path.cwd())))
+    summary = {"cadence_enabled": False, "observation_seconds": 30}
+    dest = Path(os.environ.get("CADENCE_E2E_RESULTS", str(Path.cwd())))
     # Standalone use retains evidence in the rig rather than writing repository artifacts.
     try:
         for label, injected in (("control", False), ("injected", True)):
-            rig = make_rig(heartbeat2=False, poke=injected, config=config,
+            rig = make_rig(cadence=False, poke=injected, config=config,
                            director=ReviewDirector())
             rigs[label] = rig
             if not injected:
@@ -88,7 +88,7 @@ def test_injected_turn_spawns_background_review(make_rig):
         if summary["injected"]["review_fired"]:
             raise Finding("background review followed plugin-injected POKE: " + json.dumps(summary))
     finally:
-        if "HEARTBEAT2_E2E_RESULTS" not in os.environ and rigs:
+        if "CADENCE_E2E_RESULTS" not in os.environ and rigs:
             dest = next(iter(rigs.values())).root
         dest.mkdir(parents=True, exist_ok=True)
         (dest / "summary.json").write_text(json.dumps(summary, indent=2))

@@ -8,10 +8,10 @@ from types import SimpleNamespace as NS
 import pytest
 
 from test_engine import admit, fold, engine, arm, start, end, session, KEY, GatewayCtx
-from heartbeat2 import governor
-from heartbeat2.model import Session
-from heartbeat2.poller import Poller
-from heartbeat2.registration import Runtime, register
+from cadence import governor
+from cadence.model import Session
+from cadence.poller import Poller
+from cadence.registration import Runtime, register
 
 
 def inbound(mid='m1', *, bot=False, internal=False, chat='unit'):
@@ -155,7 +155,7 @@ def test_R2_G3_running_reply_counts_once_and_is_never_silent(engine, monkeypatch
     e.intake.on_session_end(session_id='sid',turn_id='turn',completed=True)
     assert not e.store.list_occurrences(b.id)[0].delivered
     assert e.store.get_session(KEY).unanswered_count==0
-    monkeypatch.setattr('heartbeat2.tool.session_env',lambda name: 'm1' if name=='HERMES_SESSION_MESSAGE_ID' else '')
+    monkeypatch.setattr('cadence.tool.session_env',lambda name: 'm1' if name=='HERMES_SESSION_MESSAGE_ID' else '')
     e.intake.pre_llm_call(session_id='sid',turn_id='queued',user_message='owner reply',platform='telegram',
         conversation_history=[{'role':'user','content':'owner reply','platform_message_id':'m1'}])
     assert e.store.get_session(KEY).episode_id==after.episode_id
@@ -169,7 +169,7 @@ def test_R2_G3_queued_without_admission_and_owner_interrupt(engine, monkeypatch)
     e.intake.on_session_end(session_id='sid',turn_id='turn',interrupted=True,turn_exit_reason='interrupted_by_user')
     assert e.store.get_wake(w.id).error_streak==0
     session(e,unanswered_count=2)
-    monkeypatch.setattr('heartbeat2.tool.session_env',lambda name: 'queued' if name=='HERMES_SESSION_MESSAGE_ID' else '')
+    monkeypatch.setattr('cadence.tool.session_env',lambda name: 'queued' if name=='HERMES_SESSION_MESSAGE_ID' else '')
     row={'role':'user','content':'queued reply','platform_message_id':'queued'}
     e.intake.pre_llm_call(session_id='sid',turn_id='q1',user_message='queued reply',platform='telegram',conversation_history=[row])
     assert e.store.get_session(KEY).unanswered_count==0

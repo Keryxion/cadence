@@ -2,14 +2,14 @@
 # report-a-problem skill drafts issues with these same headings, so do not rename them.
 # Per repo: description, the security line, the diagnostics hint, and the surface options.
 name: Bug report
-description: Something in HeartBeat 2.0 is broken or behaves unexpectedly.
+description: Something in Cadence is broken or behaves unexpectedly.
 labels: ["bug", "triage-pending"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the report. Your Hermes agent can draft it for you: ask it to "report a problem with HeartBeat 2.0".
-        **Security problems** (unauthorized wakes or messages, cross-profile access, or anything that exposes a secret) go to a [private advisory](https://github.com/electricsheephq/heartbeat2/security/advisories/new), not here.
+        Thanks for the report. Your Hermes agent can draft it for you: ask it to "report a problem with Cadence".
+        **Security problems** (unauthorized wakes or messages, cross-profile access, or anything that exposes a secret) go to a [private advisory](https://github.com/Keryxion/cadence/security/advisories/new), not here.
         **Problems in Hermes itself** belong in [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent/issues).
   - type: textarea
     id: what_happened
@@ -37,7 +37,7 @@ body:
     id: plugin_version
     attributes:
       label: Plugin version
-      description: The heartbeat2 entry from `hermes plugins list --json` (version and source).
+      description: The cadence entry from `hermes plugins list --json` (version and source).
     validations:
       required: true
   - type: input

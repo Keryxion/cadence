@@ -7,9 +7,9 @@ import pytest
 from conftest import clock  # noqa: F401
 from test_engine import engine, arm, session, start, admit, KEY  # noqa: F401
 from test_v013b import NOTE, interrupted, replay
-from heartbeat2 import commands
-from heartbeat2.intake import Intake
-from heartbeat2.poller import Poller
+from cadence import commands
+from cadence.intake import Intake
+from cadence.poller import Poller
 
 
 def hist(w, o, cur):

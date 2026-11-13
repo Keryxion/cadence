@@ -1,8 +1,8 @@
 """Required attempt, accounting, lifecycle and permission boundaries."""
 from dataclasses import replace
 from test_engine import admit, engine,arm,session,start,end,KEY
-from heartbeat2.model import Session
-from heartbeat2.schedule import local_day
+from cadence.model import Session
+from cadence.schedule import local_day
 
 
 def test_stale_marker_cannot_supersede_new_attempt(engine):
@@ -110,7 +110,7 @@ def test_cron_governor_skips_exact_slots_and_babysit_three_noops(engine):
 
 
 def test_restart_does_not_reset_three_accepted_attempt_budget(engine):
-    from heartbeat2.poller import Poller
+    from cadence.poller import Poller
     e=engine
     w=arm(e)
     for _ in range(3):

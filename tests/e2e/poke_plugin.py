@@ -1,4 +1,4 @@
-"""Stock test plugin: inject one text turn, without heartbeat2 code."""
+"""Stock test plugin: inject one text turn, without cadence code."""
 import json
 import os
 import threading

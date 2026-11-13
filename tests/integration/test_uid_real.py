@@ -15,8 +15,8 @@ from test_u11c import hermes_origin, humans
 
 @pytest.fixture
 def hermes():
-    if os.environ.get('HEARTBEAT2_REQUIRE_HERMES') != '1':
-        pytest.skip('set HEARTBEAT2_REQUIRE_HERMES for pinned real-loop acceptance')
+    if os.environ.get('CADENCE_REQUIRE_HERMES') != '1':
+        pytest.skip('set CADENCE_REQUIRE_HERMES for pinned real-loop acceptance')
     try:
         return NS(agent=importlib.import_module('run_agent').AIAgent,
                   db=importlib.import_module('hermes_state').SessionDB,

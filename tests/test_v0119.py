@@ -4,9 +4,9 @@ from pathlib import Path
 
 import yaml
 
-from heartbeat2 import registration
-from heartbeat2.model import Occurrence, Session, Wake
-from heartbeat2.wake_text import render_wake
+from cadence import registration
+from cadence.model import Occurrence, Session, Wake
+from cadence.wake_text import render_wake
 from test_engine import engine, KEY, arm
 from test_v0114 import create, receipt
 
@@ -43,11 +43,11 @@ def test_wake_text_ends_a_settled_subject_silently(clock):
 
 def test_report_problem_skill_is_registered_with_its_description(fake_ctx):
     registration.register(fake_ctx)
-    path = ROOT/'skills/heartbeat2-report-problem/SKILL.md'
+    path = ROOT/'skills/cadence-report-problem/SKILL.md'
     assert path.is_file()
     front = yaml.safe_load(path.read_text().split('---')[1])
-    assert front == {'name': 'heartbeat2-report-problem', 'description': 'HeartBeat 2.0: report a bug or problem'}
-    assert 'heartbeat2-report-problem' in fake_ctx.skills
+    assert front == {'name': 'cadence-report-problem', 'description': 'Cadence: report a bug or problem'}
+    assert 'cadence-report-problem' in fake_ctx.skills
     body = path.read_text()
     assert 'do not fire a wake or send a DM to reproduce' in body
     assert 'security/advisories/new' in body and 'issues/new?template=bug_report.yml' in body
@@ -64,7 +64,7 @@ def test_turn_context_never_counts_a_proposal_as_armed(engine):
     engine.policy = replace(engine.policy, agent_can_create='ask_first')
     assert create(engine).get('ok')
     text = context(engine, 'next')
-    assert 'HeartBeat 2.0: 1 awaiting /pulse ok;' in text and 'armed' not in text
+    assert 'Cadence: 1 awaiting /pulse ok;' in text and 'armed' not in text
     engine.policy = replace(engine.policy, agent_can_create='yes')
     assert create(engine).get('ok')
-    assert 'HeartBeat 2.0: 1 armed, 1 awaiting /pulse ok;' in context(engine, 'later')
+    assert 'Cadence: 1 armed, 1 awaiting /pulse ok;' in context(engine, 'later')

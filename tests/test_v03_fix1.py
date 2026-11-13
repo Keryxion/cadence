@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from heartbeat2 import cache, commands, governor
+from cadence import cache, commands, governor
 from test_engine import KEY, arm, end, engine, pending, session, start
 
 

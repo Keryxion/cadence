@@ -6,8 +6,8 @@ import threading
 
 import pytest
 
-from heartbeat2.model import Wake, Session
-from heartbeat2.store import Store
+from cadence.model import Wake, Session
+from cadence.store import Store
 
 
 @pytest.fixture

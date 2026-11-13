@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[2]
 def _load_hermes():
     try: return importlib.import_module('hermes_cli.plugins')
     except ImportError:
-        if os.environ.get('HEARTBEAT2_REQUIRE_HERMES')=='1':
-            pytest.fail('HEARTBEAT2_REQUIRE_HERMES=1 but Hermes is not importable')
+        if os.environ.get('CADENCE_REQUIRE_HERMES')=='1':
+            pytest.fail('CADENCE_REQUIRE_HERMES=1 but Hermes is not importable')
         pytest.skip('Hermes is not importable in this venv')
 
 
@@ -33,9 +33,9 @@ def test_real_loader_worker_registration_and_same_session_silence(tmp_path, monk
     from hermes_constants import set_hermes_home_override, reset_hermes_home_override
     from gateway.session_context import set_session_vars, clear_session_vars
 
-    plugin = home/'plugins/heartbeat2'
+    plugin = home/'plugins/cadence'
     shutil.copytree(ROOT,plugin,ignore=shutil.ignore_patterns('.git','.venv','.pytest_cache','__pycache__'))
-    (home/'config.yaml').write_text('plugins:\n  entries:\n    heartbeat2:\n      enabled: true\n      settings:\n        quiet_hours: ""\n        timezone: UTC\n')
+    (home/'config.yaml').write_text('plugins:\n  entries:\n    cadence:\n      enabled: true\n      settings:\n        quiet_hours: ""\n        timezone: UTC\n')
     seen = []
     register_tool = PluginContext.register_tool
     def tracked(self,*args,**kwargs):
@@ -50,16 +50,16 @@ def test_real_loader_worker_registration_and_same_session_silence(tmp_path, monk
         with monkeypatch.context() as guard:
             guard.setattr(socket,'socket',lambda *a,**k: pytest.fail('loader attempted a socket'))
             manager._load_plugin(manifest)
-        loaded = manager._plugins['heartbeat2']
+        loaded = manager._plugins['cadence']
         assert loaded.enabled, loaded.error
         assert seen and all(name.startswith('plugin-load:') for name in seen)
         assert 'pulse' in loaded.tools_registered
         assert 'pulse' in loaded.commands_registered
-        registration = sys.modules[loaded.module.__name__+'.heartbeat2.registration']
+        registration = sys.modules[loaded.module.__name__+'.cadence.registration']
         assert set(registration.HOOKS) == set(loaded.hooks_registered) == set(manifest.provides_hooks)
         assert set(manifest.provides_tools) == set(loaded.tools_registered)
         if hasattr(PluginContext,'register_skill'):
-            assert any(entry['bare_name']=='heartbeat2-usage' for entry in manager._plugin_skills.values())
+            assert any(entry['bare_name']=='cadence-usage' for entry in manager._plugin_skills.values())
         runtime = registration._RUNTIMES[manager.scope_key]
         # Stop the real timer so the fake clock drives exactly one explicit tick.
         runtime._stop.set()
@@ -82,11 +82,11 @@ def test_real_loader_worker_registration_and_same_session_silence(tmp_path, monk
         tokens=set_session_vars(platform='telegram',chat_id='fresh',chat_type='dm',session_key=fresh_key,session_id='fresh-sid')
         try:
             status=manager._plugin_commands['pulse']['handler']('status')
-            assert 'plugins:\n  entries:\n    heartbeat2:\n      allow_gateway_injection: true' in status
+            assert 'plugins:\n  entries:\n    cadence:\n      allow_gateway_injection: true' in status
             assert engine.store.get_session(fresh_key).last_human_at is None
             assert 'injection_disabled' in manager._plugin_commands['pulse']['handler']('add in 1m Verify consent')
         finally: clear_session_vars(tokens)
-        (home/'config.yaml').write_text('plugins:\n  entries:\n    heartbeat2:\n      enabled: true\n      allow_gateway_injection: true\n      settings:\n        quiet_hours: ""\n        timezone: UTC\n')
+        (home/'config.yaml').write_text('plugins:\n  entries:\n    cadence:\n      enabled: true\n      allow_gateway_injection: true\n      settings:\n        quiet_hours: ""\n        timezone: UTC\n')
         key = 'agent:telegram:dm:fixture'
         # Gateway commands get a bound HERMES_SESSION_KEY (no target argument).
         tokens=set_session_vars(platform='telegram',chat_id='fixture',chat_type='dm',session_key=key,session_id='sid')
@@ -97,7 +97,7 @@ def test_real_loader_worker_registration_and_same_session_silence(tmp_path, monk
         assert 'w_' in out, out
         manager.invoke_hook('pre_gateway_dispatch',event=NS(internal=False,message_id='owner-1',text='Follow up',
             source=NS(platform=NS(value='telegram'),chat_type='dm',chat_id='fixture',message_id='owner-1',is_bot=False)))
-        full_schema = sys.modules[loaded.module.__name__+'.heartbeat2.tool'].SCHEMA
+        full_schema = sys.modules[loaded.module.__name__+'.cadence.tool'].SCHEMA
         assert full_schema['name'] == 'pulse' and full_schema['description']
         tool_schema = full_schema['parameters']
         assert 'respond' in tool_schema['properties']['action']['enum']

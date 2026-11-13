@@ -5,9 +5,9 @@ import re
 
 import pytest
 
-from heartbeat2 import commands
-from heartbeat2.model import FINISHED_WAKE_STATUSES, Session, Wake
-from heartbeat2.policy import INJECTION_CONFIG
+from cadence import commands
+from cadence.model import FINISHED_WAKE_STATUSES, Session, Wake
+from cadence.policy import INJECTION_CONFIG
 from test_engine import engine, arm, KEY
 
 # Written out, not read from the model, so removing a status from FINISHED_WAKE_STATUSES fails these tests.

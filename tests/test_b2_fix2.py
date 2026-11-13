@@ -11,9 +11,9 @@ import pytest
 import yaml
 
 from bench.live import run, score
-from heartbeat2.clock import SystemClock
-from heartbeat2.model import Session, Wake
-from heartbeat2.store import Store
+from cadence.clock import SystemClock
+from cadence.model import Session, Wake
+from cadence.store import Store
 from tests.test_b2_round3 import results
 
 
@@ -46,8 +46,8 @@ def test_n7_prearm_without_chat_turn(monkeypatch, tmp_path, usage):
             self.root = tmp_path / 'rig'
             self.root.mkdir()
             self.gateway = NS(home=self.root, hermes_home=self.root)
-            self.pulse_db = self.root / 'plugin-data/heartbeat2/pulse.db'
-            config['plugins']['entries']['heartbeat2']['allow_gateway_injection'] = True
+            self.pulse_db = self.root / 'plugin-data/cadence/pulse.db'
+            config['plugins']['entries']['cadence']['allow_gateway_injection'] = True
             (self.root / 'config.yaml').write_text(yaml.safe_dump(config))
             self.director = director
             self.llm = NS(main_requests=lambda: [])

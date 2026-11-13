@@ -8,12 +8,12 @@ import sqlite3
 
 import pytest
 
-from heartbeat2.clock import SystemClock
-from heartbeat2.model import Wake, Session, Occurrence
-from heartbeat2.policy import Policy
-from heartbeat2.schedule import time_due
-from heartbeat2.store import Store
-from heartbeat2.wake_text import render_wake
+from cadence.clock import SystemClock
+from cadence.model import Wake, Session, Occurrence
+from cadence.policy import Policy
+from cadence.schedule import time_due
+from cadence.store import Store
+from cadence.wake_text import render_wake
 
 
 def test_wal_retries_busy_and_asserts_mode(tmp_path, clock, monkeypatch):
@@ -44,8 +44,8 @@ def test_wal_three_spawned_processes_fresh_file(tmp_path):
 import sys, socket
 sys.path.insert(0, sys.argv[1])
 socket.socket.connect = lambda *a, **k: (_ for _ in ()).throw(AssertionError("network"))
-from heartbeat2.clock import SystemClock
-from heartbeat2.store import Store
+from cadence.clock import SystemClock
+from cadence.store import Store
 sys.stdin.readline()
 with Store(sys.argv[2], SystemClock()) as s:
     assert s.connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"

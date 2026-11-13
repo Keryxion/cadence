@@ -2,5 +2,5 @@
 
 
 def register(ctx):
-    from .heartbeat2.registration import register as register_plugin
+    from .cadence.registration import register as register_plugin
     return register_plugin(ctx)

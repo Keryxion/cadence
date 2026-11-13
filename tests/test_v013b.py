@@ -5,11 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from heartbeat2 import cache, commands
-from heartbeat2.intake import Intake
-from heartbeat2.model import Session
-from heartbeat2.schedule import local_day
-from heartbeat2.store import Store
+from cadence import cache, commands
+from cadence.intake import Intake
+from cadence.model import Session
+from cadence.schedule import local_day
+from cadence.store import Store
 from test_engine import engine, arm, pending, session, start, admit, KEY
 
 # Identical gateway/run.py:1030 build_resume_recovery_note at all three pins:

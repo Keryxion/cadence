@@ -3,7 +3,7 @@ import pytest
 
 from test_engine import engine, arm, start, end
 from test_wake_text import records
-from heartbeat2.wake_text import render_wake
+from cadence.wake_text import render_wake
 
 
 HOLDS = [

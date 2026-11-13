@@ -4,9 +4,9 @@ from datetime import datetime
 
 import pytest
 
-from heartbeat2 import governor
-from heartbeat2.model import Occurrence
-from heartbeat2.wake_text import render_wake
+from cadence import governor
+from cadence.model import Occurrence
+from cadence.wake_text import render_wake
 from test_engine import KEY, arm, end, engine, pending, session, start
 
 

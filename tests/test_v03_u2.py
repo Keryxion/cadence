@@ -7,11 +7,11 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from heartbeat2 import commands
-from heartbeat2.model import Wake
-from heartbeat2.policy import Policy
-from heartbeat2.store import Store, _SCHEMA
-from heartbeat2.wake_text import render_wake
+from cadence import commands
+from cadence.model import Wake
+from cadence.policy import Policy
+from cadence.store import Store, _SCHEMA
+from cadence.wake_text import render_wake
 from test_engine import KEY, arm, end, engine, pending, session, start
 
 

@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from heartbeat2.model import Wake
-from heartbeat2.policy import Policy
-from heartbeat2.tool import PARAMETERS, DESCRIPTION
+from cadence.model import Wake
+from cadence.policy import Policy
+from cadence.tool import PARAMETERS, DESCRIPTION
 from test_engine import engine, session, KEY, arm
 from test_v0113 import owner_turn, finish
 from test_v0114 import command, create, local, receipt
@@ -257,7 +257,7 @@ def test_owner_refusal_names_reminder_setting(engine):
 def test_no_chaining_and_release_metadata():
     import yaml
     root = Path(__file__).resolve().parents[1]
-    for text in (DESCRIPTION, (root/'skills/heartbeat2-usage/SKILL.md').read_text()):
+    for text in (DESCRIPTION, (root/'skills/cadence-usage/SKILL.md').read_text()):
         assert 'When a create is refused' in text
         assert 'never arm a stand-in' in text.lower() and 're-arms' in text
     assert '## 0.1.17 — 2026-10-14' in (root/'CHANGELOG.md').read_text()

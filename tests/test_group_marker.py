@@ -9,11 +9,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from heartbeat2 import commands, intake
-from heartbeat2.model import Wake
-from heartbeat2.poller import Poller
-from heartbeat2.store import Store
-from heartbeat2.wake_text import render_wake
+from cadence import commands, intake
+from cadence.model import Wake
+from cadence.poller import Poller
+from cadence.store import Store
+from cadence.wake_text import render_wake
 from test_engine import KEY, arm, end, engine, start
 from test_v013b import NOTE
 from test_wake_text import records
@@ -194,7 +194,7 @@ def test_restart_replay_untagged_line_start_non_dm_marker_is_not_recognised(grou
 def test_dm_snapshot_and_legacy_marker(engine, clock):
     w, o, s = records(clock)
     text = render_wake(w, o, replace(s, chat_type='dm'), clock=clock)
-    assert text == '''⟦pulse o:w_abcdefgh/t:100 a:2⟧ [HeartBeat 2.0 · wake w_abcdefgh · Build · armed by you 1h ago]
+    assert text == '''⟦pulse o:w_abcdefgh/t:100 a:2⟧ [Cadence · wake w_abcdefgh · Build · armed by you 1h ago]
 Local time: Sun 12 Oct 16:05 (UTC) · owner last wrote 2h 03m ago · fire 2 of 4
 Why: Follow up
 Your note: Check whether the build finished.

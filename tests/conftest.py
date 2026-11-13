@@ -56,7 +56,7 @@ class FakeCtx:
 
 
 def load_plugin_package():
-    name = "hermes_plugins_test.heartbeat2"
+    name = "hermes_plugins_test.cadence"
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(

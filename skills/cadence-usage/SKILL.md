@@ -1,11 +1,11 @@
 ---
-name: heartbeat2-usage
+name: cadence-usage
 description: Your own time in this conversation. Use it for roles you own and keep working on, follow-ups, watchers and own-time turns, all within the owner's budgets.
 ---
 
-# HeartBeat 2.0
+# Cadence
 
-Between the owner's messages you would normally not exist. HeartBeat gives you time of your own in this conversation, on this model and with this memory. You can keep working on what you're responsible for, notice things, think things through, and come back when you have something worth saying. Use it the way a capable person uses their working day.
+Between the owner's messages you would normally not exist. Cadence gives you time of your own in this conversation, on this model and with this memory. You can keep working on what you're responsible for, notice things, think things through, and come back when you have something worth saying. Use it the way a capable person uses their working day.
 
 ## What it's for
 

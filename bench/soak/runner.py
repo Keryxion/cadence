@@ -67,7 +67,7 @@ class Runner:
         self.clock, self.until_day = clock or Clock(), until_day
         self.zone = ZoneInfo(schedule['tz'])
         self.hermes_source, self.hermes_version_file = hermes_source, hermes_version_file
-        self.pulse = pulse or Pulse(self.home/'plugin-data/heartbeat2/pulse.db')
+        self.pulse = pulse or Pulse(self.home/'plugin-data/cadence/pulse.db')
         self.transcript = transcript or Transcript(self.home/'state.db', now=self.clock.now)
         self.rows = [json.loads(line) for line in self.path.read_text().splitlines()] if self.path.exists() else []
         self.episodes = deepcopy(schedule['episodes'])

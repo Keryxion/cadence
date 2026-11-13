@@ -58,7 +58,7 @@ def gateway_platform(platform):
         return False  # no gateway in this process, or it cannot say
 
 
-INJECTION_CONFIG = "plugins:\n  entries:\n    heartbeat2:\n      allow_gateway_injection: true"
+INJECTION_CONFIG = "plugins:\n  entries:\n    cadence:\n      allow_gateway_injection: true"
 
 
 def unknown_kind(kind):

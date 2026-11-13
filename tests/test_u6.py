@@ -12,14 +12,14 @@ import pytest
 from test_engine import engine, arm, start, session, KEY
 from test_commands import runtime
 from test_r3 import observer, _CONNECT, _DNS, _CREATE
-from heartbeat2 import commands, probes, registration
-from heartbeat2.model import Wake, Occurrence, Session
-from heartbeat2.poller import Poller
-from heartbeat2.store import Store
-from heartbeat2.wake_text import render_wake
+from cadence import commands, probes, registration
+from cadence.model import Wake, Occurrence, Session
+from cadence.poller import Poller
+from cadence.store import Store
+from cadence.wake_text import render_wake
 from bench.run import load_scenarios
 from bench.sim.runner import simulate
-from heartbeat2.intake import Intake
+from cadence.intake import Intake
 
 
 def terminal_occurrence(e,w,cause):

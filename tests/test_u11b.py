@@ -11,10 +11,10 @@ import pytest
 
 from test_engine import engine, arm, session, KEY, GatewayCtx
 from test_u11 import event, llm, wake, origin, count, ORIGIN, GOALS, HB
-from heartbeat2 import registration, tool
-from heartbeat2.poller import Poller
-from heartbeat2.policy import Policy
-from heartbeat2.store import Store
+from cadence import registration, tool
+from cadence.poller import Poller
+from cadence.policy import Policy
+from cadence.store import Store
 
 
 def idless(text='Fix it.'):

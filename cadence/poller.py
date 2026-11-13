@@ -19,7 +19,7 @@ from .policy import gateway_platform, owner_class, is_owner, is_watcher, one_sho
 from .schedule import time_due, local_day, parse_duration, next_every
 from . import governor
 
-LOG = logging.getLogger('heartbeat2')
+LOG = logging.getLogger('cadence')
 RETRY_DELAYS = (30,60,300,900,3600)
 FINAL_SKIP_REASONS = frozenset({'unanswered','daily_model_cap','daily_cost_cap','daily_message_cap','dm_only',
     'non_gateway','session_off','source_disabled','cancel_on_reply','expired','max_fires'})
@@ -32,7 +32,7 @@ CREATED_EPOCHS = set()  # Every poller epoch this process made; never discarded.
 def check_paused():
     try:
         from agent.estop import check_paused as paused
-        return paused('heartbeat2',LOG)
+        return paused('cadence',LOG)
     except ImportError:
         return False
     except Exception:
@@ -88,7 +88,7 @@ class Poller:
             fn=getattr(self.ctx,'_gateway_injection_allowed',None)
             if fn: return fn() is True
             from hermes_cli.config import load_config_readonly
-            return (load_config_readonly() or {}).get('plugins',{}).get('entries',{}).get('heartbeat2',{}).get('allow_gateway_injection') is True
+            return (load_config_readonly() or {}).get('plugins',{}).get('entries',{}).get('cadence',{}).get('allow_gateway_injection') is True
         except Exception:
             return False
 
@@ -215,7 +215,7 @@ class Poller:
         try:
             with s.atomic(): return fn()
         except Exception as exc:
-            self.log.warning('heartbeat2 wake evaluation failed (%s)',type(exc).__name__)
+            self.log.warning('cadence wake evaluation failed (%s)',type(exc).__name__)
             governor.error(self,s.get_wake(w.id))
             current=s.get_wake(w.id)
             s.set_meta('wake_error:'+w.id,type(exc).__name__)
@@ -233,7 +233,7 @@ class Poller:
                 s.set_meta('last_tick_at',str(now))
                 s.set_meta('last_tick_monotonic',str(self.clock.monotonic()))
                 if now-previous>15:
-                    self.log.info('heartbeat2 wall gap %.1fs',now-previous)
+                    self.log.info('cadence wall gap %.1fs',now-previous)
                     # A clock gap alone is not proof that a wake was late.
                 if not self.policy.enabled or self.paused(): return
                 governor.settle_ignored(self)
@@ -266,7 +266,7 @@ class Poller:
                 cache_line=self.cache_line(w)  # Pricing may fetch metadata; never hold the write lock.
                 self.evaluate(w,lambda o=o,cache_line=cache_line:self.dispatch(o,cache_line=cache_line))
         except Exception as exc:
-            self.log.warning('heartbeat2 tick failed',exc_info=True)
+            self.log.warning('cadence tick failed',exc_info=True)
             try: self.store.set_meta('last_error',type(exc).__name__)
             except Exception: pass
 

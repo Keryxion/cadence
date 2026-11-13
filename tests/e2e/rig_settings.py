@@ -3,5 +3,5 @@
 
 def replace_plugin_settings(config, settings):
     if settings is not None:
-        config['plugins']['entries']['heartbeat2']['settings'] = dict(settings)
+        config['plugins']['entries']['cadence']['settings'] = dict(settings)
     return config

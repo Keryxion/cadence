@@ -8,9 +8,9 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from heartbeat2 import commands
-from heartbeat2.model import Session
-from heartbeat2.policy import Policy, is_owner
+from cadence import commands
+from cadence.model import Session
+from cadence.policy import Policy, is_owner
 from test_engine import KEY, arm, end, engine, pending, session, start
 
 
@@ -29,7 +29,7 @@ def own(e, hours=6):
 
 
 def desk(e):
-    from heartbeat2.desk import render_desk
+    from cadence.desk import render_desk
     return render_desk(e.store, e.store.get_session(KEY), clock=e.clock,
                        timezone=e.policy.resolved_timezone(), policy=e.policy)
 

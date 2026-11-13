@@ -9,9 +9,9 @@ import sys
 import types
 import pytest
 
-from heartbeat2 import commands
-from heartbeat2.model import Wake
-from heartbeat2.schedule import local_day
+from cadence import commands
+from cadence.model import Wake
+from cadence.schedule import local_day
 from test_engine import engine, arm, pending, session, start, admit, KEY
 
 
@@ -176,19 +176,19 @@ def test_hold_visibility_and_last_ten_occurrences(engine, monkeypatch):
 
 @pytest.mark.parametrize('setting,platform,ttl', [('5m','telegram',300),('1h','telegram',3600),('auto','telegram',3600),('auto','cron',300),('off','telegram',None)])
 def test_claude_ttl_resolution(hermes_helpers, setting, platform, ttl):
-    from heartbeat2.cache import cache_ttl_for
+    from cadence.cache import cache_ttl_for
     hermes_helpers.raw=setting
     assert cache_ttl_for('anthropic|claude-opus-5.5|api.anthropic.com',platform=platform,api_mode='anthropic_messages')[0] == ttl
 
 
 @pytest.mark.parametrize('route,ttl', [('openai|gpt-6.1-sol|api.openai.com',1800),('openai|gpt-5.6-sol|api.openai.com',1800),('openai|gpt-5.5|api.openai.com',None),('zai|glm-5.3|api.z.ai',None)])
 def test_openai_and_unknown_ttls(route, ttl):
-    from heartbeat2.cache import cache_ttl_for
+    from cadence.cache import cache_ttl_for
     assert cache_ttl_for(route)[0] == ttl
 
 
 def test_learned_ttl_same_session_same_route_bounded(engine):
-    from heartbeat2 import cache
+    from cadence import cache
     route='zai|glm-5.3|api.z.ai'
     t=engine.clock.now()
     def touch(at, read, route=route):
@@ -208,7 +208,7 @@ def test_learned_ttl_same_session_same_route_bounded(engine):
 
 
 def test_hermes_import_missing_falls_through(engine, monkeypatch):
-    from heartbeat2.cache import cache_ttl_for
+    from cadence.cache import cache_ttl_for
     monkeypatch.setitem(sys.modules,'agent.agent_runtime_helpers',None)
     route='anthropic|claude-test|api.anthropic.com'
     engine.store.set_meta('cache_routes',json.dumps({route:{'max_warm_gap':100,'min_cold_gap':200}}))
@@ -217,8 +217,8 @@ def test_hermes_import_missing_falls_through(engine, monkeypatch):
 
 @pytest.mark.parametrize('seconds,expected', [(3419,3419),(3420,3420),(3600,3420),(4500,3420),(4501,4501)])
 def test_snap_boundaries(seconds, expected):
-    from heartbeat2.cache import interval
-    from heartbeat2.schedule import next_every
+    from cadence.cache import interval
+    from cadence.schedule import next_every
     w=Wake('unit','task','every')
     assert interval(w,seconds,3600,900)==expected
     assert next_every(0,seconds,cache_ttl=3600,minimum_s=900)==expected
@@ -226,7 +226,7 @@ def test_snap_boundaries(seconds, expected):
 
 @pytest.mark.parametrize('creator,kind,trigger', [('user','every',{}),('agent','cron',{'cron':'0 * * * *'}),('agent','every',{'at':'09:00'})])
 def test_owner_cron_anchor_never_snapped(engine, hermes_helpers, creator, kind, trigger):
-    from heartbeat2.cache import interval, touch
+    from cadence.cache import interval, touch
     touch(engine.store,engine.store.get_session(KEY),started_at=engine.clock.now(),route='anthropic|claude-opus-5.5|api.anthropic.com',prompt=100,read=100,api_mode='anthropic_messages')
     w=Wake(KEY,'task',kind,creator=creator,trigger_json=trigger,base_interval_s=3600,eff_interval_s=3600)
     assert interval(w,3600,3600,900)==3600
@@ -236,8 +236,8 @@ def test_owner_cron_anchor_never_snapped(engine, hermes_helpers, creator, kind, 
 
 @pytest.mark.parametrize('jitter', [-1,-.5,0,.5,1])
 def test_cache_jitter_downward_and_floors_win(jitter):
-    from heartbeat2.schedule import next_every
-    from heartbeat2.cache import interval
+    from cadence.schedule import next_every
+    from cadence.cache import interval
     w=Wake('unit','task','self',pacing_min_s=3500)
     assert interval(w,3600,3600,900)==3600
     assert 3500<=next_every(0,3600,cache_ttl=3600,minimum_s=3500,jitter_unit=jitter)<=3600
@@ -246,7 +246,7 @@ def test_cache_jitter_downward_and_floors_win(jitter):
 
 
 def test_governor_warm_ladder_and_cold_regime(engine, hermes_helpers):
-    from heartbeat2 import cache, governor
+    from cadence import cache, governor
     engine.policy=replace(engine.policy,agent_ungated_floor_minutes=15)
     cache.touch(engine.store,engine.store.get_session(KEY),started_at=engine.clock.now(),route='anthropic|claude-opus-5.5|api.anthropic.com',prompt=100,read=100,api_mode='anthropic_messages')
     w=arm(engine,'every',base_interval_s=900,eff_interval_s=900)
@@ -265,7 +265,7 @@ def test_governor_warm_ladder_and_cold_regime(engine, hermes_helpers):
 
 
 def test_cache_line_bounded_appended_and_pricing_failure_omits(engine, hermes_helpers, monkeypatch):
-    from heartbeat2 import cache
+    from cadence import cache
     cache.touch(engine.store,engine.store.get_session(KEY),started_at=engine.clock.now()-3120,route='anthropic|claude-opus-5.5|api.anthropic.com',prompt=120000,read=120000,api_mode='anthropic_messages')
     monkeypatch.setattr(cache,'cost',lambda *a,**k: .05 if k.get('read') else .99)
     w=arm(engine)
@@ -278,7 +278,7 @@ def test_cache_line_bounded_appended_and_pricing_failure_omits(engine, hermes_he
 
 
 def test_usage_split_and_human_cache_touch(engine, monkeypatch):
-    from heartbeat2 import cache
+    from cadence import cache
     monkeypatch.setattr(cache,'cost',lambda *a,**k: .125)
     route=dict(provider='openai',model='gpt-6.1-sol',base_url='https://user:unused@api.openai.com/v1?ignored=1',api_mode='codex_responses')
     usage=dict(prompt_tokens=100,output_tokens=2,cache_read_tokens=70,cache_write_tokens=20)
@@ -304,8 +304,8 @@ def test_usage_split_and_human_cache_touch(engine, monkeypatch):
 
 def test_store_additive_migration_from_v010(tmp_path, clock):
     from dataclasses import fields
-    from heartbeat2.model import Occurrence, Session
-    from heartbeat2.store import Store, CACHE_FIELDS
+    from cadence.model import Occurrence, Session
+    from cadence.store import Store, CACHE_FIELDS
     import sqlite3
     path=tmp_path/'old.db'
     dump=(Path(__file__).parent/'fixtures'/'pulse-v0.1.0.sql').read_text()
@@ -346,7 +346,7 @@ def test_daily_hold_releases_with_unchanged_cap_at_midnight(engine):
 
 
 def test_cache_tool_consumers_and_owner_result(engine, hermes_helpers, monkeypatch):
-    from heartbeat2 import cache
+    from cadence import cache
     monkeypatch.setattr(cache,'cost',lambda *a,**kw: None)
     cache.touch(engine.store,engine.store.get_session(KEY),started_at=engine.clock.now(),route='anthropic|claude-opus-5.5|api.anthropic.com',prompt=100,read=100,api_mode='anthropic_messages')
     created=engine.tool.handle({'action':'create','note':'Task','trigger':{'kind':'self','every':'1h'}})
@@ -367,7 +367,7 @@ def test_cache_tool_consumers_and_owner_result(engine, hermes_helpers, monkeypat
 
 @pytest.mark.parametrize('setting,platform,tip', [('5m','telegram',True),('auto','cron',True),('auto','telegram',False)])
 def test_status_exact_cache_tip(engine, hermes_helpers, monkeypatch, setting, platform, tip):
-    from heartbeat2 import cache
+    from cadence import cache
     hermes_helpers.raw=setting
     cache.touch(engine.store,engine.store.get_session(KEY),started_at=engine.clock.now(),route='anthropic|claude-opus-5.5|api.anthropic.com',prompt=100,read=0,api_mode='anthropic_messages')
     # Auto source is independent of the messaging destination, just as in Hermes.

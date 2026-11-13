@@ -21,7 +21,7 @@
 
 ## 0.3.0 — 2026-11-08
 
-HeartBeat 2.0 now gives your agent time of its own between your messages, not just follow-ups. See `specs/v0.3-AGENCY.md`.
+Cadence now gives your agent time of its own between your messages, not just follow-ups. See `specs/v0.3-AGENCY.md`.
 
 - **Roles.** `role: true` on a recurring create (or `/pulse role every 1d at 09:00 <charter>` / `/pulse role self <charter>`) makes a standing responsibility the agent owns. It has no expiry, survives `/new`, keeps its notebook between turns, can arm up to 3 follow-ups per turn, and has its own turns-per-day budget (default 6; at most `role_turns_per_day_max`, default 12; `/pulse budget <id> <n>/day`). In its own turns the agent can lower a role's budget but not raise it, and a role it starts there gets no more than the role it came from (or the default). A `self` role with no rhythm of its own spreads its budget across the day.
 - **Own time.** New setting `own_time_hours` (default 0, off) gives the agent a regular turn of its own to work on its roles, follow things up, reflect or rest. It is yours to control: the agent can pace it but not cancel or pause it, and turning the setting off and on re-arms it.
@@ -49,9 +49,9 @@ Upgrade: reinstall and restart the gateway. The daily cost limit counts spend fr
 
 ## 0.2.2 — 2026-11-03
 
-- Only the gateway that serves a profile now opens that profile's schedule, holds its poller lock or delivers its wakes. A Hermes gateway can load every profile's plugins when it starts, and it gives its message injector to all of them. Before, a gateway that did not serve a profile could tick that profile's schedule and send a due wake through itself; Hermes accepted the wake and then dropped it, so it was retried and could be given up after three tries. HeartBeat now asks the gateway with Hermes's own routing rule; a multiplex host must also have admitted the profile (#113).
+- Only the gateway that serves a profile now opens that profile's schedule, holds its poller lock or delivers its wakes. A Hermes gateway can load every profile's plugins when it starts, and it gives its message injector to all of them. Before, a gateway that did not serve a profile could tick that profile's schedule and send a due wake through itself; Hermes accepted the wake and then dropped it, so it was retried and could be given up after three tries. Cadence now asks the gateway with Hermes's own routing rule; a multiplex host must also have admitted the profile (#113).
 - A gateway that stops serving a profile mid-run releases the lock; that profile's due wakes wait for its own gateway, and a wake claimed just before is given back unsent. A wake turn already running there still finishes its bookkeeping. When the gateway serves the profile again, it recovers turns left by a process that held the lock in between (#113).
-- `/pulse status` names the reason when the gateway does not serve the profile, or when HeartBeat cannot tell (#113).
+- `/pulse status` names the reason when the gateway does not serve the profile, or when Cadence cannot tell (#113).
 
 ## 0.2.1 — 2026-10-20
 
@@ -65,7 +65,7 @@ Upgrade: reinstall and restart the gateway. The daily cost limit counts spend fr
 - Group and topic wakes are recognised behind the gateway's sender prefix using a per-profile keyed tag; in group and topic chats a marker without a valid tag never counts as a wake; DM wake text stays unchanged (#98).
 - A proposed wake (`agent_can_create: ask_first`) now reads as not set. Its tool result carries `armed: false`, and its receipt starts "Not set yet: it is armed only after the owner sends /pulse ok <id>." Every create, update, pause and resume result carries `armed` (#91).
 - The wake text adds one contract line: if the chat shows the note's subject was settled after the wake was armed, the turn ends silently with `outcome="done"` and `notify=false` (#92).
-- A bundled `heartbeat2-report-problem` skill drafts a bug report from status and logs, without firing wakes or sending DMs. It files to this repository with `gh` only after the user approves the draft.
+- A bundled `cadence-report-problem` skill drafts a bug report from status and logs, without firing wakes or sending DMs. It files to this repository with `gh` only after the user approves the draft.
 
 ## 0.1.18 — 2026-10-14
 
@@ -98,12 +98,12 @@ Upgrade: reinstall and restart the gateway. The daily cost limit counts spend fr
 
 ## 0.1.13 — 2026-10-14
 
-- **A reminder you ask for in chat fires like your own (#55).** When you said "remind me at 4" in chat, the agent armed the reminder as its own follow-up, so after two unanswered messages, or at a daily cap, it was dropped. Only `/pulse add` reminders were safe. Now a one-time reminder the agent arms because you asked in your current message (it marks the call `owner_asked`) bypasses the unanswered mute and both daily caps. HeartBeat 2.0 checks that the turn really carries your message; a reminder the agent sets on its own, or arms from a wake turn, keeps the agent's limits. A later agent edit or resume without a new request from you removes the exemption. Quiet hours, spacing and expiry still apply.
+- **A reminder you ask for in chat fires like your own (#55).** When you said "remind me at 4" in chat, the agent armed the reminder as its own follow-up, so after two unanswered messages, or at a daily cap, it was dropped. Only `/pulse add` reminders were safe. Now a one-time reminder the agent arms because you asked in your current message (it marks the call `owner_asked`) bypasses the unanswered mute and both daily caps. Cadence checks that the turn really carries your message; a reminder the agent sets on its own, or arms from a wake turn, keeps the agent's limits. A later agent edit or resume without a new request from you removes the exemption. Quiet hours, spacing and expiry still apply.
 - The wake text's counter now reads "wake messages today" instead of "unprompted messages today", and the matching setting is labelled "Wake messages per day".
 
 ## 0.1.12 — 2026-10-13
 
-- A one-time wake that comes due while you have turned HeartBeat 2.0 off for the chat (`/pulse off`, or the agent's `pulse off` when you ask it to stop) is listed as cancelled (`session_off`), not as failed. It still never runs; recurring wakes stay armed and resume after `/pulse on` (#41).
+- A one-time wake that comes due while you have turned Cadence off for the chat (`/pulse off`, or the agent's `pulse off` when you ask it to stop) is listed as cancelled (`session_off`), not as failed. It still never runs; recurring wakes stay armed and resume after `/pulse on` (#41).
 
 ## 0.1.11 — 2026-10-13
 
@@ -113,7 +113,7 @@ Upgrade: reinstall and restart the gateway. The daily cost limit counts spend fr
 
 ## 0.1.10 — 2026-10-13
 
-- Owner messages are recognised by Hermes' own row id (`message_uid`) instead of by their text (#16). Before, when Hermes rewrote history inside a turn (compaction, merged consecutive messages, task-list snapshots), heartbeat2 could count an old owner message again. That reset the unanswered mute, cancelled owner-reply wakes and suppressed the silence check-in. It could also miss a new message that repeated an earlier one word for word. A row that Hermes has not stored yet (the current message, a fresh steer) keeps the text match until Hermes assigns its id. Platforms without platform message ids, such as Signal and SimpleX, benefit most.
+- Owner messages are recognised by Hermes' own row id (`message_uid`) instead of by their text (#16). Before, when Hermes rewrote history inside a turn (compaction, merged consecutive messages, task-list snapshots), cadence could count an old owner message again. That reset the unanswered mute, cancelled owner-reply wakes and suppressed the silence check-in. It could also miss a new message that repeated an earlier one word for word. A row that Hermes has not stored yet (the current message, a fresh steer) keeps the text match until Hermes assigns its id. Platforms without platform message ids, such as Signal and SimpleX, benefit most.
 
 ## 0.1.9 — 2026-10-13
 
@@ -161,7 +161,7 @@ Upgrade: reinstall and restart the gateway. The daily cost limit counts spend fr
 - Count probe checks separately from gate skips, missing verdicts, model turns (refunding only zero-call provider failures), and cache reads/writes with price estimates.
 - Cache-aware agent timing and governor backoff preserve warm intervals; the default agent timer floor is 55 minutes. Owner timing stays explicit.
 
-**Upgrade:** restart the gateway right after updating, before opening other Hermes sessions on that profile. Downgrading to an earlier version needs the profile's `plugin-data/heartbeat2` folder removed; this discards stored wakes and history. v0.1.0 and v0.1.1 cannot read the migrated database.
+**Upgrade:** restart the gateway right after updating, before opening other Hermes sessions on that profile. Downgrading to an earlier version needs the profile's `plugin-data/cadence` folder removed; this discards stored wakes and history. v0.1.0 and v0.1.1 cannot read the migrated database.
 
 ## 0.1.1 — 2026-10-13
 

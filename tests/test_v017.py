@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from heartbeat2 import cache
+from cadence import cache
 from test_engine import engine, session, KEY
 
 

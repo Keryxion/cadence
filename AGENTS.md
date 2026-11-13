@@ -4,14 +4,14 @@ Guidance for AI coding agents, and for people, working in this repository.
 
 ## What this is
 
-HeartBeat 2.0 is a standalone Hermes Agent plugin for bounded wakes and deterministic watchers. It schedules a turn in the messaging-gateway conversation that armed it, using that conversation's model and tools. The current release delivers into gateway DMs (group chats only when `dm_only` is off); CLI, TUI, Desktop, API server and cron arming are refused.
+Cadence is a standalone Hermes Agent plugin for bounded wakes and deterministic watchers. It schedules a turn in the messaging-gateway conversation that armed it, using that conversation's model and tools. The current release delivers into gateway DMs (group chats only when `dm_only` is off); CLI, TUI, Desktop, API server and cron arming are refused.
 
 ## Layout
 
 - `plugin.yaml`: manifest, compatibility and settings schema.
-- `__init__.py` and `heartbeat2/registration.py`: plugin loading, hooks and profile runtime.
-- `heartbeat2/`: scheduler, policy, commands, probes and SQLite store.
-- `skills/heartbeat2-usage/SKILL.md`: bundled usage guidance; `skills/heartbeat2-report-problem/SKILL.md`: the bug-report workflow.
+- `__init__.py` and `cadence/registration.py`: plugin loading, hooks and profile runtime.
+- `cadence/`: scheduler, policy, commands, probes and SQLite store.
+- `skills/cadence-usage/SKILL.md`: bundled usage guidance; `skills/cadence-report-problem/SKILL.md`: the bug-report workflow.
 - `tests/`: network-denied unit tests and separate integration/E2E suites.
 - `bench/`: deterministic simulation and separately operated live benchmarks.
 - `.github/workflows/`: unit matrix, pinned-Hermes loader and gateway E2E CI.
@@ -43,10 +43,10 @@ your change touches them.
 
 ## Filing issues
 
-- Search first: `gh issue list -R electricsheephq/heartbeat2 --state all --search "<key words>"`.
+- Search first: `gh issue list -R Keryxion/cadence --state all --search "<key words>"`.
 - Use the bug form headings: What happened, What you expected, Steps to reproduce, Plugin version, Hermes version, Where it happened, Operating system, Diagnostics, Relevant log lines.
 - Maintainers filing from the CLI always pass labels: `--label bug,triage-pending` (or `triaged` once triaged), plus `agent-drafted` when an agent wrote it.
 
 ## Security
 
-Report vulnerabilities privately: https://github.com/electricsheephq/heartbeat2/security/advisories/new
+Report vulnerabilities privately: https://github.com/Keryxion/cadence/security/advisories/new

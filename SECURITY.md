@@ -1,6 +1,6 @@
 # Security and data handling
 
-Please report vulnerabilities privately: [open a security advisory](https://github.com/electricsheephq/heartbeat2/security/advisories/new).
+Please report vulnerabilities privately: [open a security advisory](https://github.com/Keryxion/cadence/security/advisories/new).
 Do not put security problems in public issues.
 
 We aim to acknowledge reports within 3 business days and to share a decision or fix plan within 14 days.
@@ -42,11 +42,11 @@ These same disclosure and exception paragraphs appear in README and the manifest
 - The immutable session key comes from the invoking gateway, never from tool
   parameters. `/pulse` reads and changes only that session's items. Unknown IDs
   in another session do not reveal the note or permit mutation.
-- HeartBeat 2.0 is intended for messaging-gateway DMs. With default `dm_only=true`,
+- Cadence is intended for messaging-gateway DMs. With default `dm_only=true`,
   groups and unknown chat types are refused. Turning `dm_only=false` permits
   recognized gateway groups; this is an opt-in exception, not tested live here.
   CLI, TUI, Desktop, API server and cron arming are refused.
-- Core consent is `plugins.entries.heartbeat2.allow_gateway_injection: true`,
+- Core consent is `plugins.entries.cadence.allow_gateway_injection: true`,
   outside `settings`. Agent tools cannot write settings or specify destinations.
 - File probes may read configured local files; relative paths resolve against
   the pinned profile home. Regex matching inspects appended complete lines only,
@@ -100,7 +100,7 @@ These same disclosure and exception paragraphs appear in README and the manifest
   intentionally interpret the configured exit condition as a signal.
 - Fingerprints are hashes, but notes, scratch, event payloads, summaries and
   JSON observer state are stored as plaintext in SQLite WAL under
-  `<profile>/plugin-data/heartbeat2/pulse.db`. Hermes filesystem permissions,
+  `<profile>/plugin-data/cadence/pulse.db`. Hermes filesystem permissions,
   backups and host access govern confidentiality. There is no encryption or
   independent OS permission boundary supplied by this plugin.
 
@@ -125,7 +125,7 @@ Roles and own-time turns are full model turns with the conversation's normal too
 turn them on only in conversations whose tools you are happy to have run on their
 own.
 A deadline reports that nothing happened; it does not assert success.
-Hermes may auto-resume a wake turn interrupted by a crash; heartbeat2 keeps the
+Hermes may auto-resume a wake turn interrupted by a crash; cadence keeps the
 replay silent, never counts it as a fire or delivery, and counts it as a model
 turn toward the daily cap.
 
@@ -137,4 +137,4 @@ an alternate private channel without posting exploit details or credentials in
 public issues. Include a minimal sanitized reproduction, version and affected
 boundary. This plugin is maintained on a best-effort basis and has no promised security response SLA.
 
-A wake turn that fails at the provider shows Hermes's own failure notice; HeartBeat backs off until the provider recovers. Provider-error hooks retain only a bounded class, never the request, response or error message.
+A wake turn that fails at the provider shows Hermes's own failure notice; Cadence backs off until the provider recovers. Provider-error hooks retain only a bounded class, never the request, response or error message.

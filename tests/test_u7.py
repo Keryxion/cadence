@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from heartbeat2 import commands
-from heartbeat2.schedule import local_day
+from cadence import commands
+from cadence.schedule import local_day
 from test_engine import engine, arm, start, end, session, KEY
 from test_commands import runtime
 import test_bench_mutants as mutants
@@ -171,12 +171,12 @@ def test_R7_CI1_no_per_mutant_clock_limit(monkeypatch, tmp_path):
     mutants.test_R6_E1_E2_E3_mutant_gate(tmp_path, 'replay_slots', {})
 
 
-@pytest.mark.parametrize('path', ['SECURITY.md', 'skills/heartbeat2-usage/SKILL.md'])
+@pytest.mark.parametrize('path', ['SECURITY.md', 'skills/cadence-usage/SKILL.md'])
 def test_R7_COST_full_context_disclosure(path):
     text = (Path(__file__).resolve().parents[1] / path).read_text()
     for phrase in ('normal model turn', "conversation's context size", 'billed like one',
                    'warm/cold wake counts and estimated cost', '/pulse ledger', '/pulse status', 'running cost'):
-        if path == 'skills/heartbeat2-usage/SKILL.md' and phrase == 'running cost':
+        if path == 'skills/cadence-usage/SKILL.md' and phrase == 'running cost':
             assert 'warm/cold wake counts and estimated cost' in text and 'in/cached/written/out' in text
             continue
         assert phrase in text, (path, phrase)

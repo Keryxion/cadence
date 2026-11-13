@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from heartbeat2.model import KINDS
-from heartbeat2.schedule import parse_at, parse_duration, next_every
+from cadence.model import KINDS
+from cadence.schedule import parse_at, parse_duration, next_every
 from test_engine import engine, session, KEY, arm, start
 from test_v0113 import owner_turn
 from test_v0114 import command, create, local, night, receipt
@@ -263,7 +263,7 @@ def test_version_changelog_and_skill():
     assert changelog.count('## 0.1.16 — 2026-10-14') == 1
     section = changelog.split('## 0.1.16 — 2026-10-14')[1].split('## 0.1.15')[0]
     assert '#72' in section and '#76' in section and 'round-3' in section
-    skill = (root/'skills/heartbeat2-usage/SKILL.md').read_text()
+    skill = (root/'skills/cadence-usage/SKILL.md').read_text()
     assert all(x in skill for x in ['HH:MM', 'tomorrow HH:MM', 'in 10 minutes', 'ISO', 'kind: at'])
     assert 'set `owner_asked: true` on the `at` create' in skill
 
@@ -272,7 +272,7 @@ def test_version_changelog_and_skill():
                                   'when silent 1h'+' '*40000+'x', 'in 1h,'+' '*40000+'and'+' '*40000+'x'])
 def test_command_duration_patterns_are_linear(text):
     import time
-    from heartbeat2.commands import DURATIONS
+    from cadence.commands import DURATIONS
     start = time.perf_counter()
     for head in ('in ', 'every ', 'when silent '):
         re.fullmatch(head+'(?P<duration>'+DURATIONS+r'|\S+)\s+(?P<note>.+)', text, re.I|re.DOTALL)

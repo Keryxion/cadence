@@ -5,7 +5,7 @@ import json
 import re
 import sqlite3
 import pytest
-from heartbeat2.model import Wake
+from cadence.model import Wake
 from bench.soak.runner import epoch
 from bench.soak.schedule import digest
 from bench.soak.score import attribute, hard_failure, matching, score, text_matches
@@ -49,7 +49,7 @@ class ShapeClient(FakeClient):
             reply = 'Quiet hours follow your settings again: 22:00-08:00'
         elif text == '/pulse on':
             self.store.cas_session('chat', {'enabled':self.store.get_session('chat').enabled}, enabled=True)
-            reply = 'HeartBeat 2.0 on for this chat.'
+            reply = 'Cadence on for this chat.'
         elif text.startswith('/pulse cancel '):
             w = self.store.get_wake(text.split()[-1]); self.store.cas_wake(w.id, w.status, status='cancelled')
             reply = w.id+' cancelled · synthetic wake'

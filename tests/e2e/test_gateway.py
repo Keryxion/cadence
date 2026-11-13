@@ -54,7 +54,7 @@ def test_owner_at_wake_delivers_once(make_rig):
     due_at = next(w['next_due_at'] for w in rig.rows('wakes') if w['id'] == wid)
     before = rig.visible_ids()
     row = rig.settled(wid)
-    shown = [s for s in rig.new_visible(before) if "HeartBeat 2.0:" not in s]
+    shown = [s for s in rig.new_visible(before) if "Cadence:" not in s]
     assert len(shown) == 1 and "WAKE-DELIVERED" in shown[0], shown
     assert row["state"] == "done" and row["delivered"] == 1, row
     assert len(rig.director.wake_starts) == 1
@@ -94,7 +94,7 @@ def test_silent_verdict_shows_nothing(make_rig, loud):
     rig.assert_tools_ok()
     assert row["state"] == "done" and row["outcome"] == "no_change", row
     assert row["notify"] == 0 and row["delivered"] == 0, row
-    shown = [t for t in rig.new_visible(before) if "HeartBeat 2.0:" not in t]
+    shown = [t for t in rig.new_visible(before) if "Cadence:" not in t]
     if loud:
         # README "Silence covers the final reply": with tool progress on, Hermes may
         # post its own progress bubble for the wake's pulse call (timing-dependent;
@@ -121,12 +121,12 @@ def test_steer_in_setup_window(make_rig):
     before_human = rig.session()["last_human_at"]
     wid = rig.arm()
     rig.wait(lambda: (rig.root / "barrier.entered").exists(), "pre_llm_call setup barrier", 90)
-    # This hook runs before heartbeat2 sets busy_since, with the agent already published.
+    # This hook runs before cadence sets busy_since, with the agent already published.
     assert rig.session()["busy_since"] is None
     before = rig.visible_ids()
     rig.driver.dm("/steer OWNER-SETUP")
     rig.wait(lambda: any("OWNER-SETUP" in t for t in rig.new_visible(before)), "setup steer accepted", 20)
-    # Still before heartbeat2's pre_llm_call: an abandoned barrier would take the busy path.
+    # Still before cadence's pre_llm_call: an abandoned barrier would take the busy path.
     assert rig.session()["busy_since"] is None
     (rig.root / "barrier.release").touch()
     rig.settled(wid)
@@ -256,7 +256,7 @@ def test_restart_with_pending_wake(make_rig):
     rig.tick_barrier(seconds=20)
     assert row["attempt"] == 1 and len(rig.director.wake_starts) == 2
     # Hermes may replay at the model (NousResearch/hermes-agent#137358).
-    # heartbeat2 must silence the turn without adopting/delivering the occurrence.
+    # cadence must silence the turn without adopting/delivering the occurrence.
     assert not rig.new_visible(visible_before), "crash-resumed turn emitted visible text"
     assert rig.occurrence(second)["delivered"] == 0
     assert next(w for w in rig.rows("wakes") if w["id"] == second)["status_reason"] == "resumed_after_restart"
@@ -377,7 +377,7 @@ def test_invalid_setting_does_not_halt_wakes(make_rig):
     wid = rig.arm("invalid-setting", delay="10s")
     path = rig.gateway.hermes_home / "config.yaml"
     config = yaml.safe_load(path.read_text())
-    config["plugins"]["entries"]["heartbeat2"]["settings"]["quiet_hours"] = "10pm-6am"
+    config["plugins"]["entries"]["cadence"]["settings"]["quiet_hours"] = "10pm-6am"
     path.write_text(yaml.safe_dump(config, sort_keys=False))
     row = rig.settled(wid)
     rig.tick_barrier()

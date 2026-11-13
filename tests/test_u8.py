@@ -10,11 +10,11 @@ import pytest
 from test_engine import engine, arm, start, session, KEY
 from test_commands import runtime
 from test_r3 import _CONNECT, _DNS, _CREATE
-from heartbeat2 import commands, probes
-from heartbeat2.poller import Poller
-from heartbeat2.policy import Policy
-from heartbeat2.store import Store
-from heartbeat2.schedule import local_day
+from cadence import commands, probes
+from cadence.poller import Poller
+from cadence.policy import Policy
+from cadence.store import Store
+from cadence.schedule import local_day
 from bench.run import load_scenarios
 from bench.sim.runner import simulate
 

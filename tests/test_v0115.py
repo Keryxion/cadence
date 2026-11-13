@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from heartbeat2.model import Session
-from heartbeat2.poller import Poller
-from heartbeat2.tool import PARAMETERS
+from cadence.model import Session
+from cadence.poller import Poller
+from cadence.tool import PARAMETERS
 from test_engine import engine, session, KEY, arm
 from test_v0114 import command, create, local, night, receipt
 
@@ -171,7 +171,7 @@ def test_version_changelog_and_skill():
     assert changelog.count('## 0.1.15 — 2026-10-14') == 1
     section = changelog.split('## 0.1.15 — 2026-10-14')[1].split('## 0.1.14')[0]
     assert '#57' in section and '#68' in section and 'owner_asked' in section
-    skill = (root/'skills/heartbeat2-usage/SKILL.md').read_text()
+    skill = (root/'skills/cadence-usage/SKILL.md').read_text()
     assert ('When the owner asks for a one-time reminder in their current message, '
             'set `owner_asked: true` on the `at` create; never set it for your own follow-ups.') in skill
     assert 'The receipt is what to repeat.' in skill

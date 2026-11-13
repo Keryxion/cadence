@@ -2,8 +2,8 @@ import json
 import sqlite3
 import subprocess
 import pytest
-from heartbeat2.store import Store
-from heartbeat2.model import Session, Wake
+from cadence.store import Store
+from cadence.model import Session, Wake
 from bench.soak.client import CommandClient, ClientError
 from bench.soak.evidence import Transcript, Pulse, frozen_state, gateway_starts
 
@@ -63,14 +63,14 @@ def test_readonly_transcript_and_pulse(tmp_path, clock):
 
 
 def test_frozen_state_and_starts(tmp_path):
-    plugin = tmp_path/'plugins/heartbeat2'; plugin.mkdir(parents=True)
+    plugin = tmp_path/'plugins/cadence'; plugin.mkdir(parents=True)
     (plugin/'plugin.yaml').write_text('version: 0.1.15\n')
     config = tmp_path/'config.yaml'
-    config.write_text('model: {default: fake, provider: fake}\nplugins:\n  entries:\n    heartbeat2: {enabled: true, timezone: UTC}\n')
+    config.write_text('model: {default: fake, provider: fake}\nplugins:\n  entries:\n    cadence: {enabled: true, timezone: UTC}\n')
     a = frozen_state(tmp_path)
     assert a['plugin_version'] == '0.1.15'
     assert a['model'] == {'default': 'fake', 'provider': 'fake'}
-    config.write_text('plugins:\n  entries:\n    heartbeat2: {timezone: UTC, enabled: true}\nmodel: {provider: fake, default: fake}\n')
+    config.write_text('plugins:\n  entries:\n    cadence: {timezone: UTC, enabled: true}\nmodel: {provider: fake, default: fake}\n')
     assert a == frozen_state(tmp_path)
     (tmp_path/'plugins/extra').mkdir()
     assert a['plugin_set_sha256'] != frozen_state(tmp_path)['plugin_set_sha256']

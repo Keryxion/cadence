@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from heartbeat2.model import Wake
+from cadence.model import Wake
 from test_engine import engine, session, start, KEY
 from test_v0113 import owner_turn, finish
 from test_v0114 import command, create, receipt

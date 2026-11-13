@@ -226,12 +226,12 @@ def test_loopback_allowlist(monkeypatch, allow):
 def test_config_replacement_without_hermes():
     # PulseRig imports the pin; exercise its config-only helper in plain units.
     helper = local_module('r6_settings', 'tests/e2e/rig_settings.py')
-    original = dict(plugins=dict(entries=dict(heartbeat2=dict(settings={'fast': True}))))
+    original = dict(plugins=dict(entries=dict(cadence=dict(settings={'fast': True}))))
     assert helper.replace_plugin_settings(copy.deepcopy(original), None) == original
     replacement = {'timezone': 'Asia/Tokyo'}
     config = helper.replace_plugin_settings(copy.deepcopy(original), replacement)
-    assert config['plugins']['entries']['heartbeat2']['settings'] == replacement
-    assert config['plugins']['entries']['heartbeat2']['settings'] is not replacement
+    assert config['plugins']['entries']['cadence']['settings'] == replacement
+    assert config['plugins']['entries']['cadence']['settings'] is not replacement
 
 
 def test_score_outputs_include_missing_reps_and_packets(tmp_path):

@@ -9,8 +9,8 @@ from types import SimpleNamespace
 import pytest
 
 from test_engine import admit, engine, arm, session, start, end, GatewayCtx, KEY
-from heartbeat2.model import Session
-from heartbeat2.policy import Policy
+from cadence.model import Session
+from cadence.policy import Policy
 
 
 def test_permission_matrix_and_proposals(engine):
@@ -153,7 +153,7 @@ def test_governor_value_reset_self_floor_and_babysit(engine):
 
 
 def test_governor_ignored_engagement_and_ratio(engine):
-    from heartbeat2 import governor
+    from cadence import governor
     e=engine
     e.policy=replace(e.policy,ignored_pause_after=1,engagement_window_hours=1)
     w=arm(e,'every')

@@ -12,8 +12,8 @@ def pytest_collection_modifyitems(items):
     for item in items:
         if HERE not in item.path.parents:
             continue
-        if not os.environ.get("HEARTBEAT2_E2E_HERMES"):
-            item.add_marker(pytest.mark.skip(reason="set HEARTBEAT2_E2E_HERMES to a pinned checkout"))
+        if not os.environ.get("CADENCE_E2E_HERMES"):
+            item.add_marker(pytest.mark.skip(reason="set CADENCE_E2E_HERMES to a pinned checkout"))
         else:
             item.add_marker(pytest.mark.timeout(240, method="signal"))
 
@@ -33,7 +33,7 @@ def make_rig(request, monkeypatch):
     # Importing Hermes can consult HOME; protect the parent before the first import.
     import tempfile
 
-    raw = os.environ["HEARTBEAT2_E2E_HERMES"]
+    raw = os.environ["CADENCE_E2E_HERMES"]
     pin = Path(raw).resolve()
     live = Path.home() / ".hermes" / "hermes-agent"
     assert pin != live.resolve() and ".hermes" not in pin.parts, "live Hermes is forbidden"
@@ -67,10 +67,10 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
     # A JSON receipt per scenario/worker, including setup/teardown time and strict xfails.
-    if HERE in item.path.parents and os.environ.get("HEARTBEAT2_E2E_RESULTS"):
+    if HERE in item.path.parents and os.environ.get("CADENCE_E2E_RESULTS"):
         import json
 
-        dest = Path(os.environ["HEARTBEAT2_E2E_RESULTS"])
+        dest = Path(os.environ["CADENCE_E2E_RESULTS"])
         dest.mkdir(parents=True, exist_ok=True)
         worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
         row = {"test": item.name, "phase": report.when, "outcome": report.outcome,

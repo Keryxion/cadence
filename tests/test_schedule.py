@@ -3,8 +3,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from heartbeat2.model import Wake
-from heartbeat2.schedule import (parse_duration, parse_at, next_every, next_cron,
+from cadence.model import Wake
+from cadence.schedule import (parse_duration, parse_at, next_every, next_cron,
                                  quiet_end, local_day, time_due)
 
 

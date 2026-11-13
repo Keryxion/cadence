@@ -8,8 +8,8 @@ import sys
 
 import pytest
 
-from heartbeat2 import probes
-from heartbeat2.registration import home_scope
+from cadence import probes
+from cadence.registration import home_scope
 from test_engine import engine
 
 
@@ -19,7 +19,7 @@ def real_helpers():
         return tuple(importlib.import_module(name) for name in (
             'tools.environments.local', 'tools.url_safety', 'agent.file_safety', 'hermes_constants'))
     except ImportError:
-        if os.environ.get('HEARTBEAT2_REQUIRE_HERMES') == '1':
+        if os.environ.get('CADENCE_REQUIRE_HERMES') == '1':
             pytest.fail('Hermes helper is not importable at the required pin')
         pytest.skip('Hermes is not importable in this venv')
 

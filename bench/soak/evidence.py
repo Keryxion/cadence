@@ -28,7 +28,7 @@ def command_matches(text, reply):
     if text == '/new': return 'Confirm /new' in reply and '/approve' in reply
     if text == '/approve': return reply.startswith(('✨ Session reset! Starting fresh.', '✨ New session started!'))
     if text == '/pulse quiet default': return reply == 'Quiet hours follow your settings again: 22:00-08:00'
-    if text == '/pulse on': return reply == 'HeartBeat 2.0 on for this chat.'
+    if text == '/pulse on': return reply == 'Cadence on for this chat.'
     if text.startswith('/pulse cancel '): return bool(re.match(re.escape(text.split()[-1])+r' cancelled\b', reply))
     return False
 
@@ -160,14 +160,14 @@ def frozen_state(profile_home, hermes_source=None, hermes_version_file=None):
     home = Path(profile_home)
     config = yaml.safe_load((home/'config.yaml').read_text()) or {}
     entries = config.get('plugins', {}).get('entries', {})
-    version = yaml.safe_load((home/'plugins/heartbeat2/plugin.yaml').read_text())['version']
+    version = yaml.safe_load((home/'plugins/cadence/plugin.yaml').read_text())['version']
     enabled = {k: v for k, v in entries.items() if v is True or isinstance(v, dict) and v.get('enabled', False)}
-    entry = entries.get('heartbeat2', {})
+    entry = entries.get('cadence', {})
     settings = entry.get('settings', entry) if isinstance(entry, dict) else {}
     return dict(**hermes_revision(hermes_source, hermes_version_file),
                 allow_gateway_injection=isinstance(entry, dict) and entry.get('allow_gateway_injection') is True,
                 quiet_hours=settings.get('quiet_hours', '22:00-08:00'), resolved_timezone=settings.get('timezone') or config.get('timezone'),
-                max_messages_per_day=settings.get('max_messages_per_day', 6), plugin_version=str(version), settings_sha256=digest(entries.get('heartbeat2', {})),
+                max_messages_per_day=settings.get('max_messages_per_day', 6), plugin_version=str(version), settings_sha256=digest(entries.get('cadence', {})),
                 nondefault_settings=sorted(k for k in settings if k not in ('timezone', 'enabled', 'allow_gateway_injection', 'settings')),
                 model=config.get('model'), plugin_set_sha256=digest(dict(directories=sorted(p.name for p in (home/'plugins').iterdir() if p.is_dir()), enabled=enabled)))
 

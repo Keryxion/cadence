@@ -126,7 +126,7 @@ def resolve(text, now, timezone, fixtures):
 
 
 def target(spec, cell):
-    from heartbeat2.schedule import parse_at
+    from cadence.schedule import parse_at
     due, now, tz = spec['match']['due'], cell['sent_at'], cell['timezone']
     if due == '{now+20m:HH:MM}':
         return (datetime.fromtimestamp(now, ZoneInfo(tz)) + timedelta(minutes=20)).replace(second=0, microsecond=0).timestamp()
@@ -134,7 +134,7 @@ def target(spec, cell):
 
 
 def matching(wake, spec, cell):
-    from heartbeat2.schedule import next_cron
+    from cadence.schedule import next_cron
     from croniter import croniter
     match = spec['match']
     trigger = wake.get('trigger_json', {})

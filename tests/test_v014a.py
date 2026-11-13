@@ -8,11 +8,11 @@ import threading
 import pytest
 import yaml
 
-from heartbeat2 import commands, governor
-from heartbeat2.model import Session
-from heartbeat2.policy import Policy
-from heartbeat2.poller import Poller
-from heartbeat2.registration import Runtime, register
+from cadence import commands, governor
+from cadence.model import Session
+from cadence.policy import Policy
+from cadence.poller import Poller
+from cadence.registration import Runtime, register
 from test_engine import engine, arm, pending, session, start, end, admit, GatewayCtx, KEY
 
 

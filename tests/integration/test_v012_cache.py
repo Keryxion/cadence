@@ -7,7 +7,7 @@ from test_real_loader import _load_hermes
 def test_v012_actual_ttl_helpers(monkeypatch, setting, platform, ttl):
     _load_hermes()
     from agent import agent_runtime_helpers as helpers
-    from heartbeat2.cache import cache_ttl_for
+    from cadence.cache import cache_ttl_for
     monkeypatch.setattr(helpers,'_raw_cache_ttl_from_config',lambda default: setting)
     from gateway.session_context import set_session_vars, clear_session_vars
     token=set_session_vars(platform=platform,source=platform)
@@ -26,7 +26,7 @@ def test_v012_actual_ttl_helpers(monkeypatch, setting, platform, ttl):
 def test_v012_actual_marker_routes(monkeypatch, route, mode, ttl):
     _load_hermes()
     from agent import agent_runtime_helpers as helpers
-    from heartbeat2.cache import cache_ttl_for
+    from cadence.cache import cache_ttl_for
     monkeypatch.setattr(helpers,'_raw_cache_ttl_from_config',lambda default: '1h')
     assert cache_ttl_for(route,platform='telegram',api_mode=mode)[0]==ttl
 
@@ -34,7 +34,7 @@ def test_v012_actual_marker_routes(monkeypatch, route, mode, ttl):
 def test_v012_actual_canonical_usage_and_1h_pricing():
     _load_hermes()
     from agent.usage_pricing import normalize_usage
-    from heartbeat2.cache import cost
+    from cadence.cache import cost
     usage=normalize_usage({'input_tokens':5,'cache_read_input_tokens':70,'cache_creation_input_tokens':25,'output_tokens':2},provider='anthropic',api_mode='anthropic_messages')
     assert usage.prompt_tokens==100 and usage.cache_read_tokens==70 and usage.cache_write_tokens==25
     route='anthropic|claude-opus-5.5|api.anthropic.com'

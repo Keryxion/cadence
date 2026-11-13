@@ -9,11 +9,11 @@ import time
 import pytest
 
 from conftest import FakeCtx, FakeClock
-from heartbeat2.model import Wake, Session
-from heartbeat2.policy import Policy
-from heartbeat2.store import Store
-from heartbeat2.poller import Poller
-from heartbeat2.tool import SCHEMA
+from cadence.model import Wake, Session
+from cadence.policy import Policy
+from cadence.store import Store
+from cadence.poller import Poller
+from cadence.tool import SCHEMA
 
 KEY = 'agent:telegram:dm:unit'
 
@@ -57,7 +57,7 @@ class GatewayCtx(FakeCtx):
 @pytest.fixture
 def engine(tmp_path, clock):
     ctx = GatewayCtx(tmp_path)
-    store = Store(tmp_path / 'plugin-data/heartbeat2/pulse.db', clock)
+    store = Store(tmp_path / 'plugin-data/cadence/pulse.db', clock)
     store.upsert_session(Session(KEY, 'telegram', 'dm', 'unit', 'sid', clock.now(),
                                  clock.now(), 'episode'))
     policy = Policy(clock=clock, quiet_hours='', timezone='UTC')
@@ -99,7 +99,7 @@ def admit(e, mid='h1', text='hello'):
 
 
 def fold(e, mid='m1', text='owner reply'):
-    from heartbeat2.intake import ORIGIN
+    from cadence.intake import ORIGIN
     f=e.intake.flights['sid']
     marker=f'⟦pulse o:{f.wake_id}/{f.dedupe_key} a:{f.attempt}⟧'
     content=ORIGIN+'\n'+json.dumps({'platform':'telegram','chat_id':'unit','message_id':mid})+'\n'+text
@@ -133,7 +133,7 @@ def test_I2_bootstrap_restart_without_inbound(engine):
     e = engine
     arm(e)
     e.close()
-    from heartbeat2.registration import register
+    from cadence.registration import register
     start_time = time.monotonic()
     register(e.ctx, clock=e.clock, bootstrap_interval=.01, tick_interval=.01)
     try:
@@ -222,7 +222,7 @@ def test_I7_ack_three_attempts_dead_and_crash_interrupted(engine):
 
 
 def test_I8_profile_home_and_settings_isolated(tmp_path, clock):
-    from heartbeat2.registration import Runtime
+    from cadence.registration import Runtime
     a = Runtime(GatewayCtx(tmp_path/'a', settings={'max_active': 1}), clock=clock)
     b = Runtime(GatewayCtx(tmp_path/'b', settings={'max_active': 7}), clock=clock)
     try:
@@ -303,7 +303,7 @@ def test_I12_duplicate_summary_error_ladder_and_pause(engine):
         e.clock.advance(delay)
     assert e.store.list_occurrences(bad.id)[0].state == 'dead'
     assert e.store.get_wake(bad.id).error_streak == 1
-    from heartbeat2.governor import error
+    from cadence.governor import error
     for _ in range(4):
         error(e, e.store.get_wake(bad.id))
     assert e.store.get_wake(bad.id).status_reason == 'governor:error'

@@ -1,4 +1,4 @@
-"""#113 seam: heartbeat2's served check against Hermes's own routing rule and home keys."""
+"""#113 seam: cadence's served check against Hermes's own routing rule and home keys."""
 import importlib
 import os
 from pathlib import Path
@@ -6,14 +6,14 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from heartbeat2 import serving
+from cadence import serving
 
 
 def _injection_mixin():
     try: return importlib.import_module('gateway.run_plugin_injection').GatewayPluginInjectionMixin
     except ImportError:
-        if os.environ.get('HEARTBEAT2_REQUIRE_HERMES')=='1':
-            pytest.fail('HEARTBEAT2_REQUIRE_HERMES=1 but Hermes is not importable')
+        if os.environ.get('CADENCE_REQUIRE_HERMES')=='1':
+            pytest.fail('CADENCE_REQUIRE_HERMES=1 but Hermes is not importable')
         pytest.skip('Hermes is not importable in this venv')
 
 

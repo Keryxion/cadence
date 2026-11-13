@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from heartbeat2.intake import TODO_HEADER, origin_rows
+from cadence.intake import TODO_HEADER, origin_rows
 from test_engine import engine
 from test_u11c import hermes_origin, humans, steer_row
 from test_v016 import api, begin_wake, silent_reply
@@ -18,7 +18,7 @@ def hermes():
                 importlib.import_module('tools.todo_tool'),
                 importlib.import_module('agent.agent_runtime_helpers'))
     except ImportError:
-        if os.environ.get('HEARTBEAT2_REQUIRE_HERMES') == '1':
+        if os.environ.get('CADENCE_REQUIRE_HERMES') == '1':
             pytest.fail('Hermes compression is not importable at the required pin')
         pytest.skip('Hermes is not importable in this venv')
 

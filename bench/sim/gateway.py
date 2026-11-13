@@ -12,12 +12,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from heartbeat2 import commands
-from heartbeat2.intake import marker
-from heartbeat2.model import Session, TERMINAL_OCCURRENCE_STATES
-from heartbeat2.policy import Policy
-from heartbeat2.poller import Poller
-from heartbeat2.store import Store
+from cadence import commands
+from cadence.intake import marker
+from cadence.model import Session, TERMINAL_OCCURRENCE_STATES
+from cadence.policy import Policy
+from cadence.poller import Poller
+from cadence.store import Store
 from .clock import FakeClock
 from .injector import FakeInjector
 from .model import ScriptedModel
@@ -68,7 +68,7 @@ class FakeGateway:
 
     def build(self,profile):
         ctx=self.contexts[profile]
-        store=Store(ctx._manager.home_path/'plugin-data/heartbeat2/pulse.db',self.clock)
+        store=Store(ctx._manager.home_path/'plugin-data/cadence/pulse.db',self.clock)
         settings={'quiet_hours':'','timezone':'UTC',**self.scenario.get('settings',{})}
         settings={k:self.expand(v) if isinstance(v,str) else v for k,v in settings.items()}
         settings.update(self.scenario.get('profile_settings',{}).get(profile,{}))
@@ -262,7 +262,7 @@ class FakeGateway:
                 if w.kind=='owner_silent':
                     s=e.store.get_session(w.session_key)
                     if s.last_human_at is not None:
-                        from heartbeat2.schedule import parse_duration
+                        from cadence.schedule import parse_duration
                         after=e.policy.checkin_after_hours*3600 if w.trigger_json.get('builtin') else parse_duration(w.trigger_json['after'])
                         times.append(s.last_human_at+after-self.origin)
             # With enabled built-in checkins, one initial tick creates the durable wake.

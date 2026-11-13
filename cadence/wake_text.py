@@ -57,7 +57,7 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
     tz_name = getattr(local.tzinfo, "key", None) or local.tzname()
     tag = f" n:{marker_tag}" if marker_tag is not None else ""
     lines = [
-        f"⟦pulse o:{occurrence.id} a:{occurrence.attempt}{tag}⟧ [HeartBeat 2.0 · {label} {wake.id} · {escape_text(wake.title)} · armed by {owner} {_age(now - wake.created_at)} ago]",
+        f"⟦pulse o:{occurrence.id} a:{occurrence.attempt}{tag}⟧ [Cadence · {label} {wake.id} · {escape_text(wake.title)} · armed by {owner} {_age(now - wake.created_at)} ago]",
         f"Local time: {local:%a %d %b %H:%M} ({tz_name}){owner_clause} · fire {wake.fires + 1} of {fire_limit}",
         f"Why: {escape_text(why)}", f"Your note: {escape_text(wake.note)}",
     ]

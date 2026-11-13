@@ -3,7 +3,7 @@
 Run `.venv/bin/python -m bench.run --baseline --gate --out /path/to/artifacts`.
 Select one YAML with `--scenario ID`. There is no network or real model call.
 The runtime uses only development dependencies already used by the tests.
-The gate fails when the engine arm takes 30 s or more. `HEARTBEAT2_BENCH_RUNTIME_BUDGET_S`
+The gate fails when the engine arm takes 30 s or more. `CADENCE_BENCH_RUNTIME_BUDGET_S`
 overrides that budget; CI sets 120 s because shared runners are several times slower.
 
 Claim class: deterministic simulation on this suite (advisory). These results
@@ -39,7 +39,7 @@ The common metric evaluator computes duplicate, destination, marker, missed
 window, burst, silence-episode, no-op, estimated-token and latency metrics.
 Invalid stale attempts still count
 as model turns but cannot satisfy a required fire. Only valid structured
-respond results count as verdicts. All HB2 hard bars and declared scenario bars
+respond results count as verdicts. All Cadence hard bars and declared scenario bars
 are gated; baseline bars are reported. A disabled transform is tested to fail
 on sentinel leaks. Generated reports include dirty-source content identity.
 

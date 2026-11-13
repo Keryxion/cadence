@@ -1,4 +1,4 @@
--- Frozen HeartBeat 2.0 v0.1.0 (06c188b) database, dumped with sqlite3 iterdump after
+-- Frozen Cadence v0.1.0 (06c188b) database, dumped with sqlite3 iterdump after
 -- v0.1.0 Store created one wake, a finished occurrence, a session and a ledger row.
 -- Used by tests/test_v012.py::test_store_additive_migration_from_v010.
 BEGIN TRANSACTION;

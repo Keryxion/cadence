@@ -13,11 +13,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from heartbeat2 import serving
-from heartbeat2.model import Session
-from heartbeat2.registration import Runtime, register
-from heartbeat2.store import Store
-from heartbeat2.poller import Poller
+from cadence import serving
+from cadence.model import Session
+from cadence.registration import Runtime, register
+from cadence.store import Store
+from cadence.poller import Poller
 from test_engine import GatewayCtx, KEY, arm, engine, pending, session  # noqa: F401 (fixture)
 from test_v014a import bind
 
@@ -33,7 +33,7 @@ def until(predicate, timeout=10):
 
 
 def locked(home):
-    path = home/'plugin-data/heartbeat2/poller.lock'
+    path = home/'plugin-data/cadence/poller.lock'
     if not path.exists(): return False
     with open(path, 'a+') as f:
         try: fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -99,7 +99,7 @@ def test_unserved_mid_run_releases_lock_and_holds_due_wakes(tmp_path, clock):
         assert locked(tmp_path)
         ctx.runner.served = False
         assert until(lambda: not locked(tmp_path))
-        store = Store(tmp_path/'plugin-data/heartbeat2/pulse.db', clock)
+        store = Store(tmp_path/'plugin-data/cadence/pulse.db', clock)
         store.upsert_session(Session(KEY, 'telegram', 'dm', 'unit', 'sid', clock.now(), clock.now(), 'episode'))
         arm(SimpleNamespace(store=store, clock=clock))
         clock.advance(10)
@@ -120,7 +120,7 @@ def test_unserved_mid_run_releases_lock_and_holds_due_wakes(tmp_path, clock):
 def test_unknown_served_check_fails_closed_and_warns_once(tmp_path, clock, caplog):
     ctx = GatewayCtx(tmp_path, settings=SETTINGS)
     ctx._manager._gateway_message_injector = (object(), None)
-    with caplog.at_level(logging.WARNING, logger='heartbeat2'):
+    with caplog.at_level(logging.WARNING, logger='cadence'):
         rt = boot(ctx, clock)
         try:
             time.sleep(.2)
@@ -222,7 +222,7 @@ def test_unserved_dispatch_leaves_the_wake_untouched(engine):
 
 
 def test_home_lost_after_claim_gives_the_claim_back(engine, monkeypatch):
-    import heartbeat2.wake_text as wake_text
+    import cadence.wake_text as wake_text
     e = engine
     w = arm(e)
     assert e.acquire()

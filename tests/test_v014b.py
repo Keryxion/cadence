@@ -6,8 +6,8 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from heartbeat2 import cache, commands
-from heartbeat2.schedule import local_day
+from cadence import cache, commands
+from cadence.schedule import local_day
 from test_engine import engine, arm, session, start, KEY
 from test_v013b import interrupted, replay
 

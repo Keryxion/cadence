@@ -26,7 +26,7 @@ jobs:
       - run: python -m pytest -q
         env:
           # Shared runners take 30-45 s for what a workstation runs in 8 s; the 30 s default stays the release gate.
-          HEARTBEAT2_BENCH_RUNTIME_BUDGET_S: '120'
+          CADENCE_BENCH_RUNTIME_BUDGET_S: '120'
   integration:
     name: Real Hermes loader (${{ matrix.target }})
     runs-on: ubuntu-latest
@@ -42,7 +42,7 @@ jobs:
     env:
       HERMES_HOME: ${{ github.workspace }}/hermes-home
       HERMES_DISABLE_LAZY_INSTALLS: '1'
-      HEARTBEAT2_REQUIRE_HERMES: '1'
+      CADENCE_REQUIRE_HERMES: '1'
       PYTHONDONTWRITEBYTECODE: '1'
       PYTHONPATH: ${{ github.workspace }}/hermes
     steps:
@@ -67,10 +67,10 @@ jobs:
           uv pip install --python .venv/bin/python pytest pyyaml croniter psutil
       - name: Copy into throwaway profile
         run: |
-          mkdir -p "$HERMES_HOME/plugins/heartbeat2"
-          cp -R plugin/heartbeat2 plugin/skills plugin/__init__.py plugin/plugin.yaml "$HERMES_HOME/plugins/heartbeat2/"
+          mkdir -p "$HERMES_HOME/plugins/cadence"
+          cp -R plugin/cadence plugin/skills plugin/__init__.py plugin/plugin.yaml "$HERMES_HOME/plugins/cadence/"
       - name: Validate through pinned Hermes CLI
-        run: hermes/.venv/bin/python -m hermes_cli.main plugins validate "$HERMES_HOME/plugins/heartbeat2"
+        run: hermes/.venv/bin/python -m hermes_cli.main plugins validate "$HERMES_HOME/plugins/cadence"
       - name: Real loader and fake gateway acceptance
         working-directory: plugin
         run: ../hermes/.venv/bin/python -m pytest tests/integration -q

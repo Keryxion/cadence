@@ -1,4 +1,4 @@
-"""Test-only hook that blocks before heartbeat2 sees the wake setup."""
+"""Test-only hook that blocks before cadence sees the wake setup."""
 import os
 import time
 from pathlib import Path
