@@ -1,7 +1,7 @@
-# Session to session: one conversation asks another
+# Session to session: conversations ask and tell each other
 
 Part of being proactive is being able to talk to the owner's other
-conversations. This spec lets any conversation ask another to do something. It
+conversations. This spec lets any conversation ask or tell another. It
 works the same for every Hermes conversation Cadence serves: a messaging DM, a
 voice device, a coding chat.
 
