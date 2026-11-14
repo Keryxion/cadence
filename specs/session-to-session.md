@@ -1,9 +1,14 @@
-# Session to session: one chat asks another
+# Session to session: one conversation asks another
 
-A wake fires in the chat that armed it, and that does not change. This spec
-lets one chat ask another to do something. The request runs a turn in the other
-chat, the answer runs a turn back in the first, and both record what was
-agreed: who is doing what.
+Part of being proactive is being able to talk to the owner's other
+conversations. This spec lets any conversation ask another to do something. It
+works the same for every Hermes conversation Cadence serves: a messaging DM, a
+voice device, a coding chat.
+
+A wake still fires only in the chat that armed it. What crosses between chats
+is a request and its answer. The request runs a turn in the other chat, the
+answer runs a turn back in the first, and both record what was agreed: who is
+doing what.
 
 > **In the Kitchen:** "Remind me in Master to take out the trash in 15 minutes."
 > **Kitchen:** "I'll ask Master."
@@ -18,24 +23,31 @@ Master owns the reminder: it is an ordinary wake in Master's own chat, so
 Master can be asked about it, snooze it, or cancel it. Kitchen owns nothing
 after the agreement except a record that it asked.
 
-The same exchange covers anything one room wants from another. Cadence carries
-the request and the answer; the asked chat does the work with its own tools.
+Cadence carries the request and the answer; the asked chat does the work with
+its own tools.
 
-| Asked in the Kitchen | What Master does in its request turn |
-|---|---|
-| "Remind me in Master to take out the trash in 15 minutes." | Arms its own reminder. Answers `accepted`, silently. |
-| "Tell Master dinner is ready." | Says it at once. Answers `accepted`. |
-| "Play some jazz in Master." | Starts the music with its own music tool. Answers `accepted`, or `declined` if it has no way to play music. |
+| Asked | Where | What the asked chat does in its request turn |
+|---|---|---|
+| "Remind me in Master to take out the trash in 15 minutes." | Kitchen asks Master | Arms its own reminder. Answers `accepted`, silently. |
+| "Tell Master dinner is ready." | Kitchen asks Master | Says it at once. Answers `accepted`. |
+| "Play some jazz in Master." | Kitchen asks Master | Starts the music with its own music tool, or answers `declined` if it has none. |
+| "Tell me on Telegram when the build is done." | A coding chat asks the Telegram DM | Sends the message when asked. Answers `accepted`. |
+| "Have the Kitchen announce that I'm on my way home." | The Telegram DM asks Kitchen | Says it at once. Answers `accepted`. |
 
-## The owner's setting
+## Which conversations can be asked
+
+Any conversation Cadence serves can ask, and be asked by, any other that is:
+
+- a DM chat, not a group;
+- in the same Hermes profile;
+- on a platform the owner has not excluded.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `request_platforms` | `["converse"]` | Platforms whose chats may be asked. `[]` turns requests off. |
+| `request_platforms` | every platform Cadence serves | Platforms whose chats may be asked. A list narrows it; `[]` turns requests off. |
 
-A chat that is asked must be a DM chat on a listed platform, in the same Hermes
-profile as the asking chat. The asking chat may be any chat where Cadence works,
-so the owner's messaging DM can ask a room.
+Requests never leave the owner's own conversations: a chat in another profile,
+or a group, is never asked.
 
 ## Asking
 
@@ -165,17 +177,19 @@ or the no-op governor.
 
 ## What Cadence needs from outside
 
-- **Channel directory entries for voice devices.** Each device must be listed by
-  its device name, so `converse:Master` resolves.
+- **Channel directory entries for every chat.** A voice device must be listed
+  by its device name, so `converse:Master` resolves.
 - **Whether a chat can be reached now.**
 - **`inject_message` with another session's key.** Hermes already provides this.
-- **Silent turns on voice.** A request turn answered with `notify: false` must
-  not be spoken.
+- **Silent turns on every platform.** A request turn answered with
+  `notify: false` must send and speak nothing.
 
 ## Invariants to test
 
 - With `request_platforms: []`, every `ask` is refused and no turn runs in
   another chat.
+- A request works between any two of the owner's DM chats on different
+  platforms.
 - A wake never fires outside the chat that armed it.
 - A chat on an unlisted platform, in another profile, or in a group is never
   asked.
