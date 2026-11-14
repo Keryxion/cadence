@@ -89,29 +89,11 @@ A reminder the owner asked for (`owner_asked`) is not muted or capped in the
 destination, as in its own chat. The one-wake-in-flight and
 duplicate-delivery guarantees are unchanged: each fire is one durable claim.
 
-## Timers that ring
+## Not in Cadence: countdown tones
 
-A voice device can also ring an alarm sound instead of speaking. `pulse create`
-takes an optional `ring` on a one-time wake, with or without `deliver_to`:
-
-```json
-{"action":"create","title":"Tea","note":"Tea timer.","trigger":{"kind":"at","after":"5m"},"owner_asked":true,"deliver_to":"converse:Master","ring":{"label":"tea"}}
-```
-
-`ring` is an object with optional `sound` (`alarm-1` to `alarm-4`, default
-`alarm-1`) and `label`. A ringing wake runs no turn. At the deadline Cadence
-calls the voice server's `ring_alarm` tool with the destination device, `sound`,
-and `label`. It is not held by quiet hours, spacing, or a busy chat, and uses no
-turn budget.
-
-| `ring_alarm` result | Outcome |
-|---|---|
-| `sent` or `queued` | The wake is done. |
-| `not_attached` | Cadence runs one ordinary wake in the arming chat saying the timer finished and the device could not ring. |
-
-A ringing wake more than 5 minutes late, for example after a restart, does not
-ring; it is handled as `not_attached`. `ring` on a chat that is not a voice
-device is refused with `cannot_ring`.
+A timer that shows a countdown and ends with a tone is the voice server's
+`countdown` tool, which the agent calls directly. Cadence delivers reminders
+as turns; it does not ring devices.
 
 ## What Cadence needs from outside
 
@@ -119,7 +101,6 @@ device is refused with `cannot_ring`.
   its device name, so `converse:Master` resolves.
 - **Whether a chat can be reached now.** Needed to fall back to the arming chat.
 - **`inject_message` with another session's key.** Hermes already provides this.
-- **`ring_alarm` callable outside a turn**, for ringing wakes only.
 
 ## Invariants to test
 
@@ -132,5 +113,4 @@ device is refused with `cannot_ring`.
 - An unreachable destination fires once, in the arming chat only.
 - A follow-up armed during a destination turn belongs to the destination chat.
 - Cancelling from either chat stops the wake for both.
-- Quiet hours in the destination hold an ordinary wake and do not hold a ring.
-- A ringing wake runs no model turn and calls `ring_alarm` once.
+- Quiet hours in the destination hold the wake.
