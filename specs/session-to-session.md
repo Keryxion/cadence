@@ -1,0 +1,161 @@
+# Session to session: one chat asks another
+
+A wake fires in the chat that armed it, and that does not change. This spec
+lets one chat ask another to do something. The request runs a turn in the other
+chat, the answer runs a turn back in the first, and both record what was
+agreed: who is doing what.
+
+> **In the Kitchen:** "Remind me in Master to take out the trash in 15 minutes."
+> **Kitchen:** "I'll ask Master."
+>
+> *Master runs a turn, silently. It arms its own 15-minute reminder and accepts.*
+>
+> **Kitchen:** "Master will remind you in 15 minutes."
+>
+> *15 minutes later, in Master, with no wake word:* "Time to take out the trash."
+
+Master owns the reminder: it is an ordinary wake in Master's own chat, so
+Master can be asked about it, snooze it, or cancel it. Kitchen owns nothing
+after the agreement except a record that it asked.
+
+The same exchange covers anything one room wants from another: "tell Master
+dinner is ready" is a request Master carries out at once.
+
+## The owner's setting
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `request_platforms` | `["converse"]` | Platforms whose chats may be asked. `[]` turns requests off. |
+
+A chat that is asked must be a DM chat on a listed platform, in the same Hermes
+profile as the asking chat. The asking chat may be any chat where `pulse` works,
+so the owner's messaging DM can ask a room.
+
+## Asking
+
+`pulse` gains two actions.
+
+| Action | Used by | Fields |
+|---|---|---|
+| `ask` | The chat that wants something | `to` (a `send_message` target, `platform:name`), `note` (what is wanted, in words) |
+| `answer` | The chat that was asked, during the request turn | `id`, `outcome` (`accepted`, `declined`, `counter`), `summary`, `notify` |
+
+Kitchen asks:
+
+```json
+{"action":"ask","to":"converse:Master","note":"Remind them to take out the trash in 15 minutes."}
+```
+
+```json
+{"ok":true,"request":"r_7","to":"Master","receipt":"Asked Master. Nothing is set until Master answers."}
+```
+
+`to` is resolved through the Hermes channel directory, with the names and
+aliases `send_message` accepts.
+
+| Situation | Result |
+|---|---|
+| Resolves to one chat on a listed platform | The request is recorded and a turn is started in that chat. |
+| Platform not in `request_platforms` | Refused: `not_allowed`. |
+| No such chat, or it has never had a conversation | Refused: `unknown`. |
+| More than one chat matches | Refused: `ambiguous`, listing the matches so the agent can ask the owner. |
+| The chat cannot be reached now | Refused: `unreachable`. The asking agent does the work itself or tells the owner. |
+
+## The request turn
+
+Cadence injects the request into the asked chat. It runs as a turn there, on
+that chat's model. The text names the asking chat, quotes the note, and says the
+owner is not in this room and has not seen the request.
+
+The asked agent decides. To accept, it does what is needed in its own chat,
+such as arming its own wake, and then answers:
+
+```json
+{"action":"create","title":"Trash","note":"Remind them to take out the trash. Asked for from Kitchen.","trigger":{"kind":"at","after":"15m"},"owner_asked":true}
+```
+
+```json
+{"action":"answer","id":"r_7","outcome":"accepted","summary":"I'll remind here in 15 minutes.","notify":false}
+```
+
+| `outcome` | Meaning |
+|---|---|
+| `accepted` | The asked chat has taken the work. `summary` says what it will do. |
+| `declined` | It will not. `summary` says why. Nothing was armed. |
+| `counter` | It proposes something else in `summary`, such as a different time. Nothing was armed. |
+
+`notify` says whether the asked chat speaks or sends a message in this turn.
+It is `false` for arranging something later and `true` for "tell Master dinner
+is ready". A wake armed during an accepted request is linked to the request.
+
+## The answer turn
+
+The answer is injected into the asking chat and runs as a turn there. The
+asking agent tells the owner what was agreed, in its own words, or acts on a
+refusal.
+
+| Answer | What the asking agent does |
+|---|---|
+| `accepted` | Confirms to the owner, quoting the summary. |
+| `declined` | Does the work itself, or tells the owner it cannot be done there. |
+| `counter` | Accepts by asking again with the proposed terms, or does the work itself. |
+| No answer in 60 seconds | Cadence reports `no_answer`. The agent treats it as `declined`. |
+
+A request ends when it is accepted, declined, or unanswered. A counter may be
+followed by one more `ask`; after three asks on the same matter Cadence refuses
+further ones and the asking agent decides alone.
+
+## Who is doing what
+
+Each request is recorded with both chats, the note, the outcome, the summary,
+and any wake armed for it. Both chats see it:
+
+- In the asking chat, `pulse list` shows "asked Master: trash reminder,
+  accepted".
+- In the asked chat, the wake shows "asked for from Kitchen".
+
+The asked chat alone can change or cancel its wake. The asking chat changes it
+by asking again.
+
+When a linked wake cannot be delivered, for example Master is not connected at
+the deadline, Cadence starts a turn in the asking chat saying so. The work
+falls back to the chat that asked.
+
+## Limits
+
+| Limit | Applies to |
+|---|---|
+| Turns per day and cost | Each turn is charged to the chat it runs in. |
+| Requests in flight | One per pair of chats; a second waits for the first to end. |
+| Depth | A request turn cannot `ask` a third chat. |
+| Quiet hours | A request the owner just made is not held. A request made from a wake turn is held by the asked chat's quiet hours. |
+| Busy chat | The request waits for the asked chat's current exchange, within the 60 seconds. |
+
+Request and answer turns are not wakes: they do not count toward `max_active`
+or the no-op governor.
+
+## What Cadence needs from outside
+
+- **Channel directory entries for voice devices.** Each device must be listed by
+  its device name, so `converse:Master` resolves.
+- **Whether a chat can be reached now.**
+- **`inject_message` with another session's key.** Hermes already provides this.
+- **Silent turns on voice.** A request turn answered with `notify: false` must
+  not be spoken.
+
+## Invariants to test
+
+- With `request_platforms: []`, every `ask` is refused and no turn runs in
+  another chat.
+- A wake never fires outside the chat that armed it.
+- A chat on an unlisted platform, in another profile, or in a group is never
+  asked.
+- An ambiguous, unknown, or unreachable `to` starts no turn.
+- One `ask` starts exactly one request turn and at most one answer turn.
+- A request turn that does not answer produces `no_answer` in the asking chat
+  once, after 60 seconds.
+- `answer` outside a request turn, or with another request's `id`, is refused.
+- A request turn cannot `ask`.
+- A fourth `ask` on the same matter is refused.
+- An undeliverable linked wake starts exactly one turn in the asking chat.
+- A request turn with `notify: false` sends and speaks nothing.
