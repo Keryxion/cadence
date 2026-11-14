@@ -41,6 +41,8 @@ its own tools.
 | "Play some jazz in Master." | Kitchen asks Master | Starts the music with its own music tool, or answers `declined` if it has none. |
 | "Tell me on Telegram when the build is done." | A coding chat asks the Telegram DM | Sends the message when asked. Answers `accepted`. |
 | "Have the Kitchen announce that I'm on my way home." | The Telegram DM asks Kitchen | Says it at once. Answers `accepted`. |
+| "Stop the kitchen timer." | Master asks Kitchen | Cancels its own ringing countdown. Answers `accepted`. |
+| *Kitchen's timer has been ringing for two minutes.* | Kitchen tells Master and Den | Each says the kitchen timer is going off. No answer. |
 
 ## Which conversations can be asked
 
@@ -85,7 +87,7 @@ own wakes and has no destination.
 |---|---|---|
 | `ask` | The chat that wants something | `to` (a conversation's name), `note` (what is wanted, in words) |
 | `answer` | The chat that was asked, during the request turn | `id`, `outcome` (`accepted`, `declined`, `counter`), `summary`, `notify` |
-| `tell` | Any chat | `to` (a conversation's name), `note` (what it should know), `urgent` (optional) |
+| `tell` | Any chat | `to` (a conversation's name, or a list of names), `note` (what it should know), `urgent` (optional) |
 | `list` | Either chat | None. Returns the requests this chat asked or was asked, with their outcomes. |
 | `names` | Any chat | None. Returns the conversations that can be asked: name, platform, and whether each can be reached now. |
 | `rename` | Any chat, for itself | `name`. |
@@ -152,6 +154,18 @@ A build watcher in a coding chat, reporting to the owner's messaging DM:
 
 ```json
 {"action":"tell","to":"Telegram","note":"The build finished: 5 checks passed, 1 failed (unit tests)."}
+```
+
+`to` may be a list. One turn runs in each conversation named, and the result
+reports each name separately, so one that cannot be reached does not hold up
+the others:
+
+```json
+{"action":"tell","to":["Master","Den"],"note":"The kitchen timer has been ringing for two minutes."}
+```
+
+```json
+{"ok":true,"results":{"Master":"told","Den":"unreachable"}}
 ```
 
 A told chat has no owner standing from the sender: it cannot arm an owner
@@ -245,7 +259,8 @@ or the no-op governor.
 - A request works between any two of the owner's DM chats on different
   platforms.
 - A scheduled wake, watcher, or stream fires only in the chat that armed it.
-- One `tell` starts exactly one turn in the other chat and none back.
+- One `tell` starts exactly one turn in each chat it names and none back.
+- A `tell` to several chats reaches the reachable ones when another is unreachable.
 - Tells sent within 15 seconds to the same chat arrive in one turn, in order.
 - A `tell` gives the told chat no owner standing.
 - A chat on an unlisted platform, in another profile, or in a group is never
