@@ -94,6 +94,23 @@ such as arming its own wake, and then answers:
 It is `false` for arranging something later and `true` for "tell Master dinner
 is ready". A wake armed during an accepted request is linked to the request.
 
+## Using `pulse` in a request turn
+
+A request turn is neither a human turn nor a wake turn. In it the asked chat
+uses `pulse` for its own chat: `create`, `list`, `update`, `pause`, `resume`,
+`cancel`, and `answer`.
+
+The asker's standing comes with the request:
+
+| The `ask` was made | In the request turn |
+|---|---|
+| In a turn where the owner had just spoken | The request carries the owner's standing. `owner_asked: true` on a one-time wake is honoured, so the reminder is not muted, capped, or held by wake spacing. Wakes the owner created in the asked chat can be changed or cancelled, so "cancel the trash reminder in Master" works from the Kitchen. |
+| From a wake turn | No owner standing. Anything armed is the agent's own follow-up, with the usual limits, and the owner's wakes cannot be changed. |
+
+A request turn can arm up to `max_children_per_wake_turn` wakes. Starting a
+role and `babysit` still need the owner in that chat. The request text tells the
+asked agent which standing it has.
+
 ## The answer turn
 
 The answer is injected into the asking chat and runs as a turn there. The
@@ -162,6 +179,9 @@ or the no-op governor.
   once, after 60 seconds.
 - `answer` outside a request turn, or with another request's `id`, is refused.
 - A request turn cannot `ask`.
+- `owner_asked` in a request turn is honoured only when the `ask` came from a
+  turn where the owner had just spoken.
+- A request without owner standing cannot change a wake the owner created.
 - A fourth `ask` on the same matter is refused.
 - An undeliverable linked wake starts exactly one turn in the asking chat.
 - A request turn with `notify: false` sends and speaks nothing.
