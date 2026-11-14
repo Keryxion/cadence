@@ -34,19 +34,21 @@ the request and the answer; the asked chat does the work with its own tools.
 | `request_platforms` | `["converse"]` | Platforms whose chats may be asked. `[]` turns requests off. |
 
 A chat that is asked must be a DM chat on a listed platform, in the same Hermes
-profile as the asking chat. The asking chat may be any chat where `pulse` works,
+profile as the asking chat. The asking chat may be any chat where Cadence works,
 so the owner's messaging DM can ask a room.
 
 ## Asking
 
-`pulse` gains two actions.
+Asking is its own tool, `request`. `pulse` is unchanged: it schedules a chat's
+own wakes and has no destination.
 
-| Action | Used by | Fields |
+| `request` action | Used by | Fields |
 |---|---|---|
 | `ask` | The chat that wants something | `to` (a `send_message` target, `platform:name`), `note` (what is wanted, in words) |
 | `answer` | The chat that was asked, during the request turn | `id`, `outcome` (`accepted`, `declined`, `counter`), `summary`, `notify` |
+| `list` | Either chat | None. Returns the requests this chat asked or was asked, with their outcomes. |
 
-Kitchen asks:
+Kitchen calls `request`:
 
 ```json
 {"action":"ask","to":"converse:Master","note":"Remind them to take out the trash in 15 minutes."}
@@ -74,11 +76,13 @@ that chat's model. The text names the asking chat, quotes the note, and says the
 owner is not in this room and has not seen the request.
 
 The asked agent decides. To accept, it does what is needed in its own chat,
-such as arming its own wake, and then answers:
+such as arming its own wake with `pulse`:
 
 ```json
 {"action":"create","title":"Trash","note":"Remind them to take out the trash. Asked for from Kitchen.","trigger":{"kind":"at","after":"15m"},"owner_asked":true}
 ```
+
+Then it answers with `request`:
 
 ```json
 {"action":"answer","id":"r_7","outcome":"accepted","summary":"I'll remind here in 15 minutes.","notify":false}
@@ -97,8 +101,9 @@ is ready". A wake armed during an accepted request is linked to the request.
 ## Using `pulse` in a request turn
 
 A request turn is neither a human turn nor a wake turn. In it the asked chat
-uses `pulse` for its own chat: `create`, `list`, `update`, `pause`, `resume`,
-`cancel`, and `answer`.
+uses `pulse` for its own chat exactly as it would for its owner: `create`,
+`list`, `update`, `pause`, `resume`, and `cancel`. It ends by calling `request`
+with `answer`.
 
 The asker's standing comes with the request:
 
@@ -133,9 +138,10 @@ further ones and the asking agent decides alone.
 Each request is recorded with both chats, the note, the outcome, the summary,
 and any wake armed for it. Both chats see it:
 
-- In the asking chat, `pulse list` shows "asked Master: trash reminder,
+- In the asking chat, `request list` shows "asked Master: trash reminder,
   accepted".
-- In the asked chat, the wake shows "asked for from Kitchen".
+- In the asked chat, `request list` shows the same request, and `pulse list`
+  marks the wake "asked for from Kitchen".
 
 The asked chat alone can change or cancel its wake. The asking chat changes it
 by asking again.
