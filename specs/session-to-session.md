@@ -49,6 +49,25 @@ Any conversation Cadence serves can ask, and be asked by, any other that is:
 Requests never leave the owner's own conversations: a chat in another profile,
 or a group, is never asked.
 
+## Names
+
+Every conversation Cadence serves has a name, unique within the profile. A
+request is addressed to a name.
+
+- **Automatic.** A conversation gets a name the first time Cadence sees it,
+  taken from the chat's own title in Hermes, such as `Telegram` or
+  `Arya: Master`. If that is taken, a number is added.
+- **Chosen.** A conversation can give itself a better name at any time, and the
+  owner can name it with `/pulse name <name>`. A name is 1 to 40 characters,
+  compared without regard to case, and refused if another conversation has it.
+
+A platform can tell its conversations how to name themselves. The voice server's
+instructions have each device name its conversation after the device, so the
+Master bedroom's conversation is `Master`.
+
+Renaming never breaks anything: requests and their records point at the
+conversation, not at the name it had.
+
 ## Asking
 
 Asking is its own tool, `request`. `pulse` is unchanged: it schedules a chat's
@@ -56,29 +75,33 @@ own wakes and has no destination.
 
 | `request` action | Used by | Fields |
 |---|---|---|
-| `ask` | The chat that wants something | `to` (a `send_message` target, `platform:name`), `note` (what is wanted, in words) |
+| `ask` | The chat that wants something | `to` (a conversation's name), `note` (what is wanted, in words) |
 | `answer` | The chat that was asked, during the request turn | `id`, `outcome` (`accepted`, `declined`, `counter`), `summary`, `notify` |
 | `list` | Either chat | None. Returns the requests this chat asked or was asked, with their outcomes. |
+| `names` | Any chat | None. Returns the conversations that can be asked: name, platform, and whether each can be reached now. |
+| `rename` | Any chat, for itself | `name`. |
 
 Kitchen calls `request`:
 
 ```json
-{"action":"ask","to":"converse:Master","note":"Remind them to take out the trash in 15 minutes."}
+{"action":"ask","to":"Master","note":"Remind them to take out the trash in 15 minutes."}
 ```
 
 ```json
 {"ok":true,"request":"r_7","to":"Master","receipt":"Asked Master. Nothing is set until Master answers."}
 ```
 
-`to` is resolved through the Hermes channel directory, with the names and
-aliases `send_message` accepts.
+A conversation naming itself:
 
-| Situation | Result |
+```json
+{"action":"rename","name":"Master"}
+```
+
+| Situation on `ask` | Result |
 |---|---|
-| Resolves to one chat on a listed platform | The request is recorded and a turn is started in that chat. |
-| Platform not in `request_platforms` | Refused: `not_allowed`. |
-| No such chat, or it has never had a conversation | Refused: `unknown`. |
-| More than one chat matches | Refused: `ambiguous`, listing the matches so the agent can ask the owner. |
+| `to` names a conversation that can be asked | The request is recorded and a turn is started in that chat. |
+| Its platform is not in `request_platforms` | Refused: `not_allowed`. |
+| No conversation has that name | Refused: `unknown`, listing the names that exist so the agent can pick or ask the owner. |
 | The chat cannot be reached now | Refused: `unreachable`. The asking agent does the work itself or tells the owner. |
 
 ## The request turn
@@ -177,8 +200,7 @@ or the no-op governor.
 
 ## What Cadence needs from outside
 
-- **Channel directory entries for every chat.** A voice device must be listed
-  by its device name, so `converse:Master` resolves.
+- **The chat's title**, for the automatic name.
 - **Whether a chat can be reached now.**
 - **`inject_message` with another session's key.** Hermes already provides this.
 - **Silent turns on every platform.** A request turn answered with
@@ -193,7 +215,9 @@ or the no-op governor.
 - A wake never fires outside the chat that armed it.
 - A chat on an unlisted platform, in another profile, or in a group is never
   asked.
-- An ambiguous, unknown, or unreachable `to` starts no turn.
+- An unknown or unreachable `to` starts no turn.
+- Two conversations never have the same name, whatever the case.
+- A request made before a rename is still answered and recorded after it.
 - One `ask` starts exactly one request turn and at most one answer turn.
 - A request turn that does not answer produces `no_answer` in the asking chat
   once, after 60 seconds.
