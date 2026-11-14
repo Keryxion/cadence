@@ -18,8 +18,14 @@ Master owns the reminder: it is an ordinary wake in Master's own chat, so
 Master can be asked about it, snooze it, or cancel it. Kitchen owns nothing
 after the agreement except a record that it asked.
 
-The same exchange covers anything one room wants from another: "tell Master
-dinner is ready" is a request Master carries out at once.
+The same exchange covers anything one room wants from another. Cadence carries
+the request and the answer; the asked chat does the work with its own tools.
+
+| Asked in the Kitchen | What Master does in its request turn |
+|---|---|
+| "Remind me in Master to take out the trash in 15 minutes." | Arms its own reminder. Answers `accepted`, silently. |
+| "Tell Master dinner is ready." | Says it at once. Answers `accepted`. |
+| "Play some jazz in Master." | Starts the music with its own music tool. Answers `accepted`, or `declined` if it has no way to play music. |
 
 ## The owner's setting
 
