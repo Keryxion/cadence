@@ -5,10 +5,18 @@ conversations. This spec lets any conversation ask another to do something. It
 works the same for every Hermes conversation Cadence serves: a messaging DM, a
 voice device, a coding chat.
 
-A wake still fires only in the chat that armed it. What crosses between chats
-is a request and its answer. The request runs a turn in the other chat, the
-answer runs a turn back in the first, and both record what was agreed: who is
-doing what.
+Turns go both ways. Any conversation can start a turn in another, and the
+other can start one back, from an ordinary turn or from a wake:
+
+- **Ask** when the other chat should decide or do something. The request runs
+  a turn there, the answer runs a turn back, and both record what was agreed:
+  who is doing what.
+- **Tell** when the other chat only needs to know. It runs one turn there and
+  nothing comes back.
+
+A scheduled wake, watcher, or stream still belongs to one chat: the chat that
+armed it owns it and it fires there. When it fires, that chat can ask or tell
+any other.
 
 > **In the Kitchen:** "Remind me in Master to take out the trash in 15 minutes."
 > **Kitchen:** "I'll ask Master."
@@ -77,6 +85,7 @@ own wakes and has no destination.
 |---|---|---|
 | `ask` | The chat that wants something | `to` (a conversation's name), `note` (what is wanted, in words) |
 | `answer` | The chat that was asked, during the request turn | `id`, `outcome` (`accepted`, `declined`, `counter`), `summary`, `notify` |
+| `tell` | Any chat | `to` (a conversation's name), `note` (what it should know), `urgent` (optional) |
 | `list` | Either chat | None. Returns the requests this chat asked or was asked, with their outcomes. |
 | `names` | Any chat | None. Returns the conversations that can be asked: name, platform, and whether each can be reached now. |
 | `rename` | Any chat, for itself | `name`. |
@@ -132,6 +141,28 @@ Then it answers with `request`:
 `notify` says whether the asked chat speaks or sends a message in this turn.
 It is `false` for arranging something later and `true` for "tell Master dinner
 is ready". A wake armed during an accepted request is linked to the request.
+
+## Telling
+
+`tell` is one-way. Cadence starts a turn in the other chat with the note and
+who sent it. The agent there decides what to do with it: say it, act on it, or
+stay silent. There is no answer and no turn back.
+
+A build watcher in a coding chat, reporting to the owner's messaging DM:
+
+```json
+{"action":"tell","to":"Telegram","note":"The build finished: 5 checks passed, 1 failed (unit tests)."}
+```
+
+A told chat has no owner standing from the sender: it cannot arm an owner
+reminder or change the owner's wakes on the strength of a `tell`. To arrange
+that, `ask`.
+
+| Situation on `tell` | Result |
+|---|---|
+| `to` names a conversation that can be asked | One turn is started there. The result is `told`. |
+| Unknown name, platform not allowed | Refused, as for `ask`. |
+| The chat cannot be reached now | Refused: `unreachable`. The sender keeps the news or tells another chat. |
 
 ## Using `pulse` in a request turn
 
@@ -190,9 +221,10 @@ falls back to the chat that asked.
 | Limit | Applies to |
 |---|---|
 | Turns per day and cost | Each turn is charged to the chat it runs in. |
-| Requests in flight | One per pair of chats; a second waits for the first to end. |
+| Requests in flight | One `ask` per pair of chats; a second waits for the first to end. |
+| Tells | At most one every 15 seconds from one chat to another. Notes sent sooner are delivered together in the next turn. |
 | Depth | A request turn cannot `ask` a third chat. |
-| Quiet hours | A request the owner just made is not held. A request made from a wake turn is held by the asked chat's quiet hours. |
+| Quiet hours | An `ask` or `tell` the owner just made is not held. One made from a wake turn is held by the other chat's quiet hours, unless it is `urgent` and the owner allows urgent wakes through. |
 | Busy chat | The request waits for the asked chat's current exchange, within the 60 seconds. |
 
 Request and answer turns are not wakes: they do not count toward `max_active`
@@ -212,7 +244,10 @@ or the no-op governor.
   another chat.
 - A request works between any two of the owner's DM chats on different
   platforms.
-- A wake never fires outside the chat that armed it.
+- A scheduled wake, watcher, or stream fires only in the chat that armed it.
+- One `tell` starts exactly one turn in the other chat and none back.
+- Tells sent within 15 seconds to the same chat arrive in one turn, in order.
+- A `tell` gives the told chat no owner standing.
 - A chat on an unlisted platform, in another profile, or in a group is never
   asked.
 - An unknown or unreachable `to` starts no turn.
