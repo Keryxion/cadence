@@ -210,6 +210,9 @@ def handle(raw_args, runtime):
         engine.refresh()
         action, _, rest = (raw_args or 'status').strip().partition(' ')
         rest = rest.strip()
+        if action == 'name':
+            return json.dumps(runtime.get_requests().handle({'action':'rename','name':rest},
+                session_id=session_env('HERMES_SESSION_ID')),ensure_ascii=False)
         with engine.store.atomic():
             session = engine.store.get_session(key)
             bound={name:session_env('HERMES_SESSION_'+name.upper()) for name in ('platform','chat_type','chat_id')}

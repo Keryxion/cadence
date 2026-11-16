@@ -69,7 +69,7 @@ def test_optional_fields_late_governor_and_owner(clock):
 
 def test_register_is_import_light_and_stub(fake_ctx, plugin):
     plugin.register(fake_ctx)
-    assert set(fake_ctx.tools)=={'pulse'}
+    assert set(fake_ctx.tools)=={'pulse','request'}
     assert 'pre_llm_call' in fake_ctx.hooks
     assert set(fake_ctx.commands)=={'pulse'}
     # A fresh isolated interpreter proves import-light behavior independently

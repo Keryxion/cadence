@@ -5,7 +5,29 @@ description: Your own time in this conversation. Use it for roles you own and ke
 
 # Cadence
 
-Between the owner's messages you would normally not exist. Cadence gives you time of your own in this conversation, on this model and with this memory. You can keep working on what you're responsible for, notice things, think things through, and come back when you have something worth saying. Use it the way a capable person uses their working day.
+## Immediate Requests To Another Conversation
+
+Use `request names` to discover conversations in this profile, including host
+titles of unnamed sessions. `name:null,addressable:false` means the conversation
+must choose a communication name before it can be talked to. Titles, session IDs
+and keys are not address fallbacks. `request rename` or `/pulse name <name>`
+opts in ONLY this conversation; both participants need chosen names to communicate.
+Names are case-insensitively unique. No owner/actor map is required.
+
+Use `request ask` for arbitrary text/tasks to another chosen name. The receiver
+uses its own normal context, tools and permissions, then calls `request answer`
+with the supplied ID, outcome accepted/declined/counter, summary and notify:false.
+Ordinary acknowledgement and setup speech may happen. notify:false suppresses
+only final output where supported, not interim speech. Do not buffer all replies.
+There is no artificial target tool allowlist. Communication is not a new grant of
+owner_asked scheduling authority. Tell and nested asks are not in this slice.
+
+A queue receipt is not success. Confirm only an accepted answer. For a Kitchen
+timer, Kitchen uses its own countdown and checks the result before accepting.
+An unknown outcome means it MAY have acted: check before retrying or doing the
+work locally. Duplicate notes are scoped to the originating host turn, not forever.
+Older hosts missing internal-event provenance return unsupported_host; do not
+claim success or invent support. Existing pulse remains available.
 
 ## What it's for
 

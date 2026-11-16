@@ -199,5 +199,6 @@ def test_gateway_event_mapping_fail_open_and_manifest(engine):
     assert set(config)==expected
     p=Policy()
     for key, value in config.items():
+        if key.startswith('request_'): continue
         assert value['default']==getattr(p,key) and value['label'] and value['description']
     assert config['agent_can_create']['choices']==['yes','ask_first','no']

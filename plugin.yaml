@@ -249,5 +249,5 @@ config_schema:
     default: 30
     label: "Ledger history (days)"
     description: "Keep daily wake counts and cost history for this many days. Maximum 36500 (100 years)."
-provides_tools: [pulse]
-provides_hooks: [pre_gateway_dispatch, gateway_platform_event, pre_llm_call, pre_api_request, post_api_request, transform_llm_output, on_session_end, agent_loop_stopped, on_session_reset, kanban_task_completed, kanban_task_blocked, on_kanban_worker_exited, subagent_stop, api_request_error]
+provides_tools: [pulse, request]
+provides_hooks: [pre_tool_call, pre_gateway_dispatch, gateway_platform_event, pre_llm_call, pre_api_request, post_api_request, transform_llm_output, on_session_end, agent_loop_stopped, on_session_reset, kanban_task_completed, kanban_task_blocked, on_kanban_worker_exited, subagent_stop, api_request_error]

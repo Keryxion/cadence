@@ -21,7 +21,7 @@ any other.
 > **In the Kitchen:** "Remind me in Master to take out the trash in 15 minutes."
 > **Kitchen:** "I'll ask Master."
 >
-> *Master runs a turn, silently. It arms its own 15-minute reminder and accepts.*
+> *Master runs a turn; setup speech may happen. It arms its own 15-minute reminder and accepts.*
 >
 > **Kitchen:** "Master will remind you in 15 minutes."
 >
@@ -34,9 +34,18 @@ after the agreement except a record that it asked.
 Cadence carries the request and the answer; the asked chat does the work with
 its own tools.
 
+Implementation status: the immediate slice provides names/rename/ask/answer/list
+and `/pulse name`. General content and normal recipient tools are supported;
+ordinary setup speech is allowed, not silently buffered. Chosen names are explicit
+self-opt-in; directory titles are not destination names. Operator owner/actor
+maps are not required. Host injection consent, same-profile routing and internal
+event provenance remain required. The first slice accepts notify:false, has no
+tell/broadcast/nested ask or linked-wake failure reporting, and does not grant
+owner_asked authority. See [implementation boundaries](../docs/immediate-requests.md).
+
 | Asked | Where | What the asked chat does in its request turn |
 |---|---|---|
-| "Remind me in Master to take out the trash in 15 minutes." | Kitchen asks Master | Arms its own reminder. Answers `accepted`, silently. |
+| "Remind me in Master to take out the trash in 15 minutes." | Kitchen asks Master | Arms its own reminder. Answers `accepted`; setup speech may happen. |
 | "Tell Master dinner is ready." | Kitchen asks Master | Says it at once. Answers `accepted`. |
 | "Play some jazz in Master." | Kitchen asks Master | Starts the music with its own music tool, or answers `declined` if it has none. |
 | "Tell me on Telegram when the build is done." | A coding chat asks the Telegram DM | Sends the message when asked. Answers `accepted`. |
@@ -48,28 +57,26 @@ its own tools.
 
 Any conversation Cadence serves can ask, and be asked by, any other that is:
 
-- a DM chat, not a group;
+- a conversation this host can route;
 - in the same Hermes profile;
+- explicitly self-named for communication;
 - on a platform the owner has not excluded.
 
-| Setting | Default | Meaning |
-|---|---|---|
-| `request_platforms` | every platform Cadence serves | Platforms whose chats may be asked. A list narrows it; `[]` turns requests off. |
-
-Requests never leave the owner's own conversations: a chat in another profile,
-or a group, is never asked.
+Normal host route permissions and plugin injection consent apply. Communication
+does not require a human-origin turn or an operator owner/actor map and does not
+mint owner_asked scheduling authority. Any host-routable session in this profile,
+including groups, may self-name and participate.
 
 ## Names
 
-Every conversation Cadence serves has a name, unique within the profile. A
-request is addressed to a name.
+The directory shows available host display titles and an optional chosen name.
+An unnamed entry has `name:null,addressable:false`; it can be discovered but not
+addressed. Titles, session IDs and route keys never resolve as address fallbacks.
+Directory inspection is allowed before naming and never auto-enrolls a session.
 
-- **Automatic.** A conversation gets a name the first time Cadence sees it,
-  taken from the chat's own title in Hermes, such as `Telegram` or
-  `Arya: Master`. If that is taken, a number is added.
-- **Chosen.** A conversation can give itself a better name at any time, and the
-  owner can name it with `/pulse name <name>`. A name is 1 to 40 characters,
-  compared without regard to case, and refused if another conversation has it.
+A conversation enrolls itself with `request rename` or `/pulse name <name>`.
+Only its own name changes. Names are 1-40 characters, case-insensitively unique
+within this profile. Both source and destination must choose names to communicate.
 
 A platform can tell its conversations how to name themselves. The voice server's
 instructions have each device name its conversation after the device, so the
@@ -140,9 +147,9 @@ Then it answers with `request`:
 | `declined` | It will not. `summary` says why. Nothing was armed. |
 | `counter` | It proposes something else in `summary`, such as a different time. Nothing was armed. |
 
-`notify` says whether the asked chat speaks or sends a message in this turn.
-It is `false` for arranging something later and `true` for "tell Master dinner
-is ready". A wake armed during an accepted request is linked to the request.
+`notify:false` requests final-reply suppression where supported. Interim output
+and ordinary setup speech may happen; it is not a silence guarantee. The immediate
+slice accepts only false. A wake armed during an accepted request is linked to the request.
 
 ## Telling
 
@@ -207,9 +214,21 @@ refusal.
 | `accepted` | Confirms to the owner, quoting the summary. |
 | `declined` | Does the work itself, or tells the owner it cannot be done there. |
 | `counter` | Accepts by asking again with the proposed terms, or does the work itself. |
-| No answer in 60 seconds | Cadence reports `no_answer`. The agent treats it as `declined`. |
+| No answer in 60 seconds | Cadence records `unknown` and attempts one answer turn explaining that the target may have acted. The asking agent must check the target before retrying or doing the work itself. |
 
-A request ends when it is accepted, declined, or unanswered. A counter may be
+Requests are immediate transport, never scheduled cross-session wakes. Cadence
+commits a durable random request ID and target identity before injection and
+claims each request/answer delivery before handing it to Hermes. Duplicate
+request envelopes do not run another target turn; duplicate answers do not run
+another source turn. Rename does not change the identities in these records.
+A host queue receipt proves only acceptance by the host, not execution or
+successful delivery. A crash, disconnection, or lost answer after possible
+acceptance is an unknown outcome, **not a decline**. Cadence never automatically
+resubmits an ambiguously accepted request or answer. Records preserve the target's
+known outcome separately from uncertain return delivery. Arbitrary external
+side effects are not exactly once; a target can act and crash before answering.
+
+A request ends when it is accepted, declined, countered, or becomes unknown. A counter may be
 followed by one more `ask`; after three asks on the same matter Cadence refuses
 further ones and the asking agent decides alone.
 
@@ -249,8 +268,8 @@ or the no-op governor.
 - **The chat's title**, for the automatic name.
 - **Whether a chat can be reached now.**
 - **`inject_message` with another session's key.** Hermes already provides this.
-- **Silent turns on every platform.** A request turn answered with
-  `notify: false` must send and speak nothing.
+- **Host-bound internal-event provenance**, to match durable requests and answers.
+  Ordinary output must not be globally held or buffered.
 
 ## Invariants to test
 
@@ -263,14 +282,13 @@ or the no-op governor.
 - A `tell` to several chats reaches the reachable ones when another is unreachable.
 - Tells sent within 15 seconds to the same chat arrive in one turn, in order.
 - A `tell` gives the told chat no owner standing.
-- A chat on an unlisted platform, in another profile, or in a group is never
-  asked.
+- A chat on an unlisted platform, in another profile, is never asked.
 - An unknown or unreachable `to` starts no turn.
 - Two conversations never have the same name, whatever the case.
 - A request made before a rename is still answered and recorded after it.
 - One `ask` starts exactly one request turn and at most one answer turn.
-- A request turn that does not answer produces `no_answer` in the asking chat
-  once, after 60 seconds.
+- A request turn that does not answer records `unknown` after 60 seconds and
+  attempts one uncertainty notice, never automatically retrying the work.
 - `answer` outside a request turn, or with another request's `id`, is refused.
 - A request turn cannot `ask`.
 - `owner_asked` in a request turn is honoured only when the `ask` came from a
@@ -278,4 +296,5 @@ or the no-op governor.
 - A request without owner standing cannot change a wake the owner created.
 - A fourth `ask` on the same matter is refused.
 - An undeliverable linked wake starts exactly one turn in the asking chat.
-- A request turn with `notify: false` sends and speaks nothing.
+- A request turn with `notify: false` suppresses final output where supported;
+  ordinary streaming remains immediate and setup speech may happen.
