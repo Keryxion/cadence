@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Read Cadence's existing poller evidence; never import/start the plugin."""
+import fcntl
+import math
+import os
+from pathlib import Path
+import sqlite3
+import sys
+import time
+
+
+def sample(directory, pid, since, now):
+    if pid <= 0:
+        raise ValueError('gateway has no MainPID')
+    os.kill(pid, 0)
+    with sqlite3.connect((directory / 'pulse.db').as_uri() + '?mode=ro',
+                         uri=True, timeout=1) as db:
+        meta = dict(db.execute('SELECT key, value FROM meta'))
+    if meta.get('poller_pid') != str(pid) or not meta.get('epoch'):
+        raise ValueError('poller is not owned by the gateway')
+    started = float(meta['poller_started_at'])
+    tick = float(meta['last_tick_at'])
+    if not all(math.isfinite(n) for n in (started, tick, since, now)):
+        raise ValueError('non-finite heartbeat')
+    if not since <= started <= tick <= now or now - tick > 15:
+        raise ValueError('stale or pre-restart poller')
+    if meta.get('last_error') or meta.get('settings_error') or meta.get('probing_since'):
+        raise ValueError('poller has errors or is still probing')
+    # A heartbeat left on disk by a dead bootstrap is not sufficient.
+    with (directory / 'poller.lock').open('r') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return meta['epoch'] + ':' + meta['last_tick_at']
+    raise ValueError('no live poller lock owner')
+
+
+def main():
+    try:
+        directory = Path.home() / '.hermes/plugin-data/cadence'
+        print(sample(directory, int(sys.argv[1]), float(sys.argv[2]), time.time()))
+    except (OSError, sqlite3.Error, ValueError, KeyError, IndexError) as exc:
+        print(f'Cadence not ready: {exc}', file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
