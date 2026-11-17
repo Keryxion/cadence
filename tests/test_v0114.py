@@ -310,7 +310,10 @@ def test_receipt_timezone_spacing_and_maximum_length(engine):
     text = receipt(result)
     w = engine.store.get_wake(result['wake']['id'])
     assert local(engine,w.next_due_at) in text and 'Muted' in text and 'Quiet' in text
-    assert 'min apart' in text and 'late' in text and 'Expires' in text and 'Cancels if you reply.' in text
+    assert 'Expires' in text and 'Cancels if you reply.' in text
+    # The receipt no longer warns about wake spacing, whatever the spacing is.
+    assert engine.policy.wake_spacing_minutes > 0
+    assert 'min apart' not in text and 'minutes late' not in text
     engine.policy = replace(engine.policy, wake_spacing_minutes=0, quiet_hours='')
     assert 'min apart' not in receipt(create(engine))
 
