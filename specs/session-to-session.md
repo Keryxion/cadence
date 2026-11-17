@@ -96,7 +96,7 @@ own wakes and has no destination.
 | `answer` | The chat that was asked, during the request turn | `id`, `outcome` (`accepted`, `declined`, `counter`), `summary`, `notify` |
 | `tell` | Any chat | `to` (a conversation's name, or a list of names), `note` (what it should know), `urgent` (optional) |
 | `list` | Either chat | None. Returns the requests this chat asked or was asked, with their outcomes. |
-| `names` | Any chat | None. Returns the conversations that can be asked: name, platform, and whether each can be reached now. |
+| `names` | Any chat | None. Returns the directory: each conversation's title, chosen name (or null), whether it is addressable, its platform, and whether it can be reached now. |
 | `rename` | Any chat, for itself | `name`. |
 
 Kitchen calls `request`:
@@ -265,7 +265,7 @@ or the no-op governor.
 
 ## What Cadence needs from outside
 
-- **The chat's title**, for the automatic name.
+- **The chat's title**, for the directory. A title is never a name.
 - **Whether a chat can be reached now.**
 - **`inject_message` with another session's key.** Hermes already provides this.
 - **Host-bound internal-event provenance**, to match durable requests and answers.

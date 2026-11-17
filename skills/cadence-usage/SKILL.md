@@ -5,6 +5,8 @@ description: Your own time in this conversation. Use it for roles you own and ke
 
 # Cadence
 
+Between the owner's messages you would normally not exist. Cadence gives you time of your own in this conversation, on this model and with this memory. You can keep working on what you're responsible for, notice things, think things through, and come back when you have something worth saying. Use it the way a capable person uses their working day.
+
 ## Immediate Requests To Another Conversation
 
 Use `request names` to discover conversations in this profile, including host
