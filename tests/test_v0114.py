@@ -271,7 +271,7 @@ def test_muted_receipts_and_cancel(engine, kind):
     assert ('Muted: it is dropped unless you reply first.' if kind == 'at' else
             'Muted: it waits for your reply.') in text
     assert 'Cancels if you reply.' in text and 'Expires ' in text
-    assert 'Wakes are at least 10 min apart, so it can land a few minutes late.' in text
+    assert 'may land a few minutes late' not in text and 'so it can land a few minutes late' not in text
     if kind == 'command': assert 'Checks now, then every 1m' in text
     if kind == 'subagent_done': assert 'Waits for subagent_done events' in text
 
@@ -424,7 +424,7 @@ def test_owner_silent_receipt_includes_spacing(engine):
     result = create(engine, {'kind':'owner_silent','after':'1h'})
     assert result.get('ok'), result
     text = receipt(result)
-    assert 'Wakes are at least 10 min apart, so it can land a few minutes late.' in text
+    assert 'may land a few minutes late' not in text and 'so it can land a few minutes late' not in text
 
 
 def test_infeasible_timed_resume_expires_once_with_notice(engine):
