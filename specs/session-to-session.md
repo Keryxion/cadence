@@ -40,8 +40,8 @@ ordinary setup speech is allowed, not silently buffered. Chosen names are explic
 self-opt-in; directory titles are not destination names. Operator owner/actor
 maps are not required. Host injection consent, same-profile routing and internal
 event provenance remain required. The first slice accepts notify:false, has no
-tell/broadcast/nested ask or linked-wake failure reporting, and does not grant
-owner_asked authority. See [implementation boundaries](../docs/immediate-requests.md).
+tell/broadcast/nested ask or linked-wake failure reporting, and does not yet
+treat a request turn as the owner's own turn for `pulse`. See [implementation boundaries](../docs/immediate-requests.md).
 
 | Asked | Where | What the asked chat does in its request turn |
 |---|---|---|
@@ -63,8 +63,7 @@ Any conversation Cadence serves can ask, and be asked by, any other that is:
 - on a platform the owner has not excluded.
 
 Normal host route permissions and plugin injection consent apply. Communication
-does not require a human-origin turn or an operator owner/actor map and does not
-mint owner_asked scheduling authority. Any host-routable session in this profile,
+does not require a human-origin turn or an operator owner/actor map. Any host-routable session in this profile,
 including groups, may self-name and participate.
 
 ## Names
@@ -132,7 +131,7 @@ The asked agent decides. To accept, it does what is needed in its own chat,
 such as arming its own wake with `pulse`:
 
 ```json
-{"action":"create","title":"Trash","note":"Remind them to take out the trash. Asked for from Kitchen.","trigger":{"kind":"at","after":"15m"},"owner_asked":true}
+{"action":"create","title":"Trash","note":"Remind them to take out the trash. Asked for from Kitchen.","trigger":{"kind":"at","after":"15m"}}
 ```
 
 Then it answers with `request`:
@@ -175,10 +174,6 @@ the others:
 {"ok":true,"results":{"Master":"told","Den":"unreachable"}}
 ```
 
-A told chat has no owner standing from the sender: it cannot arm an owner
-reminder or change the owner's wakes on the strength of a `tell`. To arrange
-that, `ask`.
-
 | Situation on `tell` | Result |
 |---|---|
 | `to` names a conversation that can be asked | One turn is started there. The result is `told`. |
@@ -187,21 +182,16 @@ that, `ask`.
 
 ## Using `pulse` in a request turn
 
-A request turn is neither a human turn nor a wake turn. In it the asked chat
-uses `pulse` for its own chat exactly as it would for its owner: `create`,
-`list`, `update`, `pause`, `resume`, and `cancel`. It ends by calling `request`
-with `answer`.
-
-The asker's standing comes with the request:
-
-| The `ask` was made | In the request turn |
-|---|---|
-| In a turn where the owner had just spoken | The request carries the owner's standing. `owner_asked: true` on a one-time wake is honoured, so the reminder is not muted, capped, or held by wake spacing. Wakes the owner created in the asked chat can be changed or cancelled, so "cancel the trash reminder in Master" works from the Kitchen. |
-| From a wake turn | No owner standing. Anything armed is the agent's own follow-up, with the usual limits, and the owner's wakes cannot be changed. |
+A request turn is an ordinary turn in the asked chat. In it the asked chat uses
+`pulse` exactly as it would if the owner had spoken there: `create`, `list`,
+`update`, `pause`, `resume`, and `cancel`. What it arms fires when it is due, and
+it can change or cancel any wake in its own chat, so "cancel the trash reminder
+in Master" works from the Kitchen. This holds whether the `ask` came from a
+turn where the owner spoke or from a wake. It ends by calling `request` with
+`answer`.
 
 A request turn can arm up to `max_children_per_wake_turn` wakes. Starting a
-role and `babysit` still need the owner in that chat. The request text tells the
-asked agent which standing it has.
+role and `babysit` still need the owner in that chat.
 
 ## The answer turn
 
@@ -281,7 +271,6 @@ or the no-op governor.
 - One `tell` starts exactly one turn in each chat it names and none back.
 - A `tell` to several chats reaches the reachable ones when another is unreachable.
 - Tells sent within 15 seconds to the same chat arrive in one turn, in order.
-- A `tell` gives the told chat no owner standing.
 - A chat on an unlisted platform, in another profile, is never asked.
 - An unknown or unreachable `to` starts no turn.
 - Two conversations never have the same name, whatever the case.
@@ -291,9 +280,9 @@ or the no-op governor.
   attempts one uncertainty notice, never automatically retrying the work.
 - `answer` outside a request turn, or with another request's `id`, is refused.
 - A request turn cannot `ask`.
-- `owner_asked` in a request turn is honoured only when the `ask` came from a
-  turn where the owner had just spoken.
-- A request without owner standing cannot change a wake the owner created.
+- A wake armed in a request turn fires when it is due, whether the `ask` came
+  from a turn where the owner spoke or from a wake.
+- A request turn can change or cancel a wake the owner created in the asked chat.
 - A fourth `ask` on the same matter is refused.
 - An undeliverable linked wake starts exactly one turn in the asking chat.
 - A request turn with `notify: false` suppresses final output where supported;
