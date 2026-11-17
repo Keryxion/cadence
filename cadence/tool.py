@@ -391,13 +391,9 @@ class Tool:
             if not owner_class(w) and s.unanswered_count>=p.max_unanswered:
                 parts.append('Muted: messages are held; work still runs.' if holds_messages(w) else
                              'Muted: it waits for your reply.' if watcher else 'Muted: it is dropped unless you reply first.')
-            if p.wake_spacing_minutes>0 and (w.kind in TIME_KINDS or watcher or w.kind=='owner_silent'):
-                parts.append(f'Wakes are at least {p.wake_spacing_minutes:g} min apart, so it can land a few minutes late.')
         if w.expires_at is not None: parts.append(f'Expires {local(w.expires_at)}.')
         if w.cancel_on_reply: parts.append('Cancels if you reply.')
         text=' '.join(parts)
-        if len(text)>240: text=text.replace('Wakes are at least ','Wakes at least ').replace(' min apart, so it can land a few minutes late.',' min apart; may land a few minutes late.')
-        if len(text)>240: text=' '.join(x for x in parts if not x.startswith('Wakes are at least '))
         if len(text)>240:
             text=text[:239]
             boundary=text.rfind('. ')
