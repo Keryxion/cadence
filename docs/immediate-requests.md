@@ -50,12 +50,11 @@ guarantee and no global stream hold or buffering. This slice accepts only
 
 ## Host Support And Evidence
 
-The host must bind the running internal MessageEvent in `_SESSION_TURN_EVENT`
-and expose `set_session_vars(turn_event=...)`. Cadence inspects actual capability,
-not an operator assertion. It verifies plugin injection provenance, exact route,
-durable ID and nonce. Quoted or forged envelopes are blocked. Older hosts without
-provenance return actionable `unsupported_host` before recording a request or
-injecting it; naming and ordinary pulse remain available.
+Requests need nothing from the host beyond `inject_message` and a turn id in
+`pre_llm_call`, so they work on every supported Hermes version. Each delivery
+carries the request's durable ID and a random single-use token. Cadence accepts
+it only in the conversation it was addressed to and only once; a wrong token, a
+wrong conversation or a replay is refused, and the reason is logged.
 
 Real-loader integration uses installed Hermes PluginContext injection and bound
 MessageEvent hooks with an in-memory gateway injector. Optional
@@ -64,9 +63,8 @@ attachment and disabled scheduling, then routes its answer back to the source.
 Ordinary direct streaming callbacks remain immediate. No model, live socket,
 physical device, install or restart is exercised.
 
-Only host-routable sessions whose turns carry the required provenance are
-supported. This does not claim every CLI/TUI/Desktop host path supplies it.
-There is no cross-profile transport.
+Any session the host can route an injected message to is supported. There is
+no cross-profile transport.
 
 ## Durable Outcomes
 

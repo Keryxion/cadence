@@ -28,8 +28,7 @@ A queue receipt is not success. Confirm only an accepted answer. For a Kitchen
 timer, Kitchen uses its own countdown and checks the result before accepting.
 An unknown outcome means it MAY have acted: check before retrying or doing the
 work locally. Duplicate notes are scoped to the originating host turn, not forever.
-Older hosts missing internal-event provenance return unsupported_host; do not
-claim success or invent support. Existing pulse remains available.
+Existing pulse remains available.
 
 ## What it's for
 

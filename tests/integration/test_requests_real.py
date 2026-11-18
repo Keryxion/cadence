@@ -55,15 +55,17 @@ def test_real_request_loader_provenance_and_normal_streaming(tmp_path, monkeypat
         for key in ('mac','kitchen'):
             e.store.upsert_session(Session(key,'telegram','dm',key,key+'-sid'))
         requests = runtime.get_requests()
-        # Neither pinned nor installed Hermes exposes a turn-scoped plugin hold.
-        # Detect optional actor/event binding instead of making it a pulse dependency.
+        # Requests need no host provenance. Bind the turn event only where this
+        # Hermes accepts it, so the same round trip runs on every pinned version.
         parameters = inspect.signature(set_session_vars).parameters
         import gateway.session_context as session_context
         actor_context = ('actor_id' in parameters and 'turn_event' in parameters and
                          hasattr(session_context, '_SESSION_TURN_EVENT'))
-        assert requests.host_supported == actor_context
         holds_stream = getattr(manager, 'holds_stream', lambda: False)
         assert not holds_stream(), 'Cadence must not globally buffer ordinary replies'
+
+        def turn(event):
+            return {'turn_event': event} if actor_context else {}
 
         def bind(key):
             options = dict(platform='telegram', chat_id=key, chat_type='dm',
@@ -82,72 +84,63 @@ def test_real_request_loader_provenance_and_normal_streaming(tmp_path, monkeypat
         try:
             requests.hook('pre_llm_call', session_id='mac-sid', turn_id='human-turn', user_message='Ask Kitchen')
             result = json.loads(runtime.request({'action':'ask','to':'Kitchen','note':'Set a five minute countdown.'}, session_id='mac-sid'))
-            if actor_context:
-                assert result['ok'], result
-            else:
-                assert result['error'] == 'unsupported_host', result
-                assert 'provenance' in result['detail']
-            # Existing pulse remains available even on hosts without actor context.
+            assert result['ok'], result
             pulse = json.loads(runtime.tool({'action':'list'}, session_id='mac-sid'))
             assert 'error' not in pulse, pulse
         finally:
             clear_session_vars(tokens)
-        if not actor_context:
-            assert not injected
-            assert e.store.connection.execute('SELECT COUNT(*) FROM session_requests').fetchone()[0] == 0
-        else:
-            assert len(injected) == 1
-            text = injected[0]['content']
-            event = NS(internal=True, text=text, metadata={'hermes_plugin_injection':True,
-                'hermes_plugin_id':'cadence', 'gateway_session_key':'kitchen'})
-            tokens = set_session_vars(platform='telegram', chat_id='kitchen', chat_type='dm',
-                session_key='kitchen', session_id='kitchen-sid', actor_id='', turn_event=event)
-            try:
-                context = requests.hook('pre_llm_call', session_id='kitchen-sid',
-                    turn_id='target-turn', user_message=text)
-                assert 'YOUR OWN tools' in context['context']
-                assert requests.hook('pre_tool_call', session_id='kitchen-sid',
-                    turn_id='target-turn', tool_name='terminal') is None
-                # Actual Converse countdown implementation; injected attachment, no sockets or scheduler.
-                root = os.environ.get('CADENCE_CONVERSE_ROOT')
-                if root:
-                    import importlib.util
-                    package = '_cadence_request_countdown'
-                    spec = importlib.util.spec_from_file_location(package, Path(root)/'__init__.py',
-                        submodule_search_locations=[root])
-                    module = importlib.util.module_from_spec(spec)
-                    monkeypatch.setitem(sys.modules, package, module)
-                    spec.loader.exec_module(module)
-                    cd = __import__(package+'.countdowns', fromlist=['Countdowns'])
-                    frames = []
-                    countdown = cd.Countdowns(NS(attachment=lambda key:NS(send=frames.append) if key=='kitchen' else None))
-                    monkeypatch.setattr(countdown, '_schedule', lambda *args:None)
-                    clear_session_vars(tokens)
-                    tokens = set_session_vars(platform='converse', chat_id='kitchen', chat_type='dm',
-                        session_key='kitchen', session_id='kitchen-sid', turn_event=event)
-                    timer = json.loads(countdown.handle({'action':'set','in_seconds':300,'label':'Kitchen'}))
-                    assert timer['result'] == 'set' and len(frames) == 1
-                answer = json.loads(runtime.request({'action':'answer','id':result['request'],
-                    'outcome':'accepted','summary':'Countdown set in Kitchen.','notify':False}, session_id='kitchen-sid'))
-                assert answer['ok'], answer
-            finally:
+        assert len(injected) == 1
+        text = injected[0]['content']
+        event = NS(internal=True, text=text, metadata={'hermes_plugin_injection':True,
+            'hermes_plugin_id':'cadence', 'gateway_session_key':'kitchen'})
+        tokens = set_session_vars(platform='telegram', chat_id='kitchen', chat_type='dm',
+            session_key='kitchen', session_id='kitchen-sid', **turn(event))
+        try:
+            context = requests.hook('pre_llm_call', session_id='kitchen-sid',
+                turn_id='target-turn', user_message=text)
+            assert 'YOUR OWN tools' in context['context']
+            assert requests.hook('pre_tool_call', session_id='kitchen-sid',
+                turn_id='target-turn', tool_name='terminal') is None
+            # Actual Converse countdown implementation; injected attachment, no sockets or scheduler.
+            root = os.environ.get('CADENCE_CONVERSE_ROOT')
+            if root:
+                import importlib.util
+                package = '_cadence_request_countdown'
+                spec = importlib.util.spec_from_file_location(package, Path(root)/'__init__.py',
+                    submodule_search_locations=[root])
+                module = importlib.util.module_from_spec(spec)
+                monkeypatch.setitem(sys.modules, package, module)
+                spec.loader.exec_module(module)
+                cd = __import__(package+'.countdowns', fromlist=['Countdowns'])
+                frames = []
+                countdown = cd.Countdowns(NS(attachment=lambda key:NS(send=frames.append) if key=='kitchen' else None))
+                monkeypatch.setattr(countdown, '_schedule', lambda *args:None)
                 clear_session_vars(tokens)
-            assert len(injected) == 2 and injected[-1]['session_key'] == 'mac'
-            text = injected[-1]['content']
-            event = NS(internal=True, text=text, metadata={'hermes_plugin_injection':True,
-                'hermes_plugin_id':'cadence', 'gateway_session_key':'mac'})
-            tokens = set_session_vars(platform='telegram', chat_id='mac', chat_type='dm',
-                session_key='mac', session_id='mac-sid', turn_event=event)
-            try:
-                context = requests.hook('pre_llm_call', session_id='mac-sid', turn_id='answer-turn', user_message=text)
-                assert 'accepted' in context['context'] and 'Confirm success only for accepted' in context['context']
-            finally:
-                clear_session_vars(tokens)
+                tokens = set_session_vars(platform='converse', chat_id='kitchen', chat_type='dm',
+                    session_key='kitchen', session_id='kitchen-sid', **turn(event))
+                timer = json.loads(countdown.handle({'action':'set','in_seconds':300,'label':'Kitchen'}))
+                assert timer['result'] == 'set' and len(frames) == 1
+            answer = json.loads(runtime.request({'action':'answer','id':result['request'],
+                'outcome':'accepted','summary':'Countdown set in Kitchen.','notify':False}, session_id='kitchen-sid'))
+            assert answer['ok'], answer
+        finally:
+            clear_session_vars(tokens)
+        assert len(injected) == 2 and injected[-1]['session_key'] == 'mac'
+        text = injected[-1]['content']
+        event = NS(internal=True, text=text, metadata={'hermes_plugin_injection':True,
+            'hermes_plugin_id':'cadence', 'gateway_session_key':'mac'})
+        tokens = set_session_vars(platform='telegram', chat_id='mac', chat_type='dm',
+            session_key='mac', session_id='mac-sid', **turn(event))
+        try:
+            context = requests.hook('pre_llm_call', session_id='mac-sid', turn_id='answer-turn', user_message=text)
+            assert 'accepted' in context['context'] and 'Confirm success only for accepted' in context['context']
+        finally:
+            clear_session_vars(tokens)
         # When available, exercise the actual direct callback mixin without a hold.
         try:
             from agent.stream_delivery import StreamDeliveryMixin
         except ImportError:
-            return  # Older pinned host: loader/pulse/fail-closed assertions ran.
+            return  # Older pinned host without the direct callback mixin.
         stream = StreamDeliveryMixin()
         spoken = []
         stream._hold_stream = holds_stream()

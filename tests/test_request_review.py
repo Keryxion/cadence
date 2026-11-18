@@ -60,22 +60,6 @@ def test_missing_origin_turn_cannot_authorize_ask(pair):
     assert not e.ctx.calls
 
 
-def test_old_host_fails_closed_before_record_or_injection(pair, monkeypatch):
-    from cadence.requests import Requests
-    e, r = pair
-    setup_names(e, r)
-    monkeypatch.setattr(Requests, "_host_supported", staticmethod(lambda: False))
-    old_host = Requests(e)
-    assert not old_host.host_supported
-    result = ask(e, old_host)
-    assert result['error'] == 'unsupported_host'
-    assert 'provenance' in result['detail']
-    assert e.store.connection.execute('SELECT COUNT(*) FROM session_requests').fetchone()[0] == 0
-    assert not e.ctx.calls
-    assert old_host.hook('transform_llm_output', session_id='mac-sid', response_text='Normal') is None
-    assert old_host.hook('pre_tool_call', session_id='mac-sid', tool_name='countdown') is None
-
-
 def test_registration_never_holds_every_profile_reply():
     from cadence.registration import _register_surfaces
     class Context:

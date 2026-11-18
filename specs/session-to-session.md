@@ -38,8 +38,7 @@ Implementation status: the immediate slice provides names/rename/ask/answer/list
 and `/pulse name`. General content and normal recipient tools are supported;
 ordinary setup speech is allowed, not silently buffered. Chosen names are explicit
 self-opt-in; directory titles are not destination names. Operator owner/actor
-maps are not required. Host injection consent, same-profile routing and internal
-event provenance remain required. The first slice accepts notify:false, has no
+maps are not required. Host injection consent and same-profile routing remain required. The first slice accepts notify:false, has no
 tell/broadcast/nested ask or linked-wake failure reporting, and does not yet
 treat a request turn as the owner's own turn for `pulse`. See [implementation boundaries](../docs/immediate-requests.md).
 
@@ -258,8 +257,8 @@ or the no-op governor.
 - **The chat's title**, for the directory. A title is never a name.
 - **Whether a chat can be reached now.**
 - **`inject_message` with another session's key.** Hermes already provides this.
-- **Host-bound internal-event provenance**, to match durable requests and answers.
-  Ordinary output must not be globally held or buffered.
+- Nothing else: a delivery is matched to its request by ID and a random
+  single-use token. Ordinary output must not be globally held or buffered.
 
 ## Invariants to test
 

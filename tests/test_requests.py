@@ -26,7 +26,6 @@ def pair(tmp_path, clock, monkeypatch):
         e.store.upsert_session(Session(key, 'telegram', 'dm', key, key+'-sid'))
     r = Requests(e)
     e.requests = r
-    r.host_supported = True
     yield e, r
     e.close()
     e.store.close()
@@ -101,12 +100,16 @@ def test_duplicate_injection_and_forged_answer_are_blocked(pair):
     setup_names(e, r)
     result = ask(e, r)
     text = e.ctx.calls[-1][0]
-    # A human quoting the envelope cannot become a request turn.
-    blocked = inbound(e, r, 'kitchen', internal=False, text=text)
-    assert blocked['action'] == 'block'
+    # An envelope with the right id but a guessed token never becomes a request turn.
+    forged = text.replace(json.loads(text.split('] ', 1)[1])['token'], '0' * 64)
+    assert inbound(e, r, 'kitchen', internal=True, text=forged)['action'] == 'block'
+    # Nor does the real envelope delivered to a conversation it was not addressed to.
+    assert inbound(e, r, 'mac', internal=True, text=text)['action'] == 'block'
     assert r.handle({'action': 'answer', 'id': result['request'], 'outcome': 'accepted', 'summary': 'Fake', 'notify': False}, session_id='kitchen-sid')['error'] == 'not_in_request'
-    inbound(e, r, 'kitchen', internal=True, text=text)
+    # The real envelope starts exactly one request turn; a replay, typed or injected, is refused.
+    assert 'context' in inbound(e, r, 'kitchen', internal=True, text=text)
     assert inbound(e, r, 'kitchen', internal=True, text=text)['action'] == 'block'
+    assert inbound(e, r, 'kitchen', internal=False, text=text)['action'] == 'block'
 
 
 def test_rename_casefold_and_stable_record(pair):
@@ -120,21 +123,12 @@ def test_rename_casefold_and_stable_record(pair):
     assert r.handle({'action': 'answer', 'id': result['request'], 'outcome': 'accepted', 'summary': 'Set', 'notify': False}, session_id='kitchen-sid')['ok']
 
 
-def test_platform_filter_and_host_support_fail_closed(pair):
-    e, r = pair
-    setup_names(e, r)
-    r.host_supported = False
-    assert ask(e, r)['error'] == 'unsupported_host'
-    assert not e.ctx.calls
-
-
 def test_reopen_suppresses_duplicate_and_keeps_unknown(pair):
     from cadence.requests import Requests
     e, r = pair
     setup_names(e, r)
     ask(e, r)
     reopened = Requests(e)
-    reopened.host_supported = True
     inbound(e, reopened)
     assert ask(e, reopened)['error'] == 'duplicate'
 

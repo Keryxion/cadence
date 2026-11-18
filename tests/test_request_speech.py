@@ -1,19 +1,7 @@
 """Named opt-in communication keeps ordinary tools and streaming."""
-from contextvars import ContextVar
-import sys
-import types
 from types import SimpleNamespace as NS
 
 from test_requests import pair, setup_names, ask, inbound, CURRENT
-
-
-def fake_host(monkeypatch, session_context):
-    # The unit suite runs without Hermes installed, so the `gateway` package is a
-    # stand-in; only its session_context surface is what Requests inspects.
-    package = types.ModuleType('gateway')
-    package.session_context = session_context
-    monkeypatch.setitem(sys.modules, 'gateway', package)
-    monkeypatch.setitem(sys.modules, 'gateway.session_context', session_context)
 
 
 def test_unnamed_directory_is_visible_but_not_addressable(pair):
@@ -51,28 +39,3 @@ def test_group_source_and_target_are_not_artificially_blocked(pair):
     for key in ('mac', 'kitchen'):
         e.store.cas_session(key, {'chat_type':'dm'}, chat_type='group')
     assert ask(e, r)['ok']
-
-
-def test_real_host_provenance_capability_not_silence(pair, monkeypatch):
-    from cadence.requests import Requests
-    e, _ = pair
-    def set_session_vars(*, turn_event=None): pass
-    host = NS(set_session_vars=set_session_vars, _SESSION_TURN_EVENT=ContextVar('event', default=None))
-    fake_host(monkeypatch, host)
-    r = Requests(e)
-    setup_names(e, r)
-    assert ask(e, r)['ok']
-
-
-def test_absent_provenance_fails_closed_before_request_write(pair, monkeypatch):
-    from cadence.requests import Requests
-    e, _ = pair
-    host = NS(set_session_vars=lambda:None)
-    fake_host(monkeypatch, host)
-    r = Requests(e)
-    setup_names(e, r)
-    result = ask(e, r)
-    assert result['error'] == 'unsupported_host'
-    assert 'provenance' in result['detail']
-    assert not e.ctx.calls
-    assert e.store.connection.execute('SELECT COUNT(*) FROM session_requests').fetchone()[0] == 0

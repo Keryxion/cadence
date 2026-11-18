@@ -4,9 +4,8 @@ The database claims delivery before calling Hermes. Queue acceptance is not proo
 of execution; neither crash recovery nor timeout resubmits an uncertain request.
 """
 import hashlib
-import inspect
-from contextvars import ContextVar
 import json
+import logging
 import secrets
 import sqlite3
 import threading
@@ -15,6 +14,7 @@ import uuid
 from . import serving
 from .tool import session_env
 
+LOG = logging.getLogger('cadence')
 PREFIX = '[Cadence request] '
 DESCRIPTION = ('Immediate requests between explicitly self-named conversations in this profile. '
                'Use rename to opt in, names to discover, ask/answer/list to communicate about anything. '
@@ -45,12 +45,7 @@ class Requests:
     def __init__(self, engine):
         self.engine = engine
         self.store = engine.store
-        self.host_supported = self._host_supported()
-        self.unsupported_detail = ('Hermes lacks host-bound internal event provenance support. '
-            'Use a Hermes host exposing set_session_vars(turn_event=...), '
-            '_SESSION_TURN_EVENT ContextVar; naming alone cannot authenticate an injected turn.')
         self.lock = threading.RLock()
-        self.pending = {}
         self.origins = {}
         self.turns = {}
         with self.store.atomic():
@@ -61,16 +56,6 @@ class Requests:
             for column in ('source_actor', 'target_actor', 'origin_turn'):
                 if column not in columns:
                     self.store.connection.execute(f"ALTER TABLE session_requests ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
-
-    @staticmethod
-    def _host_supported():
-        try:
-            from gateway import session_context
-            parameters = inspect.signature(session_context.set_session_vars).parameters
-            return ('turn_event' in parameters and
-                    isinstance(getattr(session_context, '_SESSION_TURN_EVENT', None), ContextVar))
-        except (ImportError, AttributeError, TypeError, ValueError):
-            return False
 
     def _eligible(self):
         e = self.engine
@@ -189,8 +174,6 @@ class Requests:
                         'from': names.get(row['source'], ''), 'to': names.get(row['target'], '')} for row in rows]}
                 if action == 'answer': return self._answer(args, session_id)
                 if session_id in self.turns: return {'error': 'nested_request'}
-                if not self.host_supported:
-                    return {'error': 'unsupported_host', 'detail': self.unsupported_detail}
                 origin = self.origins.get(session_id)
                 origin_turn = origin[1] if origin and origin[0] == key else ''
                 if not origin_turn: return {'error': 'missing_turn', 'detail': 'This host must supply a current pre_llm_call turn_id.'}
@@ -269,69 +252,45 @@ class Requests:
 
     def hook(self, name, **kw):
         with self.lock:
-            if name == 'pre_gateway_dispatch':
-                event, gateway = kw.get('event'), kw.get('gateway')
-                source = getattr(event, 'source', None)
-                resolver = getattr(gateway, '_session_key_for_source', None)
-                if not source or not callable(resolver): return None
-                key = resolver(source)
-                text = getattr(event, 'text', '')
-                # Invalidate a prior actor even on rejected/bot input.
-                self.pending.pop(key, None)
-                internal = getattr(event, 'internal', False)
-                metadata = getattr(event, 'metadata', None) or {}
-                if (internal and isinstance(text, str) and text.startswith(PREFIX) and
-                        metadata.get('hermes_plugin_injection') is True and
-                        metadata.get('hermes_plugin_id') == getattr(self.engine.ctx, 'plugin_id', 'cadence')):
-                    self.pending[key] = ('protocol', text, self.engine.clock.now())
-                return None
+            if name == 'pre_gateway_dispatch': return None
             sid = kw.get('session_id', '')
             tid = kw.get('turn_id', '')
             if name == 'on_session_end': self.origins.pop(sid, None)
             if name == 'pre_llm_call':
                 key = self.engine.tool.session_key_fn()
                 text = kw.get('user_message', '')
-                pending = self.pending.pop(key, None)
-                # Internal gateway turns bypass pre_gateway_dispatch. The live
-                # ContextVar is host-bound, never reconstructed from model text.
-                try:
-                    from gateway.session_context import _SESSION_TURN_EVENT
-                    event = _SESSION_TURN_EVENT.get()
-                except ImportError:
-                    event = None
-                if event is not None:
-                    pending = None
-                    metadata = getattr(event, 'metadata', None) or {}
-                    if (getattr(event, 'internal', False) and getattr(event, 'text', None) == text and
-                            metadata.get('hermes_plugin_injection') is True and
-                            metadata.get('hermes_plugin_id') == getattr(self.engine.ctx, 'plugin_id', 'cadence') and
-                            metadata.get('gateway_session_key') == key):
-                        pending = ('protocol', text, self.engine.clock.now())
                 self.origins.pop(sid, None)
                 self.turns.pop(sid, None)
                 if not isinstance(text, str) or not text.startswith(PREFIX):
                     if sid and tid: self.origins[sid] = (key, tid)
                     return None
-                block = {'action': 'block', 'message': '[SILENT]'}
-                if not pending or pending[:2] != ('protocol', text) or not self.host_supported or not sid or not tid:
-                    return block
+                def refuse(reason):
+                    # Say why in the log: a silently dropped turn is otherwise undiagnosable.
+                    LOG.info('cadence request envelope refused in %s: %s', key, reason)
+                    return {'action': 'block', 'message': '[SILENT]'}
+                # The envelope authenticates itself: an unguessable per-request token,
+                # the exact route, and a single-use claim. No host provenance is needed.
+                if not sid or not tid: return refuse('host gave no session or turn id')
                 try: envelope = json.loads(text[len(PREFIX):])
-                except (ValueError, TypeError): return block
-                if not isinstance(envelope, dict): return block
+                except (ValueError, TypeError): return refuse('unreadable envelope')
+                if not isinstance(envelope, dict): return refuse('unreadable envelope')
                 with self.store.atomic():
                     row = self._row(envelope.get('id', ''))
                     kind = envelope.get('kind')
                     if not row or kind not in {'ask', 'answer'} or not secrets.compare_digest(str(envelope.get('token', '')), row['token']):
-                        return block
-                    if not self._eligible() or not self._authorized(row):
-                        return block
-                    if key != row['target' if kind == 'ask' else 'source']: return block
+                        return refuse('unknown request or wrong token')
+                    if not self._eligible(): return refuse('cadence is off, paused or not serving here')
+                    if not self._authorized(row): return refuse('a participant is no longer named')
+                    if key != row['target' if kind == 'ask' else 'source']: return refuse('delivered to the wrong conversation')
                     if kind == 'ask':
-                        if row['request_sid'] or row['outcome'] or self.engine.clock.now() >= row['deadline']: return block
+                        if row['request_sid']: return refuse('request already delivered')
+                        if row['outcome']: return refuse('request already ended')
+                        if self.engine.clock.now() >= row['deadline']: return refuse('request deadline passed')
                         self.store.connection.execute("UPDATE session_requests SET request_sid=?,request_turn=?,state='started' WHERE id=?",
                                                       (sid, tid, row['id']))
                     else:
-                        if row['answer_sid'] or not row['outcome']: return block
+                        if row['answer_sid']: return refuse('answer already delivered')
+                        if not row['outcome']: return refuse('request has no outcome yet')
                         self.store.connection.execute("UPDATE session_requests SET answer_sid=?,answer_turn=?,answer_state='started' WHERE id=?",
                                                       (sid, tid, row['id']))
                     self.turns[sid] = (row['id'], kind, tid)
