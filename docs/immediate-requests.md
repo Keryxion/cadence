@@ -13,12 +13,18 @@ automatic enrollment. No machine sockets or extra access settings are copied.
 ## Names Are Opt-In
 
 `names` is available before self-naming. Each entry has `title` (host display
-label or platform fallback), `name` (chosen address or null), `addressable` and
-`reachable`. Unnamed conversations are discoverable but cannot be addressed.
+label or platform fallback), `name` (chosen address or null) and `addressable`.
+`reachable` is present only when the host's own admission check could be
+consulted: `true` means an ask sent now would be admitted, `false` that it would
+be refused. Unnamed conversations are discoverable but cannot be addressed.
 A title, session ID or route key is never an address fallback: "There is a
 conversation titled Kitchen, but it has not chosen the name Kitchen yet."
 Listing never enrolls anyone. `rename` enrolls only the invoking conversation.
-Names are 1-40 characters, case-insensitively unique within this profile.
+Names are 1-40 characters after trimming, with no control characters, and
+case-insensitively unique within this profile. Punctuation such as a colon or an
+apostrophe is ordinary text; a straight and a typographic apostrophe are different
+characters. A name belongs to the conversation, not to one session: it survives
+`/new` and a gateway restart, and routing never uses a stored session ID.
 Both participants must choose names to communicate. Renaming preserves existing
 requests because routing uses stable internal identity.
 
@@ -66,6 +72,29 @@ physical device, install or restart is exercised.
 Any session the host can route an injected message to is supported. There is
 no cross-profile transport.
 
+## Ask States
+
+Each `ask` result is exactly one of three states, in its `state` field:
+
+| `state` | Shape | Meaning | Asking again |
+| --- | --- | --- | --- |
+| `awaiting_answer` | `ok:true`, `request` | The host took the request for the target. Not success yet. | Wait for the answer. |
+| `not_delivered` | `error:not_delivered`, `reason`, `detail`, `retry_safe:true` | The target never got it and did nothing. No request is recorded. | Safe once the reason is fixed. |
+| `unknown` | `error:unknown`, `request`, `retry_safe:false` | The host failed mid-handoff; the target may have acted. | Check the target first. |
+
+`reason` is `target_not_ready` (the host would refuse it: see below),
+`cadence_unavailable` (off, paused, or injection not allowed) or `host_refused`
+(`inject_message` returned false, so nothing was scheduled). A name nobody chose
+is `error:unknown_name`, which is not a state of any request.
+
+Hermes's `inject_message` returns before the gateway decides: true means the
+turn was scheduled, and a refusal by the session authority afterwards is only
+logged. The authority admits a plugin turn only into a conversation whose current
+session already holds a human message, so a conversation just started with `/new`
+(or reset) cannot be asked anything until someone speaks to it. Cadence asks the
+host that same question before sending and fails at once with `target_not_ready`.
+On a host without a session authority there is no such refusal and no check.
+
 ## Durable Outcomes
 
 SQLite stores IDs, stable routes, originating turns, note fingerprints, nonce,
@@ -73,8 +102,10 @@ target claim, outcome and answer claim. Claims commit before host injection;
 restart never resubmits a claimed delivery. Crashes can lose delivery,
 deliberately favoring no repeated action over availability.
 
-After 60 seconds without an answer, outcome is `unknown` and one uncertainty
-notice is attempted. The target may have acted. Never retry, paraphrase to evade
+After 60 seconds, a request the target's turn never claimed ends `not_delivered`:
+the target did nothing, a late delivery is refused, and asking again is safe. A
+request the target did receive but never answered ends `unknown`. Either way one
+notice is attempted to the asker. After `unknown` the target may have acted. Never retry, paraphrase to evade
 deduplication, or do the work locally without checking. Known acceptance remains
 accepted if return delivery is unknown; `list` exposes `answer_state` separately.
 External effects are not exactly once or rolled back by this protocol.

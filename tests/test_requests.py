@@ -82,6 +82,7 @@ def test_unknown_outcome_never_retries(pair):
     e, r = pair
     setup_names(e, r)
     result = ask(e, r)
+    inbound(e, r, 'kitchen', internal=True, text=e.ctx.calls[-1][0])  # the target got it, then went quiet
     e.clock.advance(61)
     r.expire()
     CURRENT.key = 'mac'
