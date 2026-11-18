@@ -97,6 +97,8 @@ class Tool:
 
     def owner_turn_evidence(self, session_id, flight):
         e = self.engine
+        requests=getattr(e,'requests',None)
+        if requests and requests.context(session_id): return requests.standing(session_id)
         return (flight is None and bool(session_id) and bool(turn := e.intake.turns.get(session_id))
                 and e.intake.owner_turns.get(session_id) == turn)
 
@@ -127,6 +129,8 @@ class Tool:
                 s = e.store.get_session(s.session_key)
                 flight = e.intake.flight_for(session_id, s.session_key)
                 evidence = self.owner_turn_evidence(session_id, flight)
+                requests=getattr(e,'requests',None)
+                request_context=requests.context(session_id) if requests else None
                 created_in = 'wake_turn' if flight else 'human_turn'
                 if action == 'respond':
                     return self.respond(args, flight)
@@ -170,6 +174,7 @@ class Tool:
                     result = self.prepare(w,request)
                     result.clamped.update(budget_clamps)
                     w = e.store.create_wake(result.wake)
+                    if request_context: e.store.set_meta('request_wake:'+w.id,request_context['id'])
                     if child_key:
                         e.store.set_meta(child_key,str(children+1))
                     item = {'ok':True,'armed':w.status=='active','wake':asdict(w),'clamped':result.clamped,'cache':self.cache_result(w),'receipt':self.receipt(w,s)}

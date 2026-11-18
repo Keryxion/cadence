@@ -15,7 +15,7 @@ from . import serving
 LOG=logging.getLogger('cadence')
 _RUNTIMES={}
 _GUARD=threading.RLock()
-HOOKS=('pre_gateway_dispatch','gateway_platform_event','pre_llm_call',
+HOOKS=('pre_tool_call','pre_gateway_dispatch','gateway_platform_event','pre_llm_call',
        'pre_api_request','post_api_request','transform_llm_output','on_session_end','agent_loop_stopped',
        'on_session_reset','kanban_task_completed','kanban_task_blocked',
        'on_kanban_worker_exited','subagent_stop','api_request_error')
@@ -63,6 +63,24 @@ class Runtime:
         self._last_bootstrap_error=''
         self._started_monotonic=self.clock.monotonic()
         self.closed=False
+        self._requests=None
+
+    def get_requests(self):
+        with self._engine_lock:
+            if self._requests is None:
+                from .requests import Requests
+                self._requests=Requests(self.get_engine())
+                self._engine.requests=self._requests
+            return self._requests
+
+    def request(self,args,**kwargs):
+        if self.inactive(): return json.dumps({'error':'not_allowed'})
+        try:
+            with home_scope(self.home):
+                return json.dumps(self.get_requests().handle(args,**kwargs),ensure_ascii=False)
+        except Exception:
+            LOG.warning('cadence request adapter failed',exc_info=True)
+            return json.dumps({'error':'engine_unavailable'})
 
     def policy(self):
         from dataclasses import fields
@@ -134,6 +152,10 @@ class Runtime:
                     from .intake import delegated_child
                     if not delegated_child(kwargs.get('platform','')) and (self._thread is None or not self._thread.is_alive()):
                         self.restart()
+                requests=self.get_requests()
+                result=requests.hook(name,**kwargs)
+                if result is not None: return result
+                if name=='pre_tool_call': return None
                 intake=self.get_engine().intake
                 if name=='api_request_error': return intake.api_request_error(**kwargs)
                 if name in EVENTS: return intake.event(EVENTS[name],**kwargs)
@@ -222,6 +244,7 @@ class Runtime:
                         self._wake.clear()
                         continue
                     runner.tick()
+                    self.get_requests().expire()
                     self._last_tick_monotonic=self.clock.monotonic()
                     self._last_bootstrap_error=''
                     next_tick=self.clock.monotonic()+self.tick_interval
@@ -259,9 +282,15 @@ def _register_surfaces(ctx,runtime):
     def tool(args,**kwargs):
         return runtime.tool(args,**kwargs) if runtime else json.dumps({'error':'engine_unavailable'})
     ctx.register_tool(name='pulse',toolset='cadence',schema=SCHEMA,handler=tool,description=DESCRIPTION)
+    from .requests import SCHEMA as REQUEST_SCHEMA,DESCRIPTION as REQUEST_DESCRIPTION
+    ctx.register_tool(name='request',toolset='cadence',schema=REQUEST_SCHEMA,
+                      handler=lambda args,**kw:runtime.request(args,**kw) if runtime else json.dumps({'error':'engine_unavailable'}),
+                      description=REQUEST_DESCRIPTION)
     for name in HOOKS:
         def callback(_name=name,**kwargs):
             return runtime.hook(_name,**kwargs) if runtime else None
+        # The available hold_stream registration buffers the entire profile.
+        # Do not buffer ordinary replies; request setup speech is allowed.
         ctx.register_hook(name,callback)
     ctx.register_command(name='pulse',handler=lambda args:runtime.command(args) if runtime else 'Error: no profile runtime.',
                          description='Cadence wakes and watchers',args_hint='<action>')
