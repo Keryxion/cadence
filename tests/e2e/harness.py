@@ -184,20 +184,23 @@ class PulseRig:
         path.write_text(yaml.safe_dump(cfg, sort_keys=False))
 
     def install_barrier(self):
-        plugin = self.gateway.hermes_home / "plugins/e2e-barrier"
+        plugin = self.gateway.hermes_home / "plugins/barrier-e2e"
         plugin.mkdir(parents=True)
         shutil.copyfile(Path(__file__).parent / "barrier_plugin.py", plugin / "__init__.py")
         (plugin / "plugin.yaml").write_text(
-            "name: e2e-barrier\nversion: 0.0.1\nmanifest_version: 2\napi_version: 1\n"
+            "name: barrier-e2e\nversion: 0.0.1\nmanifest_version: 2\napi_version: 1\n"
             "kind: standalone\ndescription: Test-only setup barrier\n"
             "provides_hooks: [pre_llm_call]\n")
         import hermes_yaml as yaml
 
         path = self.gateway.hermes_home / "config.yaml"
         cfg = yaml.safe_load(path.read_text())
-        # Loader insertion order: barrier must precede cadence pre_llm_call.
-        cfg["plugins"]["enabled"] = ["e2e-barrier", "cadence"]
-        cfg["plugins"]["entries"]["e2e-barrier"] = {"enabled": True}
+        # Hermes loads plugins in alphabetical key order (plugins.enabled is a set),
+        # and hooks run in load order: the barrier's name must sort before "cadence"
+        # so its pre_llm_call runs first.
+        assert "barrier-e2e" < "cadence"
+        cfg["plugins"]["enabled"] = ["barrier-e2e", "cadence"]
+        cfg["plugins"]["entries"]["barrier-e2e"] = {"enabled": True}
         path.write_text(yaml.safe_dump(cfg, sort_keys=False))
 
     def start(self, *, bootstrap=True):

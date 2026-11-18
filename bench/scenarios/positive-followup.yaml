@@ -24,9 +24,12 @@ duration: 1500
 expectations:
   required_fires:
   - wake: task
+    # Due at 600 and accepted but dropped. The restart at 660 re-submits at once (an
+    # owner one-time reminder is not held by wake spacing), into the injector that
+    # still drops until 690. The 600 s acknowledgement timeout then refunds it at 1260.
     window:
-    - 1200
-    - 1230
+    - 1260
+    - 1290
   forbidden_deliveries: []
   bars:
     task:
