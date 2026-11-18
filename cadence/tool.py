@@ -37,6 +37,8 @@ DESCRIPTION = ('Your own time in this chat. Use create to arm a wake/watcher (no
                'cancel to end it. During a wake turn, use respond to set '
                'outcome and notify, optionally scratch/next_check; outcome=progress with notify=false and a summary is real work, never counted as idle. Bounds and clamps are reported. Never type silence markers. '
                'Results include a `cache` line; pick intervals the line marks warm. '
+               'list returns `now`, `local_time` and each wake\'s last finished turn (state, outcome, summary, ended_local): '
+               'read those before saying whether a timer fired, was late, or has still to come — never infer it from an epoch. '
                'Results include a receipt line; tell the owner what it says, not a promise of your own. '
                'If a result is proposed (armed=false and its receipt names a /pulse ok command), nothing is set yet: say so first and ask the owner to send that command; never call it set, done or scheduled. '
                'When a create is refused, tell the owner why and what can be done; never arm a stand-in or relay wake '
@@ -135,7 +137,14 @@ class Tool:
                 if action == 'respond':
                     return self.respond(args, flight)
                 if action == 'list':
-                    return {'ok':True,'wakes':[{**asdict(w),'cache':self.cache_result(w)} for w in e.store.list_wakes(s.session_key)]}
+                    from .desk import last_fire
+                    tz = e.policy.resolved_timezone()
+                    now = e.clock.now()
+                    return {'ok':True,'now':now,
+                            'timezone':getattr(tz,'key',None) or str(tz),
+                            'local_time':datetime.fromtimestamp(now,tz).strftime('%a %d %b %H:%M'),
+                            'wakes':[{**asdict(w),'last':last_fire(e.store,w,tz),'cache':self.cache_result(w)}
+                                     for w in e.store.list_wakes(s.session_key)]}
                 if action == 'create':
                     if not s.enabled:
                         return {'error':'session_off'}

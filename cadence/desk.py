@@ -1,10 +1,28 @@
 """A bounded, read-only view of this chat's responsibilities and budgets."""
+from datetime import datetime
 from types import SimpleNamespace
 
 from .commands import _clip, _oneline, _time, messages_count
 from .policy import is_watcher
 from .schedule import zone
 from .wake_text import _age
+
+
+def last_fire(store, wake, timezone):
+    """The most recent finished turn of this wake, as flat fields an agent can quote.
+
+    `pulse list` carries raw rows, so answering "did it run, and what happened?"
+    from it meant converting epochs by hand and guessing. Roles already show this
+    row on the desk; time wakes get the same facts.
+    """
+    done = [o for o in store.list_occurrences(wake.id) if o.ended_at is not None]
+    if not done:
+        return None
+    last = max(done, key=lambda o: o.ended_at)
+    return {'state': last.state, 'outcome': last.outcome or '', 'notify': bool(last.notify),
+            'summary': last.summary or '', 'error': last.error or '',
+            'ended_at': last.ended_at,
+            'ended_local': datetime.fromtimestamp(last.ended_at, zone(timezone)).strftime('%a %d %b %H:%M')}
 
 
 def cost_line(store, key, timezone, policy):
