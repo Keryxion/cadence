@@ -105,7 +105,7 @@ def test_dm_thread_message_counts_under_its_own_session(tmp_path, clock, monkeyp
     from cadence.model import Session
     store = Store(tmp_path / 'pulse.db', clock)
     store.upsert_session(Session(KEY, 'telegram', 'dm', 'unit', 'sid', clock.now(), clock.now(), 'episode'))
-    e = Poller(GatewayCtx(tmp_path), store, Policy(clock=clock, quiet_hours='', timezone='UTC'), clock,
+    e = Poller(GatewayCtx(tmp_path), store, Policy(clock=clock, timezone='UTC'), clock,
                session_key_fn=lambda: keys['current'], paused=lambda: False, jitter=lambda: 0,
                compression_tip=lambda sid: sid)
     try:

@@ -97,21 +97,8 @@ def test_stored_task_and_board_filters_still_fire(engine, filters):
     assert occurrence.payload_json == [{'task_id':'task','board':'board'}]
 
 
-def test_owner_silence_quiet_hours_can_make_expiry_impossible(engine):
-    now = night(engine, 21)
-    session(engine, last_human_at=now)
-    result = create(engine, {'kind':'owner_silent','after':'2h'}, until={'expires':'in 3h'})
-    assert result.get('error') == 'invalid_request', result
-    assert 'due after expiry' in result['detail']
-    assert not engine.store.list_wakes(KEY)
 
 
-def test_owner_silence_receipt_reports_quiet_release(engine):
-    now = night(engine, 21)
-    session(engine, last_human_at=now)
-    result = create(engine, {'kind':'owner_silent','after':'2h'})
-    assert result.get('ok'), result
-    assert f'Quiet hours hold it until {local(engine,now+11*3600)}.' in receipt(result)
 
 
 @pytest.mark.parametrize('kind', ['at','every','owner_silent','kanban_completed'])
@@ -127,18 +114,6 @@ def test_active_spacing_can_make_expiry_impossible(engine, kind):
     assert not engine.store.list_wakes(KEY)
 
 
-@pytest.mark.parametrize('kind', ['at','owner_silent','kanban_completed'])
-def test_spacing_precedes_quiet_adjustment_and_receipt(engine, kind):
-    now = night(engine, 21)
-    engine.policy = replace(engine.policy, wake_spacing_minutes=120)
-    session(engine, last_wake_turn_at=now)
-    trigger = {'kind':kind, **({'at':'in 30m'} if kind=='at' else
-               {'after':'30m'} if kind=='owner_silent' else {'deadline':'in 30m'})}
-    result = create(engine, trigger, until={'expires':'in 4h'})
-    assert result.get('error') == 'invalid_request', result
-    result = create(engine, trigger)
-    assert result.get('ok'), result
-    assert f'Quiet hours hold it until {local(engine,now+11*3600)}.' in receipt(result)
 
 
 @pytest.mark.parametrize('kind', ['at','owner_silent','kanban_completed'])
@@ -191,7 +166,7 @@ def test_sweep_ignores_stray_event_key_on_non_event_kinds(engine, kind, trigger)
     assert result.get('ok'), result
 
 
-@pytest.mark.parametrize('bypass', ['spacing','quiet'])
+@pytest.mark.parametrize('bypass', ['spacing'])
 def test_deadline_free_event_watcher_counts_holds(engine, bypass):
     if bypass == 'spacing':
         engine.policy = replace(engine.policy, wake_spacing_minutes=10)
@@ -214,7 +189,7 @@ def test_sweep_leaves_started_turn_for_restart_settlement(engine):
     assert engine.store.get_occurrence(w.id, 'legacy-started').error != 'invalid_trigger_event'
 
 
-@pytest.mark.parametrize('hold', ['spacing','quiet'])
+@pytest.mark.parametrize('hold', ['spacing'])
 def test_deadline_free_event_watcher_receipt_reports_holds(engine, hold):
     if hold == 'spacing':
         engine.policy = replace(engine.policy, wake_spacing_minutes=10)

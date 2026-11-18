@@ -1,9 +1,9 @@
 """A bounded, read-only view of this chat's responsibilities and budgets."""
 from types import SimpleNamespace
 
-from .commands import _clip, _oneline, _time, messages_count, quiet_until
+from .commands import _clip, _oneline, _time, messages_count
 from .policy import is_watcher
-from .schedule import quiet_end, zone
+from .schedule import zone
 from .wake_text import _age
 
 
@@ -40,10 +40,8 @@ def _rhythm(wake) -> str:
 def render_desk(engine_or_store, session, *, clock, timezone, policy, measure=len, turn=None) -> str:
     store = getattr(engine_or_store, 'store', engine_or_store)
     now, key = clock.now(), session.session_key
-    # The existing command formatters/override resolver need only these read seams.
     view = SimpleNamespace(store=store, clock=clock, policy=SimpleNamespace(
-        resolved_timezone=lambda: zone(timezone), quiet_hours_urgent=policy.quiet_hours_urgent,
-        quiet_until=lambda **kw: quiet_end(kw.get('now', now), policy.quiet_hours, timezone)))
+        resolved_timezone=lambda: zone(timezone)))
     wakes = [w for w in store.list_wakes(key) if w.status in {'active', 'paused'}]
     roles = sorted((w for w in wakes if w.role), key=lambda w: (w.updated_at, w.created_at), reverse=True)
     rows = []
@@ -76,8 +74,7 @@ def render_desk(engine_or_store, session, *, clock, timezone, policy, measure=le
     tail.append(f'- Owner last wrote {age} · unanswered {session.unanswered_count} · '
                 f'messages today {messages_count(counts["delivered"], in_flight, policy.max_messages_per_day)} · '
                 f'turns today {counts["model_turns"]}/{policy.max_model_wakes_per_day}' + (' · '+cost if cost else ''))
-    held = ('quiet hours' if quiet_until(view,key) is not None else
-            "the owner hasn't replied yet" if session.unanswered_count >= policy.max_unanswered else
+    held = ("the owner hasn't replied yet" if session.unanswered_count >= policy.max_unanswered else
             "today's message limit" if counts['delivered'] - own >= policy.max_messages_per_day else '')
     if held: tail.append('- Messages held now: '+held)
     omitted = 0

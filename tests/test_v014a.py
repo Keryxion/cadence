@@ -16,7 +16,7 @@ from cadence.registration import Runtime, register
 from test_engine import engine, arm, pending, session, start, end, admit, GatewayCtx, KEY
 
 
-BAD_SETTINGS = [('quiet_hours', '10pm-6am'), ('max_messages_per_day', 1.5),
+BAD_SETTINGS = [('max_messages_per_day', 1.5),
                 ('min_interval_minutes', 0), ('timezone', 'Europe/Pari'), ('max_active', -1)]
 
 
@@ -91,7 +91,7 @@ def test_multiple_bad_settings_report_each_default(runtime):
 def test_refresh_build_exception_does_not_abort_due_wake(engine):
     e = engine
     old = e.policy
-    e.refresh_policy = lambda: Policy.from_settings({'quiet_hours': '10pm-6am'}, clock=e.clock)
+    e.refresh_policy = lambda: Policy.from_settings({'timezone': 'Europe/Pari'}, clock=e.clock)
     arm(e)
     e.tick()
     assert len(e.ctx.calls) == 1 and e.policy == old
@@ -107,11 +107,11 @@ def test_runtime_bootstrap_shares_last_good_policy(runtime, monkeypatch):
     observed = {}
     monkeypatch.setattr(Poller, 'acquire', lambda self: True)
     def refresh_sequence(runner):
-        runtime.ctx.settings.update({'quiet_hours': '23:00-07:00',
+        runtime.ctx.settings.update({'timezone': 'Asia/Tokyo',
                                      'max_model_wakes_per_day': 5})
         runner.refresh()
-        observed['before'] = (e.policy.quiet_hours, runner.policy.quiet_hours)
-        runtime.ctx.settings['quiet_hours'] = '11pm-7am'
+        observed['before'] = (e.policy.timezone, runner.policy.timezone)
+        runtime.ctx.settings['timezone'] = 'Europe/Pari'
         e.refresh()
         runner.refresh()
         observed['policies'] = (e.policy, runner.policy)
@@ -119,29 +119,29 @@ def test_runtime_bootstrap_shares_last_good_policy(runtime, monkeypatch):
         stop.set()
     monkeypatch.setattr(Poller, 'tick', refresh_sequence)
     runtime._bootstrap(stop)  # Exercise the actual runner refresh wiring.
-    assert observed['before'] == ('', '23:00-07:00')
+    assert observed['before'] == ('UTC', 'Asia/Tokyo')
     engine_policy, runner_policy = observed['policies']
     assert engine_policy == runner_policy
-    assert runner_policy.quiet_hours == '23:00-07:00'
+    assert runner_policy.timezone == 'Asia/Tokyo'
     assert runner_policy.max_model_wakes_per_day == 5
-    assert observed['notice'][0]['effective'] == runner_policy.quiet_hours
+    assert observed['notice'][0]['effective'] == runner_policy.timezone
 
 
-def test_valid_disable_applies_with_rejected_quiet_hours(runtime):
+def test_valid_disable_applies_with_rejected_timezone(runtime):
     e = bind(runtime)
-    old_quiet = e.policy.quiet_hours
+    old_timezone = e.policy.timezone
     arm(e)
-    runtime.ctx.settings.update({'enabled': False, 'quiet_hours': '10pm-6am'})
+    runtime.ctx.settings.update({'enabled': False, 'timezone': 'Europe/Pari'})
     e.tick()
     assert e.policy.enabled is False
-    assert e.policy.quiet_hours == old_quiet
+    assert e.policy.timezone == old_timezone
     assert not e.ctx.calls
-    assert json.loads(e.store.get_meta('settings_error'))[0]['effective'] == old_quiet
+    assert json.loads(e.store.get_meta('settings_error'))[0]['effective'] == old_timezone
 
 
 def test_invalid_refresh_never_clears_or_rewrites_unchanged_notice(runtime, monkeypatch):
     e = bind(runtime)
-    runtime.ctx.settings['quiet_hours'] = '10pm-6am'
+    runtime.ctx.settings['timezone'] = 'Europe/Pari'
     e.refresh()
     writes = []
     set_meta = e.store.set_meta

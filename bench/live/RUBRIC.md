@@ -270,7 +270,7 @@ then the cell is VOID and may be queued once more at the end. Only these
 infrastructure VOIDs are queued again: `upstream_unavailable`, `gateway_exited`,
 `rig_config`, `incomplete_evidence`, `cleanup_failed`, `send_slipped`. Any other
 VOID is final, including the model-behaviour reasons `no_reply`,
-`gateway_not_idle` and `turn_not_settled` and the model-dependent `quiet_hours`
+`gateway_not_idle` and `turn_not_settled` and the model-dependent observation limits
 and `observation_incomplete`; rerunning them would resample the model. Before starting
 any cell or rerun, its full window plus 10-minute margin must fit `--until`;
 otherwise record NOT_RUN (`deadline`). Quota stops active cells and leaves the
@@ -278,16 +278,7 @@ rest NOT_RUN (`quota`), except queued or active VOID reruns keep the first attem
 `;stopped:quota` (or `;stopped:terminated` for a signal). A real upstream requires a future, timezone-aware
 `--until`. Round 6 is amended to run at operator-set hours, only inside that
 window, and never at the same time as another B2 round.
-Before each cell or rerun, refuse as NOT_RUN (`quiet_hours`) if the interval
-from now through window+10 min intersects the manifest's default `quiet_hours`
-in `--tz`. After the first send, a sent_at-to-end interval crossing quiet hours
-is VOID (`quiet_hours`), including any S-stop extension. A refused rerun retains
-the original VOID reason and adds `rerun_refused:<reason>`; final VOID exits 3.
-Exit 0 requires every cell to complete. Output directories must be fresh (no
-`calls.json` or result JSON). SIGTERM/SIGINT stops active cells, allows up to 60 s
-for cleanup, marks unfinished cells NOT_RUN (`terminated`), and exits 2. A cell
-signal without a quota latch records TERMINATED, never QUOTA. Pin refusal exits
-4 in the cell and stops the run with every cell NOT_RUN (`refused`).
+
 
 **Not proven:** shared/installed profiles, real Telegram transport, other Hermes
 pins, other models, broader toolsets, compression, groups, CLI/TUI/Desktop/API/

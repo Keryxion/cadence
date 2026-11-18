@@ -35,7 +35,7 @@ def test_real_loader_worker_registration_and_same_session_silence(tmp_path, monk
 
     plugin = home/'plugins/cadence'
     shutil.copytree(ROOT,plugin,ignore=shutil.ignore_patterns('.git','.venv','.pytest_cache','__pycache__'))
-    (home/'config.yaml').write_text('plugins:\n  entries:\n    cadence:\n      enabled: true\n      settings:\n        quiet_hours: ""\n        timezone: UTC\n')
+    (home/'config.yaml').write_text('plugins:\n  entries:\n    cadence:\n      enabled: true\n      settings:\n        timezone: UTC\n')
     seen = []
     register_tool = PluginContext.register_tool
     def tracked(self,*args,**kwargs):
@@ -86,7 +86,7 @@ def test_real_loader_worker_registration_and_same_session_silence(tmp_path, monk
             assert engine.store.get_session(fresh_key).last_human_at is None
             assert 'injection_disabled' in manager._plugin_commands['pulse']['handler']('add in 1m Verify consent')
         finally: clear_session_vars(tokens)
-        (home/'config.yaml').write_text('plugins:\n  entries:\n    cadence:\n      enabled: true\n      allow_gateway_injection: true\n      settings:\n        quiet_hours: ""\n        timezone: UTC\n')
+        (home/'config.yaml').write_text('plugins:\n  entries:\n    cadence:\n      enabled: true\n      allow_gateway_injection: true\n      settings:\n        timezone: UTC\n')
         key = 'agent:telegram:dm:fixture'
         # Gateway commands get a bound HERMES_SESSION_KEY (no target argument).
         tokens=set_session_vars(platform='telegram',chat_id='fixture',chat_type='dm',session_key=key,session_id='sid')

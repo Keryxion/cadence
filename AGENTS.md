@@ -36,7 +36,7 @@ your change touches them.
 - Don't bump versions, create tags, or add CHANGELOG release headings. Maintainers cut releases.
 - No build step or committed bundles: this plugin ships Python source and its manifest.
 - Unit tests must not access the network or billed model APIs; preserve the network-denial fixture.
-- Keep consent, destination/session isolation, quiet hours, caps and silent-response boundaries intact.
+- Keep consent, destination/session isolation, caps and silent-response boundaries intact.
 - Diagnose installed deployments with status and logs only; do not fire a wake, send a DM or change consent to reproduce a bug.
 - Never commit secrets, tokens, real user data, or machine-specific paths.
 - Tests use a temporary `HERMES_HOME`, never a real one.

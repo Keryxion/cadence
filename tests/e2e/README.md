@@ -37,7 +37,7 @@ Unix sockets fit. At most four workers run in parallel, with a 240-second
 scenario deadline; the CI job has a 30-minute deadline. Serial pytest works too.
 
 The fixture copies only the plugin's production files into the temporary home.
-It enables gateway injection, disables quiet hours, lowers supported scheduling
+It enables gateway injection, lowers supported scheduling
 floors, disables streaming, and restricts tools to `cadence`. Tool Search is
 explicitly off so the scripted direct `pulse` calls are offered and executed.
 E2's default Telegram display keeps tool progress/reasoning off; its second cell
@@ -71,7 +71,7 @@ idle, and a one-second grace before that barrier. A status timeout with
 `flush-cancelled` in the agent log names the upstream duplicate `/stop` wedge.
 E11/E14 count real gateway injection dispatches as well as distinct wake markers.
 The invalid-setting cell changes only the rig's live config after arming an owner
-one-shot; it checks one delivery and the `Setting ignored: quiet_hours` status notice.
+one-shot; it checks one delivery and the `Setting ignored: timezone` status notice.
 Negative replay/loop claims have a bounded poller-tick observation window;
 they are not soak claims.
 

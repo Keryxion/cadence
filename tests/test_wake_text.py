@@ -22,8 +22,6 @@ def records(clock):
 
 @pytest.mark.parametrize('held_by,after_restart,why', [
     ('', False, 'Follow up'),
-    ('quiet_hours', False, 'Follow up (held by quiet hours)'),
-    ('quiet_hours', True, 'Follow up (held by quiet hours after restart)'),
 ])
 def test_snapshot(clock, held_by, after_restart, why):
     wake, occ, session = records(clock)

@@ -281,7 +281,7 @@ def test_setup_command_mismatch_reason(tmp_path):
     r,c,store,e=shape_rig(tmp_path,'N');original=c.send
     def send(text):
         m=original(text)
-        if text=='/pulse quiet default':c.messages[-1]['text']='Error: unavailable'
+        if text=='/pulse status':c.messages[-1]['text']='Error: unavailable'
         return m
     c.send=send
     assert r.run()==1
@@ -289,14 +289,14 @@ def test_setup_command_mismatch_reason(tmp_path):
     store.close()
 
 
-@pytest.mark.parametrize('condition,reason', [('session','session_not_rotated'),('quiet','quiet_window_mismatch'),
+@pytest.mark.parametrize('condition,reason', [('session','session_not_rotated'),
     ('unanswered','unanswered_not_zero'),('enabled','chat_disabled'),('dirty','dirty_wakes')])
 def test_postsend_failure_reasons(tmp_path,condition,reason):
     r,c,store,e=shape_rig(tmp_path,'N');declare(r)
     original=r.setup_send
     def setup_send(*args):
         ok=original(*args)
-        if args[1]=='quiet':
+        if args[1]=='status':
             if condition=='session':r.transcript.current_session=lambda _: 's'
             elif condition=='quiet':store.set_meta('quiet:chat',json.dumps({'range':'off'}))
             elif condition=='unanswered':store.cas_session('chat',{'unanswered_count':0},unanswered_count=1)

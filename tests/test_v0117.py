@@ -180,7 +180,7 @@ def test_reminder_bound_never_below_general_lifetime(engine):
 
 def test_owner_expiry_clamp_label_and_lowered_setting(engine):
     engine.policy = Policy.from_settings({'max_reminder_days':40}, clock=engine.clock)
-    engine.policy = replace(engine.policy, quiet_hours='', timezone='UTC')
+    engine.policy = replace(engine.policy, timezone='UTC')
     owner_turn(engine)
     result = create(engine, {'kind':'at','at':'in 30d'}, owner_asked=True, until={'expires':'in 60d'})
     assert result.get('ok'), result

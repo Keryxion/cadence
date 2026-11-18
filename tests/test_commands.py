@@ -54,12 +54,12 @@ def test_all_reads_mutations_on_off_are_session_scoped(runtime):
     assert e.store.get_wake(mine.id).status == 'cancelled' and e.store.get_wake(other.id).status == 'active'
 
 
-def test_status_injection_yaml_quiet_ledger_why(runtime):
+def test_status_injection_yaml_ledger_why(runtime):
     e = runtime.get_engine()
     w = arm(e,title='build',reason='CI is pending')
     e.ctx.allowed=False
     out = commands.handle('',runtime)
-    assert INJECTION_CONFIG in out and 'not running' in out and 'UTC' in out and 'quiet' in out.lower()
+    assert INJECTION_CONFIG in out and 'not running' in out and 'UTC' in out
     assert 'CI is pending' in commands.handle(f'why {w.id}',runtime)
     e.ctx.allowed=True
     for field in ('fires','checks','model wakes','messages','engaged','cache/cost','verdict'):
@@ -89,31 +89,19 @@ def test_user_add_proposal_approval_and_governor_answers(runtime):
     assert e.store.get_wake(w.id).status == 'cancelled'
 
 
-def test_quiet_override_timed_pause_and_invalid_input(runtime):
+def test_timed_pause_and_invalid_input(runtime):
     e = runtime.get_engine()
     w = arm(e, trigger_json={'at':'in 1h'})
-    assert '22:00-07:30' in commands.handle('quiet 22:00-07:30',runtime)
-    assert 'quiet' in commands.handle('quiet for 3h',runtime).lower()
+    assert 'paused' in commands.handle(f'pause {w.id} for 3d',runtime)
     e.tick()
     assert not e.ctx.calls
-    commands.handle('quiet off',runtime)
-    assert 'paused' in commands.handle(f'pause {w.id} for 3d',runtime)
     e.clock.advance(3*86400)
     e.tick()
     assert e.store.get_wake(w.id).status in {'active','done'}
-    for invalid in ('quiet nonsense','ledger all','add in 2h','pause all for bad','on foreign'):
+    for invalid in ('ledger all','add in 2h','pause all for bad','on foreign'):
         assert 'error' in commands.handle(invalid,runtime).lower()
 
 
-def test_quiet_off_releases_previously_deferred_one_shot(runtime):
-    e=runtime.get_engine()
-    w=arm(e)
-    commands.handle('quiet for 3h',runtime)
-    e.tick()
-    assert not e.ctx.calls
-    commands.handle('quiet off',runtime)
-    e.tick()
-    assert len(e.ctx.calls)==1
 
 
 def test_pause_resume_does_not_reuse_superseded_occurrence(runtime):

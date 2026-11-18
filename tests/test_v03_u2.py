@@ -204,14 +204,12 @@ def test_role_daily_dispatch_budget_and_next_local_day(engine, budget):
     assert len(e.ctx.calls) == 3
 
 
-@pytest.mark.parametrize('hold', ['unanswered', 'quiet_hours', 'daily_message_cap'])
+@pytest.mark.parametrize('hold', ['unanswered', 'daily_message_cap'])
 def test_owner_role_holds_messages_but_runs(engine, hold):
     e = engine
     w = arm(e, 'self', role=True, creator='user')
     if hold == 'unanswered':
         session(e, unanswered_count=e.policy.max_unanswered)
-    elif hold == 'quiet_hours':
-        e.policy = replace(e.policy, quiet_hours='00:00-23:59')
     else:
         e.ledger(w, delivered=e.policy.max_messages_per_day)
     before = e.daily(KEY)['delivered']

@@ -44,8 +44,8 @@ class FakeClient:
                     db.execute('INSERT OR IGNORE INTO sessions VALUES (?,?,?,?)', (self.sid,'chat',now,None))
                 self.store.cas_session('chat', {'unanswered_count':self.store.get_session('chat').unanswered_count}, unanswered_count=0)
                 reply = '✨ Session reset! Starting fresh.\n\nModel: fixture'
-            elif text == '/pulse quiet default':
-                self.store.set_meta('quiet:chat','{}'); reply = 'Quiet hours follow your settings again: 22:00-08:00'
+            elif text == '/pulse status':
+                self.store.set_meta('quiet:chat','{}'); reply = 'Cadence running.'
             elif text.startswith('/pulse cancel '):
                 w=self.store.get_wake(text.split()[-1]);self.store.cas_wake(w.id,w.status,status='cancelled')
                 reply=w.id+' cancelled · fixture wake'

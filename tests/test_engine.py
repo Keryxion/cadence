@@ -60,7 +60,7 @@ def engine(tmp_path, clock):
     store = Store(tmp_path / 'plugin-data/cadence/pulse.db', clock)
     store.upsert_session(Session(KEY, 'telegram', 'dm', 'unit', 'sid', clock.now(),
                                  clock.now(), 'episode'))
-    policy = Policy(clock=clock, quiet_hours='', timezone='UTC')
+    policy = Policy(clock=clock, timezone='UTC')
     e = Poller(ctx, store, policy, clock, session_key_fn=lambda: KEY,
                paused=lambda: False, jitter=lambda: 0, compression_tip=lambda sid: sid)
     yield e
@@ -373,7 +373,6 @@ def test_I16_dispatch_gate_matrix(engine):
               ('session_paused', {}, {'paused_until':e.clock.now()+60}, {}),
               ('dm_only', {}, {'chat_type':'group'}, {}),
               ('unanswered', {}, {'unanswered_count':2}, {}),
-              ('quiet_hours', {'kind':'every','creator':'user','eff_interval_s':3600}, {}, {'quiet_hours':'00:00-23:59'}),
               ('daily_message_cap', {}, {}, {'max_messages_per_day':0}),
               ('daily_model_cap', {}, {}, {'max_model_wakes_per_day':0}),
               ('busy', {}, {'busy_since':e.clock.now()}, {}),
@@ -381,7 +380,7 @@ def test_I16_dispatch_gate_matrix(engine):
     original = e.store.get_session(KEY)
     for reason, wc, sc, pc in cases:
         session(e, **{f.name:getattr(original,f.name) for f in fields(Session) if f.name != 'session_key'})
-        e.policy = replace(e.policy, quiet_hours='', max_model_wakes_per_day=24, max_messages_per_day=6, **pc) if not any(k in pc for k in ('quiet_hours','max_model_wakes_per_day','max_messages_per_day')) else replace(Policy(clock=e.clock, quiet_hours='', timezone='UTC'), **pc)
+        e.policy = replace(e.policy, max_model_wakes_per_day=24, max_messages_per_day=6, **pc) if not any(k in pc for k in ('quiet_hours','max_model_wakes_per_day','max_messages_per_day')) else replace(Policy(clock=e.clock, timezone='UTC'), **pc)
         session(e, **sc) if sc else None
         w = arm(e, **wc)
         o = pending(e, w)

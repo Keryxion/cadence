@@ -27,7 +27,7 @@ def command_matches(text, reply):
     reply = display(reply)
     if text == '/new': return 'Confirm /new' in reply and '/approve' in reply
     if text == '/approve': return reply.startswith(('✨ Session reset! Starting fresh.', '✨ New session started!'))
-    if text == '/pulse quiet default': return reply == 'Quiet hours follow your settings again: 22:00-08:00'
+    if text == '/pulse status': return reply.startswith('Cadence ')
     if text == '/pulse on': return reply == 'Cadence on for this chat.'
     if text.startswith('/pulse cancel '): return bool(re.match(re.escape(text.split()[-1])+r' cancelled\b', reply))
     return False
@@ -129,12 +129,10 @@ class Pulse(Reader):
         return dict(wakes=self.wakes(session_key), sessions=self.rows('SELECT * FROM sessions WHERE session_key=?', (session_key,)),
                     occurrences=self.rows('SELECT o.* FROM occurrences o JOIN wakes w ON w.id=o.wake_id WHERE w.session_key=?', (session_key,)))
 
-    def baseline_state(self, session_key, day, default_quiet):
-        quiet = self.rows('SELECT value FROM meta WHERE key=?', ('quiet:'+session_key,))
-        override = decoded(quiet[0]['value']) if quiet else {}
+    def baseline_state(self, session_key, day):
         usage = self.rows('SELECT l.* FROM ledger l JOIN wakes w ON w.id=l.wake_id WHERE w.session_key=? AND l.day=?', (session_key, day))
         pending = self.rows("SELECT o.* FROM occurrences o JOIN wakes w ON w.id=o.wake_id WHERE w.session_key=? AND o.state IN ('claimed','started')", (session_key,))
-        return dict(effective_quiet=default_quiet if not override else override.get('range'), quiet_override=override, usage=usage, pending=pending)
+        return dict(usage=usage, pending=pending)
 
 
 def hermes_revision(source, version_file):
@@ -166,7 +164,7 @@ def frozen_state(profile_home, hermes_source=None, hermes_version_file=None):
     settings = entry.get('settings', entry) if isinstance(entry, dict) else {}
     return dict(**hermes_revision(hermes_source, hermes_version_file),
                 allow_gateway_injection=isinstance(entry, dict) and entry.get('allow_gateway_injection') is True,
-                quiet_hours=settings.get('quiet_hours', '22:00-08:00'), resolved_timezone=settings.get('timezone') or config.get('timezone'),
+                resolved_timezone=settings.get('timezone') or config.get('timezone'),
                 max_messages_per_day=settings.get('max_messages_per_day', 6), plugin_version=str(version), settings_sha256=digest(entries.get('cadence', {})),
                 nondefault_settings=sorted(k for k in settings if k not in ('timezone', 'enabled', 'allow_gateway_injection', 'settings')),
                 model=config.get('model'), plugin_set_sha256=digest(dict(directories=sorted(p.name for p in (home/'plugins').iterdir() if p.is_dir()), enabled=enabled)))

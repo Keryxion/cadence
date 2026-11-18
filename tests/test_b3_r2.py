@@ -80,31 +80,9 @@ def test_cleanup_every_episode(tmp_path, kind):
     store.close()
 
 
-def test_fresh_baseline_wakes_appearing_during_setup_quiet_and_archive(tmp_path):
-    r,c,store,e = rig(tmp_path,'N')
-    original = c.send
-    def send(text):
-        m = original(text)
-        if text == '/approve':
-            for status in ('active','proposed','paused'):
-                store.create_wake(Wake(session_key='chat',kind='at',note='old',id='old-'+status,status=status))
-        return m
-    c.send = send
-    store.set_meta('quiet:chat', json.dumps({'range':'off'}))
-    store.cas_session('chat',{'enabled':True}, enabled=False, unanswered_count=2)
-    assert r.run() == 0
-    texts = [text for _,text in c.sent]
-    assert texts.index('/new') < texts.index('/pulse quiet default') < texts.index(e['sends'][0]['text'])
-    assert all(store.get_wake('old-'+status).status == 'cancelled' for status in ('active','proposed','paused'))
-    baseline = next(row for row in r.rows if row['kind']=='baseline_setup')
-    assert baseline['effective_quiet'] == '22:00-08:00'
-    assert baseline['session']['unanswered_count']==0 and baseline['session']['enabled']
-    assert baseline['transcript_sha256'] == schedule.digest(baseline['starting_transcript'])
-    assert baseline['session_id'] != baseline['old_session_id']
-    store.close()
 
 
-@pytest.mark.parametrize('problem', ['injection','quiet','used_day','wrong_date','revision'])
+@pytest.mark.parametrize('problem', ['injection','used_day','wrong_date','revision'])
 def test_baseline_fails_closed(tmp_path, problem):
     r,c,store,e = rig(tmp_path,'N')
     if problem == 'injection':

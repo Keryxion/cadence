@@ -31,16 +31,12 @@ expectations:
     window:
     - 300
     - 330
-  - wake: other_task
-    window:
-    - 1800
-    - 1830
   forbidden_deliveries: []
   bars:
     task:
       deliveries: 1
     other_task:
-      deliveries: 1
+      deliveries: 0
 heartbeat_checklist:
 - ref: task
   session: owner
@@ -59,5 +55,5 @@ profile_settings:
   a:
     max_model_wakes_per_day: 1
   b:
-    quiet_hours: 12:00-12:30
+    max_model_wakes_per_day: 0
 baseline_interval_s: 300

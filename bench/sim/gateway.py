@@ -69,7 +69,7 @@ class FakeGateway:
     def build(self,profile):
         ctx=self.contexts[profile]
         store=Store(ctx._manager.home_path/'plugin-data/cadence/pulse.db',self.clock)
-        settings={'quiet_hours':'','timezone':'UTC',**self.scenario.get('settings',{})}
+        settings={'timezone':'UTC',**self.scenario.get('settings',{})}
         settings={k:self.expand(v) if isinstance(v,str) else v for k,v in settings.items()}
         settings.update(self.scenario.get('profile_settings',{}).get(profile,{}))
         engine=Poller(ctx,store,Policy.from_settings(settings,clock=self.clock),self.clock,
@@ -84,7 +84,7 @@ class FakeGateway:
                 self.trace.append({'t':self.t,'event':'gate','ref':self.ref_for(profile,w.id),'reason':reason})
                 self.gate_reasons[identity]=reason
             holds=self.holds.setdefault(identity,[])
-            if defer and reason in {'quiet_hours','busy','wake_spacing','provider_unavailable','session_paused','global_flood'}:
+            if defer and reason in {'busy','wake_spacing','provider_unavailable','session_paused','global_flood'}:
                 if not holds or holds[-1][1] is not None: holds.append([self.t,None])
             elif holds and holds[-1][1] is None:
                 holds[-1][1]=self.t  # observed release; 15 s tick resolution

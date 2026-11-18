@@ -212,15 +212,17 @@ def test_R8_F7_spaced_meridiem_not_note(runtime,anchor,expected,note):
     assert (w.trigger_json.get('at'),w.note)==(expected,note)
 
 
-@pytest.mark.parametrize('skip_quiet',[True,False])
-def test_R8_F9_restart_scope_is_occurrence(engine,skip_quiet):
+@pytest.mark.parametrize('skip_first',[True,False])
+def test_R8_F9_restart_scope_is_occurrence(engine,skip_first):
     e=engine; w=arm(e,'every',creator='user',next_due_at=e.clock.now()+3600)
     e.tick(); e.clock.advance(3900); e.close()
     e2=Poller(e.ctx,e.store,e.policy,e.clock,session_key_fn=lambda:KEY,paused=lambda:False,jitter=lambda:0,compression_tip=lambda sid:sid)
     try:
-        if skip_quiet: e2.store.set_meta('quiet:'+KEY,json.dumps({'until':e.clock.now()+60}))
+        # A spent daily cap drops the recovered tick, so the next occurrence is the first to run.
+        if skip_first: e2.policy=replace(e.policy,max_model_wakes_per_day=0)
         e2.tick()
-        if not skip_quiet:
+        e2.policy=e.policy
+        if not skip_first:
             assert 'after restart' in e2.ctx.calls[-1][0]
             return
         assert e2.store.list_occurrences(w.id)[0].state=='skipped'
@@ -291,7 +293,7 @@ def test_R8_F5_url_timeout_reaps_worker(monkeypatch,phase):
     finally: stop.set(); listener.close(); thread.join(1)
 
 
-@pytest.mark.parametrize('quiet,failed,stop,held,late',[(True,False,False,300,0),(True,True,False,300,1300),(False,True,True,15,1280)])
+@pytest.mark.parametrize('quiet,failed,stop,held,late',[(False,True,True,15,1280)])
 def test_R8_F14_measured_holds_preserve_lateness(tmp_path,quiet,failed,stop,held,late):
     sc=load_scenarios('positive-followup')[0]
     sc['arms'][0]['command']='add in 5m Check the task.'

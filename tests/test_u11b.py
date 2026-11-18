@@ -236,7 +236,7 @@ def test_first_idle_owner_in_unknown_chat(tmp_path,clock,monkeypatch,platform,mi
     env={'HERMES_SESSION_PLATFORM':platform,'HERMES_SESSION_CHAT_TYPE':'dm','HERMES_SESSION_CHAT_ID':'unit','HERMES_SESSION_ID':'sid'}
     monkeypatch.setattr(tool,'session_env',lambda name:env.get(name,''))
     store=Store(tmp_path/'pulse.db',clock)
-    e=Poller(GatewayCtx(tmp_path),store,Policy(clock=clock,quiet_hours='',timezone='UTC'),clock,session_key_fn=lambda:KEY,paused=lambda:False,jitter=lambda:0)
+    e=Poller(GatewayCtx(tmp_path),store,Policy(clock=clock,timezone='UTC'),clock,session_key_fn=lambda:KEY,paused=lambda:False,jitter=lambda:0)
     try:
         e.intake.pre_gateway_dispatch(event=event(mid=mid,source_mid=mid,platform=platform))
         stamp='pending_human:'+platform+':unit'

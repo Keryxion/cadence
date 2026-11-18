@@ -5,7 +5,7 @@ import pytest
 
 from cadence.model import Wake
 from cadence.schedule import (parse_duration, parse_at, next_every, next_cron,
-                                 quiet_end, local_day, time_due)
+                                 local_day, time_due)
 
 
 def ts(value):
@@ -59,27 +59,8 @@ def test_cron_pure_and_strictly_future():
         next_cron("garbage", now=now, timezone="UTC")
 
 
-def test_quiet_daytime_disabled_and_equal_bounds():
-    now = ts("2025-10-12T12:00:00+00:00")
-    assert quiet_end(now, "", "UTC") is None
-    assert quiet_end(now, "12:00-12:00", "UTC") is None
-    assert quiet_end(now, "09:00-17:00", "UTC") == ts("2025-10-12T17:00:00+00:00")
-    assert quiet_end(ts("2025-10-12T17:00:00+00:00"), "09:00-17:00", "UTC") is None
-    assert local_day(now, "Pacific/Honolulu") == "2025-10-12"
-    assert local_day(ts("2025-10-12T01:00:00+00:00"), "Pacific/Honolulu") == "2025-10-11"
-    with pytest.raises(ValueError):
-        quiet_end(now, "25:00-08:00", "UTC")
 
 
-def test_DST_spring_gap_and_fall_fold():
-    zone = "America/New_York"
-    end = quiet_end(ts("2025-03-09T01:30:00-05:00"), "22:00-02:30", zone)
-    assert end == ts("2025-03-09T03:00:00-04:00")
-    # Stay quiet through the repeated hour; use the later end boundary.
-    end = quiet_end(ts("2025-11-02T01:45:00-04:00"), "22:00-01:30", zone)
-    assert end == ts("2025-11-02T01:30:00-05:00")
-    assert quiet_end(end, "22:00-01:30", zone) is None
-    assert parse_at("2025-03-09T02:30", now=0, timezone=zone) == ts("2025-03-09T03:00:00-04:00")
 
 
 def test_cron_interval_floor_and_fractional_dedupe():

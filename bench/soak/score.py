@@ -218,7 +218,7 @@ def score(schedule, rows, verdicts=None):
     last_snapshot = next((r['snapshot'] for r in reversed(rows) if r.get('snapshot')), None)
     baseline = next((r for r in rows if r['kind'] == 'baseline_setup'), {})
     if not (baseline.get('starting_transcript') is not None and baseline.get('transcript_sha256') == digest(baseline['starting_transcript']) and
-            baseline.get('effective_quiet') == '22:00-08:00' and baseline.get('session', {}).get('enabled') and
+            baseline.get('session', {}).get('enabled') and
             baseline.get('session', {}).get('unanswered_count') == 0 and declaration.get('frozen', {}).get('allow_gateway_injection') and
             declaration.get('frozen', {}).get('hermes_version') and declaration.get('frozen', {}).get('hermes_commit')):
         for i in evidence: evidence[i] = False

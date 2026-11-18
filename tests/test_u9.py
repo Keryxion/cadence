@@ -7,7 +7,6 @@ from cadence.wake_text import render_wake
 
 
 HOLDS = [
-    ('quiet_hours', 'quiet hours'),
     ('busy', 'a busy chat'),
     ('wake_spacing', 'wake spacing'),
     ('in_flight', 'another wake in flight'),

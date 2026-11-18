@@ -16,11 +16,10 @@ numbers are never presented as measurements of OpenClaw. Fixed interval and
 context assumptions appear beside each scenario; this is a failure-regression
 comparison, not a speed or token quality benchmark of two deployed products.
 
-The shared benchmark base sets `quiet_hours=""` and `timezone="UTC"`; all other
+The shared benchmark base sets `timezone="UTC"`; all other
 bounds start at Policy defaults. YAML settings and per-profile settings override
-that base. This intentionally tests failure handling with quiet hours disabled
-except in scenarios that exercise quiet deferral; it is not a fresh-install
-configuration comparison.
+that base. This intentionally tests failure handling without time-of-day restrictions
+and is not a fresh-install configuration comparison.
 
 Each YAML declares provenance, settings overrides, tool/command arm actions,
 timeline, model policies, duration, expectations and a HEARTBEAT checklist for
@@ -54,7 +53,7 @@ The first model turn in a session has no previous cache touch and writes it.
 `est_cache_read_tokens` + `est_cache_write_tokens` partition that input.
 `est_output_tokens` is separate. These are estimates, not provider metering.
 
-B1 now has 34 scenarios, including caps, mute classes, production quiet defaults,
+B1 now has 32 scenarios, including caps, mute classes,
 DM admission, cron, command changes, cache snap, ignored/error ladders, lifetime
 feasibility and the #58 final-state change-watcher limit. `url-trigger` is skipped:
 the simulator has no loopback URL stub, and B1 adds no network. The command

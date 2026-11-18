@@ -221,16 +221,16 @@ def test_f4_sha256_own_time_and_unchanged_checkin_id(engine):
 
 def test_f5_recurring_receipt_matches_message_holds(engine):
     e = engine
-    e.policy = replace(e.policy, quiet_hours='00:00-23:59')
+    e.policy = replace(e.policy)
     session(e, unanswered_count=5)
     result = create(e, role=False, trigger={'kind': 'every', 'every': '1h'})
     assert result.get('ok'), result
     receipt = result['receipt']
-    assert 'hold its messages' in receipt and 'messages are held; work still runs' in receipt
+    assert 'messages are held; work still runs' in receipt
     assert 'skip its ticks' not in receipt and 'dropped unless you reply' not in receipt
     w = arm(e, 'every', creator='user', next_due_at=e.clock.now()+3600)
     receipt = e.tool.receipt(w, e.store.get_session(KEY))
-    assert 'Quiet hours skip its ticks until' in receipt and 'messages are held' not in receipt
+    assert 'Quiet hours' not in receipt and 'messages are held' not in receipt
 
 
 def test_f6_governor_cards_only_offer_valid_conversions(engine):

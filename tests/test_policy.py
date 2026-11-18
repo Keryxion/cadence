@@ -18,7 +18,7 @@ def test_defaults_are_frozen_and_settings_untouched(clock):
                 "probe_commands": False, "enabled": "off"}
     before = settings.copy()
     p = Policy.from_settings(settings, clock=clock)
-    assert p.agent_can_create == "yes" and p.quiet_hours == ""
+    assert p.agent_can_create == "yes"
     assert p.probe_commands == "" and p.enabled is False
     assert settings == before
     with pytest.raises(FrozenInstanceError):
@@ -29,7 +29,7 @@ def test_defaults_are_frozen_and_settings_untouched(clock):
             defaults.noop_pause_after, defaults.ledger_days) == (24, 6, 15, 55, 6, 30)
 
 
-@pytest.mark.parametrize("key", ["agent_can_create", "timezone", "quiet_hours", "probe_commands"])
+@pytest.mark.parametrize("key", ["agent_can_create", "timezone", "probe_commands"])
 def test_yaml_boolean_strings(key, clock):
     assert isinstance(getattr(Policy.from_settings({key: False}, clock=clock), key), str)
 
@@ -188,22 +188,8 @@ def test_command_allowlist_is_argv_prefix(clock):
     assert not Policy.from_settings({"probe_commands": False}, clock=clock).command_allowed(["gh", "pr", "view"])
 
 
-@pytest.mark.parametrize("stamp,is_quiet", [("2025-10-12T21:59:00", False),
-    ("2025-10-12T22:00:00", True), ("2025-10-13T07:59:00", True),
-    ("2025-10-13T08:00:00", False)])
-def test_quiet_crossing_midnight(stamp, is_quiet, clock):
-    clock.wall = datetime.fromisoformat(stamp).replace(tzinfo=ZoneInfo("UTC")).timestamp()
-    p = Policy.from_settings({"timezone": "UTC"}, clock=clock)
-    assert (p.quiet_until(urgent=False) is not None) == is_quiet
-    assert p.quiet_until(urgent=True) == p.quiet_until(urgent=False)
-    bypass = Policy.from_settings({"timezone": "UTC", "quiet_hours_urgent": True}, clock=clock)
-    assert bypass.quiet_until(urgent=True) is None
 
 
-def test_policy_DST_quiet_end(clock):
-    clock.wall = datetime.fromisoformat("2025-03-09T01:00:00-05:00").timestamp()
-    p = Policy.from_settings({"timezone": "America/New_York", "quiet_hours": "22:00-02:30"}, clock=clock)
-    assert datetime.fromtimestamp(p.quiet_until(), ZoneInfo("America/New_York")).isoformat() == "2025-03-09T03:00:00-04:00"
 
 
 def test_pacing_min_max_and_cron_floor_are_reported(clock):
