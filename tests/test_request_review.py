@@ -35,6 +35,7 @@ def test_same_note_new_human_turn_after_unknown_does_not_replay_old_request(pair
     e, r = pair
     setup_names(e, r)
     first = ask(e, r)['request']
+    inbound(e, r, 'kitchen', internal=True, text=e.ctx.calls[-1][0])  # the target got it, then went quiet
     e.clock.advance(61)
     r.expire()
     inbound(e, r)

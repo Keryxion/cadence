@@ -24,10 +24,23 @@ only final output where supported, not interim speech. Do not buffer all replies
 There is no artificial target tool allowlist. Communication is not a new grant of
 owner_asked scheduling authority. Tell and nested asks are not in this slice.
 
-A queue receipt is not success. Confirm only an accepted answer. For a Kitchen
-timer, Kitchen uses its own countdown and checks the result before accepting.
-An unknown outcome means it MAY have acted: check before retrying or doing the
-work locally. Duplicate notes are scoped to the originating host turn, not forever.
+Every `request ask` result carries one `state`; do what it says and nothing else:
+
+- `awaiting_answer` (`ok:true`): sent. Say you have asked. Confirm success only
+  when the answer arrives as `accepted`. For a Kitchen timer, Kitchen uses its
+  own countdown and checks the result before accepting.
+- `not_delivered` (an error, `retry_safe:true`): the target never got it and did
+  nothing. Tell the person the `detail`, for example that someone must speak to
+  that device first. Ask again once that is fixed; do not claim it was asked.
+- `unknown` (an error, `retry_safe:false`): it MAY have acted. Say so, and check
+  before retrying or doing the work locally.
+
+A later answer uses the same words: `accepted`, `declined`, `counter`,
+`not_delivered` (never reached the target within 60 seconds; asking again is
+safe) or `unknown`. `unknown_name` means nobody chose that name: pick from the
+`names` it returns. In `request names`, `reachable:false` means an ask sent now
+would not be delivered; when the host cannot tell, the field is absent.
+Duplicate notes are scoped to the originating host turn, not forever.
 Existing pulse remains available.
 
 ## What it's for

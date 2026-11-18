@@ -14,7 +14,7 @@ def test_unnamed_directory_is_visible_but_not_addressable(pair):
     assert r.handle({'action':'rename','name':'MacBook'}, session_id='mac-sid')['ok']
     inbound(e, r)
     for destination in ('Kitchen display', 'kitchen', 'kitchen-sid'):
-        assert ask(e, r, to=destination)['error'] == 'unknown'
+        assert ask(e, r, to=destination)['error'] == 'unknown_name'
     assert not e.ctx.calls
     assert e.store.connection.execute('SELECT COUNT(*) FROM request_names').fetchone()[0] == 1
 
