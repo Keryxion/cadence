@@ -7,6 +7,7 @@ import hashlib
 import inspect
 from contextvars import ContextVar
 import json
+import logging
 import secrets
 import sqlite3
 import threading
@@ -15,6 +16,7 @@ import uuid
 from . import serving
 from .tool import session_env
 
+LOG = logging.getLogger(__name__)
 PREFIX = '[Cadence request] '
 DESCRIPTION = ('Immediate requests between explicitly self-named conversations in this profile. '
                'Use rename to opt in, names to discover, ask/answer/list to communicate about anything. '
@@ -313,7 +315,11 @@ class Requests:
                     if sid and tid: self.origins[sid] = (key, tid)
                     return None
                 block = {'action': 'block', 'message': '[SILENT]'}
-                if not pending or pending[:2] != ('protocol', text) or not self.host_supported or not sid or not tid:
+                if not pending or pending[:2] != ('protocol', text):
+                    # The envelope includes an authentication nonce; never log it.
+                    LOG.warning('Cadence request blocked: missing_host_provenance')
+                    return block
+                if not self.host_supported or not sid or not tid:
                     return block
                 try: envelope = json.loads(text[len(PREFIX):])
                 except (ValueError, TypeError): return block

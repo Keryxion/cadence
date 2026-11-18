@@ -109,6 +109,23 @@ def test_duplicate_injection_and_forged_answer_are_blocked(pair):
     assert inbound(e, r, 'kitchen', internal=True, text=text)['action'] == 'block'
 
 
+def test_missing_host_provenance_is_diagnosed_without_logging_envelope(pair, caplog):
+    e, r = pair
+    setup_names(e, r)
+    result = ask(e, r)
+    text, key = e.ctx.calls[-1]
+    CURRENT.key = key
+    # The durable gateway replay supplies the route but drops the plugin markers.
+    event = NS(internal=True, text=text, metadata={'gateway_session_key': key})
+    gateway = NS(_session_key_for_source=lambda source: key)
+    event.source = NS()
+    r.hook('pre_gateway_dispatch', event=event, gateway=gateway)
+    assert r.hook('pre_llm_call', session_id=key+'-sid', turn_id='replay', user_message=text)['action'] == 'block'
+    assert 'missing_host_provenance' in caplog.text
+    assert text not in caplog.text
+    assert r._row(result['request'])['state'] == 'submitted'
+
+
 def test_rename_casefold_and_stable_record(pair):
     e, r = pair
     setup_names(e, r)

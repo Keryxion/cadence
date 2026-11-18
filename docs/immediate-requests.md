@@ -57,6 +57,12 @@ durable ID and nonce. Quoted or forged envelopes are blocked. Older hosts withou
 provenance return actionable `unsupported_host` before recording a request or
 injecting it; naming and ordinary pulse remain available.
 
+Host support also requires preserving the plugin identity and exact route when
+replaying a durable admission, not just exposing the turn-event API. If the host
+admits an event but loses its provenance during replay, Cadence fails closed and
+logs `missing_host_provenance` without printing the envelope. A queue receipt
+still does not establish that the recipient ran.
+
 Real-loader integration uses installed Hermes PluginContext injection and bound
 MessageEvent hooks with an in-memory gateway injector. Optional
 `CADENCE_CONVERSE_ROOT` imports actual countdown implementation with an in-memory
