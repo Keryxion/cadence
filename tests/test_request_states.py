@@ -162,7 +162,7 @@ def test_name_then_gateway_restart_then_ask_is_delivered(pair, tmp_path, clock):
     # Restart: a new process, host and plugin runtime over the same database.
     e.store.close()
     ctx = GatewayCtx(tmp_path)
-    e2 = Poller(ctx, Store(tmp_path/'pulse.db', clock), Policy(clock=clock, quiet_hours='', timezone='UTC'),
+    e2 = Poller(ctx, Store(tmp_path/'pulse.db', clock), Policy(clock=clock, timezone='UTC'),
                 clock, paused=lambda: False, session_key_fn=lambda: CURRENT.key)
     r2 = Requests(e2)
     e2.requests = r2
