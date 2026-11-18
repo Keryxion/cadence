@@ -243,7 +243,8 @@ class Tool:
                         candidate, clamps = result.wake, result.clamped
                         until = args.get('until') if isinstance(args.get('until'),dict) else {}
                         timing = ('trigger_json','kind','next_due_at','deadline_at','base_interval_s','eff_interval_s','pacing_min_s','pacing_max_s')
-                        # Urgency changes wake priority; title and reason are cosmetic and keep owner status.
+                        # Title and reason are cosmetic and keep owner status. `urgent` no longer changes delivery (it only
+                        # bypassed the removed quiet hours) but is still stored, so an agent edit of it still counts.
                         edited = [*timing,'note','urgent']
                         # Lifetime fields revoke only when the agent set them, never via a policy re-clamp.
                         edited += [f for f,present in (('expires_at','expires' in until),('max_fires','max_fires' in until),

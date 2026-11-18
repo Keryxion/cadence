@@ -166,6 +166,28 @@ def stamp(text):
     return datetime.fromisoformat(text+'+00:00').timestamp()
 
 
+@pytest.mark.parametrize('builtin', [True, False])
+def test_R10_A3_hold_cannot_outlive_silence_episode(engine, builtin):
+    e = engine
+    e.policy = replace(e.policy, owner_silent_checkin=builtin)
+    e.clock.wall = stamp('2025-10-12T23:00:00')
+    session(e, last_human_at=e.clock.now(), episode_id='E1')
+    if builtin:
+        e.tick(); w, = e.store.list_wakes()
+    else:
+        w = arm(e, 'owner_silent', creator='user', next_due_at=None, trigger_json={'after':'24h'})
+    e.clock.wall = stamp('2025-10-13T23:00:00')
+    session(e, paused_until=stamp('2025-10-14T08:00:00'))
+    e.tick()
+    assert e.store.get_occurrence(w.id, 's:E1').error == 'session_paused'
+    e.clock.wall = stamp('2025-10-14T07:30:00'); admitted(e)
+    e.tick()
+    stale = e.store.get_occurrence(w.id, 's:E1')
+    assert (stale.state, stale.error) == ('skipped', 'episode_ended')
+    e.clock.wall = stamp('2025-10-14T08:00:00'); e.tick()
+    assert not e.ctx.calls
+    e.clock.wall = stamp('2025-10-15T07:30:00'); e.tick()
+    assert len(e.ctx.calls) == 1
 
 
 # Adapted from review-scratch-release/redos.py, with an outer deadline and

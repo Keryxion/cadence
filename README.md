@@ -11,7 +11,7 @@ Cadence is derived from [HeartBeat 2.0](https://github.com/electricsheephq/heart
 - **Follow-ups and watchers.** A follow-up at a set time, a recurring check, a check-in after a long silence, or a deterministic watcher on a file, process, URL, read-only command or Hermes event. A watcher costs no model call until something changes.
 - **Same conversation, same model.** Every wake is a turn in the chat it belongs to, on that chat's own model. There is no side model, separate cron session or subagent.
 - **Quiet work counts.** A turn that researches, writes or prepares something without messaging you is real progress. Only wakes that keep finding nothing to do slow down, then pause and ask you once.
-- **You set the budgets.** Turns per day, an optional daily cost limit, turns per role, messages per day, and the unanswered mute are your settings. They hold back messages and spending, not initiative: while you're away or asleep the agent can keep working, and it tells you what matters when you're back. Cadence does not implement quiet hours or DND; Arya owns interruption policy. Legacy quiet settings and chat overrides are ignored. That work still uses turns: the agent's recurring work, roles and own time keep running (and billing) under the mute, within the turns-per-day and cost limits. Roles and own time don't expire on a timer. The agent can tighten its own limits but never widen yours.
+- **You set the budgets.** Turns per day, an optional daily cost limit, turns per role, messages per day, and the unanswered mute are your settings. They hold back messages and spending, not initiative: while you're away or asleep the agent can keep working, and it tells you what matters when you're back. Cadence has no quiet hours or do-not-disturb: a wake fires when it is due, at any hour, and holding interruptions back is the job of the client that delivers them. `quiet_hours` settings and `/pulse quiet` overrides left over from earlier versions are ignored. That work still uses turns: the agent's recurring work, roles and own time keep running (and billing) under the mute, within the turns-per-day and cost limits. Roles and own time don't expire on a timer. The agent can tighten its own limits but never widen yours.
 
 ## See it work
 
@@ -157,7 +157,7 @@ pulse tool results name the ignored setting.
 
 A wake turn is a normal turn in your chat: the agent has the same tools as in any other turn there. Cadence does not restrict them, so arm wakes in conversations whose tools you are happy to have run while you are away.
 
-Every arm returns a receipt with timing, any quiet-hour hold or unanswered mute, and expiry. A granted owner-requested agent reminder adds: "Counts as your own reminder: not muted or capped." The agent relays that receipt instead of promising exact timing; a proposed wake is awaiting your OK.
+Every arm returns a receipt with timing, any wake-spacing hold or unanswered mute, and expiry. A granted owner-requested agent reminder adds: "Counts as your own reminder: not muted or capped." The agent relays that receipt instead of promising exact timing; a proposed wake is awaiting your OK.
 
 Watchers available to the agent:
 

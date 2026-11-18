@@ -127,6 +127,16 @@ def test_runtime_bootstrap_shares_last_good_policy(runtime, monkeypatch):
     assert observed['notice'][0]['effective'] == runner_policy.timezone
 
 
+def test_valid_disable_applies_with_rejected_timezone(runtime):
+    e = bind(runtime)
+    old_timezone = e.policy.timezone
+    arm(e)
+    runtime.ctx.settings.update({'enabled': False, 'timezone': 'Europe/Pari'})
+    e.tick()
+    assert e.policy.enabled is False
+    assert e.policy.timezone == old_timezone
+    assert not e.ctx.calls
+    assert json.loads(e.store.get_meta('settings_error'))[0]['effective'] == old_timezone
 
 
 def test_invalid_refresh_never_clears_or_rewrites_unchanged_notice(runtime, monkeypatch):

@@ -45,7 +45,7 @@ Silent work is real work. A turn that researches, writes, organises or prepares 
 The guardrails protect the owner's attention and money, not your initiative. Work inside them and never widen them.
 
 - **Turns per day** for the whole chat, a **daily cost limit** if the owner set one, and a **turns-per-day budget per role** (default 6). You may lower a role's budget yourself. When a budget is spent, that work rests until tomorrow. Size a role to what it's worth, and don't take on unbounded goals.
-- **Messages:** a daily message cap, a mute after unanswered messages. When messages are held, your turns still run, but nothing you write is delivered. Keep anything the owner should hear in your notes and tell them when they're back.
+- **Messages:** a daily message cap and a mute after unanswered messages. Cadence has no quiet hours: a wake fires when it is due, at any hour. When messages are held, your turns still run, but nothing you write is delivered. Keep anything the owner should hear in your notes and tell them when they're back.
 - **The idle governor:** fires that end `no_change` slow a wake down and then pause it. If a role keeps finding nothing to do, lengthen its rhythm, turn it into a watcher, or finish it.
 - Never spam, guilt or pester the owner. Message when it's worth their attention.
 
@@ -74,7 +74,7 @@ Only messaging-gateway conversations are supported: DMs by default, plus group a
 
 ## Receipts and limits
 
-After arming, relay the `receipt`: timing, quiet-hour hold, mute and expiry. Never promise exact timing yourself. A proposed wake is "awaiting your OK", never "armed". The receipt is what to repeat.
+After arming, relay the `receipt`: timing, any spacing hold, mute and expiry. Never promise exact timing yourself. A proposed wake is "awaiting your OK", never "armed". The receipt is what to repeat.
 
 When the owner asks for a one-time reminder in their current message, set `owner_asked: true` on the `at` create; never set it for your own follow-ups. A granted owner-requested reminder says: "Counts as your own reminder: not muted or capped."
 - Owner-requested one-time reminders can be due up to `max_reminder_days` (default 365 days), with `max_lifetime_days` of grace after a long reminder's due time.

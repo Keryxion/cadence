@@ -33,7 +33,10 @@ def test_legacy_quiet_settings_and_chat_override_do_not_gate(engine, kind, urgen
 
 
 def test_quiet_command_and_status_are_removed(runtime):
-    assert commands.handle('quiet for 3h', runtime).startswith('Error:')
+    for legacy in ('quiet', 'quiet for 3h', 'quiet off', 'quiet default', 'quiet 22:00-07:30'):
+        reply = commands.handle(legacy, runtime)
+        assert reply.startswith('Error: Cadence no longer has quiet hours') and '/pulse pause all' in reply
+    assert runtime.get_engine().store.get_meta('quiet:' + KEY) is None
     assert 'quiet' not in commands.HELP.lower()
     assert 'quiet' not in commands.handle('status', runtime).lower()
 

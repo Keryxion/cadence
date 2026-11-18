@@ -202,6 +202,17 @@ def test_other_malformed_inputs_do_not_leak_python_errors(engine, args):
     assert result['detail'].startswith(('invalid request', 'invalid URL')), result
 
 
+@pytest.mark.parametrize('kind', ['every', 'cron', 'self'])
+@pytest.mark.parametrize('spacing,held', [(10, False), (180, True)])
+def test_recurring_receipt_names_spacing_hold(engine, kind, spacing, held):
+    now = night(engine, 8)
+    engine.policy = replace(engine.policy, wake_spacing_minutes=spacing)
+    session(engine, last_wake_turn_at=now if held else now-3600)
+    result = create(engine, {'kind':kind, **({'cron':'0 9 * * *'} if kind == 'cron' else {'every':'1h'})})
+    assert result.get('ok'), result
+    text = receipt(result)
+    assert ('Wake spacing holds' in text) is held, text
+    if held: assert f'Wake spacing holds it until {local(engine, now+spacing*60)}.' in text
 
 
 @pytest.mark.parametrize('now,expected', [

@@ -53,7 +53,7 @@ The first model turn in a session has no previous cache touch and writes it.
 `est_cache_read_tokens` + `est_cache_write_tokens` partition that input.
 `est_output_tokens` is separate. These are estimates, not provider metering.
 
-B1 now has 33 scenarios, including caps, mute classes,
+B1 now has 32 scenarios, including caps, mute classes,
 DM admission, cron, command changes, cache snap, ignored/error ladders, lifetime
 feasibility and the #58 final-state change-watcher limit. `url-trigger` is skipped:
 the simulator has no loopback URL stub, and B1 adds no network. The command

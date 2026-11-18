@@ -280,6 +280,9 @@ def handle(raw_args, runtime):
                     raise ValueError('concurrent session change')
                 engine.signal()
                 return f'Cadence {action} for this chat.'
+            if action == 'quiet':
+                raise ValueError('Cadence no longer has quiet hours: wakes fire when they are due, at any hour. '
+                                 'Use /pulse pause all for 8h to hold this chat\'s wakes.')
             if action not in {'why','pause','resume','cancel','ok','keep','slow','stop','watch'}:
                 raise ValueError(HELP)
             match = re.fullmatch(r'(\S+)(?: for (\S+))?',rest)

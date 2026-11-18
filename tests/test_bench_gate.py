@@ -9,7 +9,7 @@ from cadence.intake import Intake
 def test_bench_gate(tmp_path):
     assert main(['--gate','--out',str(tmp_path)])==0
     result=json.loads(next(tmp_path.glob('*.json')).read_text())
-    assert len(result['scenarios'])==34
+    assert len(result['scenarios'])==32
     assert result['engine_runtime_s']<result['runtime_budget_s']==runtime_budget()
     assert not result['failures']
 
