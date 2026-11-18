@@ -1,8 +1,7 @@
 """Pure wall-clock scheduling. Callers supply now; no timers or ambient clock.
 
 Missed ticks collapse to one, following Hermes heartbeat.py's coalescing idea.
-DST boundaries use the first valid minute after a gap; quiet-end folds use the
-later instant so the repeated hour cannot let a quiet wake through early.
+DST boundaries use the first valid minute after a gap.
 """
 from dataclasses import dataclass
 from datetime import datetime, timedelta, tzinfo
@@ -139,30 +138,6 @@ def next_cron(expression: str, *, now: float, timezone: str | tzinfo,
         return croniter(expression, datetime.fromtimestamp(earliest, zone(timezone))).get_next(datetime).timestamp()
     except (ValueError, KeyError, OverflowError) as exc:
         raise ValueError("invalid cron expression") from exc
-
-
-def quiet_end(now: float, quiet_hours: str, timezone: str | tzinfo) -> float | None:
-    if not quiet_hours:
-        return None
-    try:
-        start, end = quiet_hours.split("-")
-        start_hm, end_hm = _hm(start), _hm(end)
-    except (ValueError, AttributeError) as exc:
-        raise ValueError("quiet_hours must be HH:MM-HH:MM") from exc
-    if start_hm == end_hm:
-        return None
-    tz = zone(timezone)
-    date = datetime.fromtimestamp(now, tz).date()
-    for offset in (-1, 0):
-        begin_day = date + timedelta(days=offset)
-        end_day = begin_day + timedelta(days=int(start_hm > end_hm))
-        begin = _local_instant(datetime.combine(begin_day, datetime.min.time()).replace(
-            hour=start_hm[0], minute=start_hm[1]), tz)
-        finish = _local_instant(datetime.combine(end_day, datetime.min.time()).replace(
-            hour=end_hm[0], minute=end_hm[1]), tz, later=True)
-        if begin <= now < finish:
-            return finish
-    return None
 
 
 def local_day(now: float, timezone: str | tzinfo) -> str:

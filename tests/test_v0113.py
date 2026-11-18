@@ -242,13 +242,6 @@ def test_requested_text_and_command_rendering(engine, command):
     assert 'owner_asked=true' in DESCRIPTION
 
 
-def test_requested_reminder_still_holds_for_quiet(engine, command):
-    owner_turn(engine)
-    w, _ = create(engine)
-    assert flag(w) is True
-    command('quiet for 3m')
-    o = muted_dispatch(engine, w)
-    assert o.state == 'pending' and o.error == 'quiet_hours' and not engine.ctx.calls
 
 
 @pytest.mark.parametrize('value', [1, 0, 'true', None, [], {}])

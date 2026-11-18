@@ -7,7 +7,7 @@ from .model import Wake, Session, FINISHED_WAKE_STATUSES
 from . import governor
 from . import cache
 from .policy import INJECTION_CONFIG, gateway_platform, owner_requested
-from .schedule import parse_duration, quiet_end, local_day, _DURATION
+from .schedule import parse_duration, local_day, _DURATION
 from .tool import session_env, Infeasible
 
 DURATIONS = _DURATION.pattern+r'(?:\s*(?:,\s*)?(?:and\s*)?'+_DURATION.pattern+r')*'  # one way to split whitespace: linear
@@ -17,25 +17,13 @@ HELP = ('/pulse status | desk | list [all] | ledger [7d] | why <id> | add in 2h 
         'add every 1d at 09:00 <note> | add when silent 24h <note> | '
         'role every 1d [at 09:00] <charter> | role self <charter> | budget <id> <n>/day | '
         'pause|resume|cancel <id|all> [for 3d] | off|on | '
-        'quiet <22:00-07:30|off|default|for 3h> | ok|keep|slow|stop|watch <id>')
+        'ok|keep|slow|stop|watch <id>')
 
 
 def messages_count(delivered, in_flight, cap):
     """Messages sent today against the cap. A running wake turn holds a slot until it ends; show it as in progress, not sent."""
     sent = max(0, delivered - in_flight)
     return f'{sent}/{cap}' + (f' (+{in_flight} in progress)' if in_flight else '')
-
-
-def quiet_until(engine, session_key, *, urgent=False, now=None):
-    if urgent and engine.policy.quiet_hours_urgent: return None
-    now = engine.clock.now() if now is None else now
-    override = json.loads(engine.store.get_meta('quiet:'+session_key) or '{}')
-    if override.get('until', 0) > now:
-        until=override['until']
-        return max(until,engine.policy.quiet_until(urgent=urgent,now=until) or until)
-    if 'range' in override:
-        return quiet_end(now, override['range'], engine.policy.resolved_timezone())
-    return engine.policy.quiet_until(urgent=urgent, now=now)
 
 
 def _activation(engine, session, wake):
@@ -229,12 +217,6 @@ def handle(raw_args, runtime):
                 return render_desk(engine,session,clock=engine.clock,timezone=engine.policy.resolved_timezone(),policy=engine.policy)
             if action == 'status' and not rest:
                 status = engine.status()
-                q = quiet_until(engine,key)
-                override=json.loads(engine.store.get_meta('quiet:'+key) or '{}')
-                quiet_label='until '+_time(engine,q) if q else 'off now'
-                if 'range' in override:
-                    quiet_label=(override['range']+' (chat override)' if override['range'] else 'off for this chat (override)')
-                elif override.get('until',0)>engine.clock.now(): quiet_label+=' (chat override)'
                 daily = engine.daily(key)
                 counts={}
                 for wake in engine.store.list_wakes(key):
@@ -248,7 +230,7 @@ def handle(raw_args, runtime):
                 lines = [f'Cadence: {"on" if session.enabled and engine.policy.enabled else "off"} · poller {status["state"]}'
                          + (f' ({status["reason"]})' if status.get('reason') else ''),
                          f'allow_gateway_injection: {str(engine.injection_allowed()).lower()}',
-                         f'Local time: {_time(engine,engine.clock.now())} · quiet: {quiet_label}',
+                         f'Local time: {_time(engine,engine.clock.now())}',
                          f'Today: fires {counts.get("fires",0)} · checks {counts.get("checks",0)} · model wakes {daily["model_turns"]}/{engine.policy.max_model_wakes_per_day} · messages {messages_count(daily["delivered"],engine.store.messages_in_flight(key),engine.policy.max_messages_per_day)} · engaged {counts.get("engaged",0)} · {cache.display(counts)}',
                          f'Active items: {sum(w.status=="active" for w in active)} · next due: {_time(engine,next_due)}']
                 held=sum(o.held_since is not None for o in engine.store.list_occurrences(session_key=key,state='pending'))
@@ -298,24 +280,6 @@ def handle(raw_args, runtime):
                     raise ValueError('concurrent session change')
                 engine.signal()
                 return f'Cadence {action} for this chat.'
-            if action == 'quiet':
-                if rest=='default':
-                    engine.store.connection.execute('DELETE FROM meta WHERE key=?',('quiet:'+key,))
-                    override=None
-                elif rest.startswith('for '):
-                    override = {'until':engine.clock.now()+parse_duration(rest[4:])}
-                elif rest == 'off': override = {'range':''}
-                else:
-                    quiet_end(engine.clock.now(),rest,engine.policy.resolved_timezone())
-                    if not rest: raise ValueError('quiet expects a range, off, default, or for 3h')
-                    override = {'range':rest}
-                if override is not None: engine.store.set_meta('quiet:'+key,json.dumps(override))
-                for occurrence in engine.store.list_occurrences(session_key=key,state='pending'):
-                    if occurrence.error=='quiet_hours':
-                        engine.store.set_meta('not_before:'+occurrence.id,'')
-                engine.signal()
-                if rest=='default': return 'Quiet hours follow your settings again: '+(engine.policy.quiet_hours or 'none')
-                return f'Quiet for this chat: {rest}.'
             if action not in {'why','pause','resume','cancel','ok','keep','slow','stop','watch'}:
                 raise ValueError(HELP)
             match = re.fullmatch(r'(\S+)(?: for (\S+))?',rest)

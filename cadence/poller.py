@@ -513,9 +513,6 @@ class Poller:
         """Agent recurring work may continue while its messages are held."""
         if s is None or not holds_messages(w):
             return ''
-        from .commands import quiet_until
-        if quiet_until(self,s.session_key,urgent=w.urgent) is not None:
-            return 'quiet_hours'
         if self.policy.unanswered_gate(w,s.unanswered_count):
             return 'unanswered'
         if self.daily(s.session_key)['delivered']>=self.policy.max_messages_per_day:
@@ -524,6 +521,9 @@ class Poller:
 
     def gate(self,w,o,s):
         now=self.clock.now()
+        # Clear legacy quiet deferrals before another gate can replace their reason.
+        if o.error == 'quiet_hours':
+            self.store.set_meta('not_before:'+o.id,'')
         if o.state=='pending' and o.held_since is not None and o.error.startswith('held_'):
             self.store.set_meta('not_before:'+o.id,'')
         if w.kind=='owner_silent' and o.dedupe_key.startswith('s:') and (s is None or o.dedupe_key!='s:'+(s.episode_id or '')):
@@ -562,9 +562,6 @@ class Poller:
         # Message gates silence agent recurring work; spend and dispatch gates
         # still apply. Other wakes retain the existing hold/drop ordering.
         message_held=self.message_hold_reason(w,s)
-        from .commands import quiet_until
-        quiet=quiet_until(self,s.session_key,urgent=w.urgent)
-        if quiet is not None and not message_held: return 'quiet_hours',w.kind not in RECURRING_KINDS,quiet
         mute=self.policy.unanswered_gate(w,s.unanswered_count)
         if mute and not message_held: return mute,mute=='held_unanswered',None
         totals=self.daily(s.session_key)

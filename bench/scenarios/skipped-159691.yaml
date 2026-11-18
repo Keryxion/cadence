@@ -3,7 +3,6 @@ title: A quiet-hour skipped recurring occurrence is not replayed
 cites:
 - https://github.com/openclaw/openclaw/issues/159691
 settings:
-  quiet_hours: 12:00-12:30
 arms:
 - ref: task
   command: add every 15m Check the release

@@ -19,7 +19,7 @@ def pair(tmp_path, clock, monkeypatch):
         lambda name: getattr(CURRENT, 'actor', '') if name == 'HERMES_SESSION_ACTOR_ID' else '')
     from cadence.requests import Requests
     ctx = GatewayCtx(tmp_path)
-    e = Poller(ctx, Store(tmp_path/'pulse.db', clock), Policy(clock=clock, quiet_hours='', timezone='UTC'),
+    e = Poller(ctx, Store(tmp_path/'pulse.db', clock), Policy(clock=clock, timezone='UTC'),
                clock, paused=lambda: False, session_key_fn=lambda: CURRENT.key)
     CURRENT.key = 'mac'
     for key in ('mac', 'kitchen'):

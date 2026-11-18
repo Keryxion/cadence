@@ -44,9 +44,9 @@ class ShapeClient(FakeClient):
                 db.execute('INSERT INTO sessions VALUES (?,?,?,?)', (self.sid, 'chat', now, None))
             self.store.cas_session('chat', {'unanswered_count':self.store.get_session('chat').unanswered_count}, unanswered_count=0)
             reply = '✨ Session reset! Starting fresh.\n\nModel: fixture'
-        elif text == '/pulse quiet default':
+        elif text == '/pulse status':
             self.store.set_meta('quiet:chat', '{}')
-            reply = 'Quiet hours follow your settings again: 22:00-08:00'
+            reply = 'Cadence running.'
         elif text == '/pulse on':
             self.store.cas_session('chat', {'enabled':self.store.get_session('chat').enabled}, enabled=True)
             reply = 'Cadence on for this chat.'
@@ -72,7 +72,7 @@ def test_deployed_shape_end_to_end(tmp_path):
     r.schedule=smoke_schedule(r.schedule['start']);e=r.schedule['episodes'][0];r.episodes=[e];c.e=e
     r.clock.wall=epoch(e['sends'][0]['at'])-120
     assert r.run() == 0
-    assert [s for _, s in c.sent][:3] == ['/new', '/approve', '/pulse quiet default']
+    assert [s for _, s in c.sent][:3] == ['/new', '/approve', '/pulse status']
     assert not any('always' in s for _, s in c.sent)
     assert r.pulse.session('chat')['current_session_id'] == 's'
     turns = [x for x in r.rows if x['kind'] == 'turn']
@@ -114,7 +114,7 @@ def test_command_mismatch_fails_closed(tmp_path):
     r,c,store,e = shape_rig(tmp_path, 'N'); original = c.send
     def send(text):
         m = original(text)
-        if text == '/pulse quiet default': c.messages[-1]['text'] = 'Error: unavailable'
+        if text == '/pulse status': c.messages[-1]['text'] = 'Error: unavailable'
         return m
     c.send = send
     assert r.run() == 1

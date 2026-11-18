@@ -166,30 +166,6 @@ def stamp(text):
     return datetime.fromisoformat(text+'+00:00').timestamp()
 
 
-@pytest.mark.parametrize('builtin', [True, False])
-def test_R10_A3_quiet_hold_cannot_outlive_silence_episode(engine, builtin):
-    e = engine
-    e.policy = replace(e.policy, quiet_hours='22:00-08:00', owner_silent_checkin=builtin)
-    e.clock.wall = stamp('2025-10-12T23:00:00')
-    session(e, last_human_at=e.clock.now(), episode_id='E1')
-    if builtin:
-        e.tick(); w, = e.store.list_wakes()
-    else:
-        w = arm(e, 'owner_silent', creator='user', next_due_at=None, trigger_json={'after':'24h'})
-    e.clock.wall = stamp('2025-10-13T23:00:00'); e.tick()
-    assert e.store.get_occurrence(w.id, 's:E1').error == 'quiet_hours'
-    e.clock.wall = stamp('2025-10-14T07:30:00'); admitted(e)
-    e.tick()
-    stale = e.store.get_occurrence(w.id, 's:E1')
-    assert (stale.state, stale.error) == ('skipped', 'episode_ended')
-    e.clock.wall = stamp('2025-10-14T08:00:00'); e.tick()
-    assert not e.ctx.calls
-    e.clock.wall = stamp('2025-10-15T07:30:00'); e.tick()
-    e.clock.wall = stamp('2025-10-15T08:00:00'); e.tick(); start(e)
-    assert end(e, 'needs_attention', True, 'Helpful next step') is None
-    for _ in range(3):
-        e.clock.advance(660); e.tick()
-    assert len(e.ctx.calls) == 1
 
 
 # Adapted from review-scratch-release/redos.py, with an outer deadline and
@@ -211,7 +187,7 @@ from cadence import probes
 home=Path(sys.argv[2]); home.mkdir(parents=True, exist_ok=True)
 clock=FakeClock(); store=Store(home/'pulse.db',clock)
 store.upsert_session(Session(KEY,'telegram','dm','unit','sid',clock.now(),clock.now(),'episode'))
-e=Poller(GatewayCtx(home),store,Policy(clock=clock,quiet_hours='',timezone='UTC'),clock,
+e=Poller(GatewayCtx(home),store,Policy(clock=clock,timezone='UTC'),clock,
          session_key_fn=lambda:KEY,paused=lambda:False,compression_tip=lambda sid:sid)
 kind=sys.argv[3]; path=home/'build.log'; path.write_text('start\n')
 body=[b'initial']; probes._get_url=lambda url,**kwargs:body[0]
@@ -333,28 +309,26 @@ def test_R10_A7_command_change_silent_baseline_then_change(engine, monkeypatch):
     e.clock.advance(61); e.tick(); assert len(e.ctx.calls) == 1
 
 
-def test_R10_A8_overnight_watcher_matches_coalesce(engine, tmp_path):
+def test_R10_A8_muted_watcher_matches_coalesce(engine, tmp_path):
     e = engine
-    e.policy = replace(e.policy, quiet_hours='22:00-08:00')
     e.clock.wall = stamp('2025-10-12T22:00:00')
+    session(e, unanswered_count=e.policy.max_unanswered)
     path = tmp_path/'build.log'; path.write_text('start\n')
-    w = arm(e, 'file', creator='user', trigger_json={'path':str(path),'pattern':'ERROR','check_every':'1m'})
+    w = arm(e, 'file', creator='agent', trigger_json={'path':str(path),'pattern':'ERROR','check_every':'1m'})
     e.tick()
     for n in range(59):
         e.clock.advance(600)
         with path.open('a') as f: f.write(f'ERROR {n}\n')
         e.tick()
-    pending = e.store.list_occurrences(w.id, state='pending')
-    assert len(pending) <= math.ceil(59/20)
-    assert sum(len(o.payload_json) for o in pending) == 59
-    assert all(len(o.payload_json)<=20 and len(json.dumps(o.payload_json).encode())<=8192 for o in pending)
+    pending, = e.store.list_occurrences(w.id, state='pending')
+    # Muted watchers retain the latest match rather than accumulating stale payloads.
+    assert len(pending.payload_json) == 1 and pending.held_matches == 59
+    assert 'ERROR 58' in pending.payload_json[0]['message']
     assert not e.ctx.calls
     e.clock.wall = stamp('2025-10-13T08:00:00')
-    for n in range(3):
-        if n == 2: admit(e, text='Continue the remaining batch')
-        e.tick(); start(e); end(e, 'progress', True, f'Batch {n}')
-        e.clock.advance(660)
-    assert len(e.ctx.calls) == 3 and not e.store.list_occurrences(w.id, state='pending')
+    admit(e, text='Continue the matched work')
+    e.tick(); start(e); end(e, 'progress', True, 'Latest match handled')
+    assert len(e.ctx.calls) == 1 and not e.store.list_occurrences(w.id, state='pending')
     assert e.store.get_wake(w.id).status == 'active'
 
 
@@ -493,15 +467,6 @@ def test_R10_B7_watch_reply_tells_owner_to_ask_agent(runtime):
     assert 'Paused. Ask your agent to turn it into a watcher (pulse update with a file, process, url or command trigger).' in commands.handle('watch '+w.id,runtime)
 
 
-@pytest.mark.parametrize('override,label', [('off','off for this chat (override)'), ('23:00-07:00','23:00-07:00 (chat override)')])
-def test_R10_Q1_quiet_default_and_override_status(runtime, override, label):
-    e = runtime.get_engine(); e.policy = replace(e.policy, quiet_hours='22:00-08:00')
-    commands.handle('quiet '+override, runtime)
-    assert 'quiet: '+label in commands.handle('status', runtime)
-    assert commands.handle('quiet default', runtime) == 'Quiet hours follow your settings again: 22:00-08:00'
-    assert e.store.get_meta('quiet:'+KEY) is None
-    assert 'chat override' not in commands.handle('status', runtime)
-    assert 'default' in commands.HELP
 
 
 def test_R10_Q2_owner_why_uses_you_asked(runtime):

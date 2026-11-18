@@ -51,16 +51,6 @@ config_schema:
     default: ""
     label: "Time zone"
     description: "IANA name such as Europe/Paris. Blank uses the profile's time zone."
-  quiet_hours:
-    type: str
-    default: "22:00-08:00"
-    label: "Quiet hours"
-    description: "HH:MM-HH:MM, may cross midnight; blank for none. Due one-shots wait until the end. The agent's own recurring work keeps running inside them, with its messages held."
-  quiet_hours_urgent:
-    type: bool
-    default: false
-    label: "Urgent wakes ignore quiet hours"
-    description: "Let wakes marked urgent through quiet hours."
   max_model_wakes_per_day:
     type: int
     default: 24
@@ -77,7 +67,7 @@ config_schema:
     min: 0
     max: 168
     label: "Own time (hours between turns)"
-    description: "0 = off. The agent gets a turn of its own this often to work on its roles, follow things up, reflect or rest. Each is a full model turn; quiet hours hold its messages, not its work."
+    description: "0 = off. The agent gets a turn of its own this often to work on its roles, follow things up, reflect or rest. Each is a full model turn; message limits hold its messages, not its work."
   daily_cost_limit_usd:
     type: number
     default: 0

@@ -7,7 +7,7 @@ from bench.run import load_scenarios, totals
 from bench.sim.metrics import compute
 from bench.sim.runner import simulate
 
-NEW = ('caps-owner-bypass', 'mute-classes', 'quiet-default', 'dm-only',
+NEW = ('caps-owner-bypass', 'mute-classes', 'dm-only',
        'cron-trigger', 'command-trigger', 'cache-snap', 'ignored-ladder',
        'error-ladder', 'due-after-expiry', 'change-after-final')
 

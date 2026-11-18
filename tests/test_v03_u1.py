@@ -99,24 +99,6 @@ def test_unanswered_holds_only_agent_recurring_messages(engine):
         assert o.state == 'skipped' and o.error == 'unanswered'
 
 
-def test_quiet_hours_hold_messages_but_owner_at_still_waits(engine):
-    e = engine
-    e.clock.wall = datetime.fromisoformat('2025-10-12T23:00:00+00:00').timestamp()
-    e.policy = replace(e.policy, quiet_hours='22:00-08:00')
-    w = arm(e, 'every')
-    e.tick()
-    assert_held_turn(e, w, 'quiet_hours', 'quiet hours')
-    owner = arm(e, 'at', creator='user')
-    o = pending(e, owner)
-    e.dispatch(o)
-    held = e.store.get_occurrence(owner.id, o.dedupe_key)
-    assert held.state == 'pending' and held.error == 'quiet_hours'
-    assert not held.force_silent and len(e.ctx.calls) == 1
-    e.clock.advance(9 * 3600)
-    e.dispatch(held)
-    assert len(e.ctx.calls) == 2
-    assert not e.store.get_occurrence(owner.id, o.dedupe_key).force_silent
-    assert 'Messages are held right now' not in e.ctx.calls[-1][0]
 
 
 def test_message_cap_holds_messages_model_cap_still_drops(engine):
@@ -127,7 +109,7 @@ def test_message_cap_holds_messages_model_cap_still_drops(engine):
     assert_held_turn(e, w, 'daily_message_cap', "today's message limit")
     e.ledger(w, model_turns=e.policy.max_model_wakes_per_day)
     session(e, unanswered_count=e.policy.max_unanswered)
-    e.policy = replace(e.policy, quiet_hours='00:00-23:59')
+    e.policy = replace(e.policy)
     other = arm(e, 'every')
     e.dispatch(pending(e, other))
     o, = e.store.list_occurrences(other.id)
@@ -149,15 +131,13 @@ def test_wake_contract_and_optional_message_hold(engine):
     assert held.index(CONTRACT[-1]) < held.index('Messages are held right now')
 
 
-@pytest.mark.parametrize('gate', ['quiet_hours', 'unanswered', 'daily_message_cap'])
+@pytest.mark.parametrize('gate', ['unanswered', 'daily_message_cap'])
 def test_notify_true_cannot_deliver_held_turn_or_spend_message_budget(engine, gate):
     e = engine
     w = arm(e, 'every')
-    label = {'quiet_hours': 'quiet hours', 'unanswered': "the owner hasn't replied yet",
+    label = {'unanswered': "the owner hasn't replied yet",
              'daily_message_cap': "today's message limit"}[gate]
-    if gate == 'quiet_hours':
-        e.policy = replace(e.policy, quiet_hours='00:00-23:59')
-    elif gate == 'unanswered':
+    if gate == 'unanswered':
         session(e, unanswered_count=e.policy.max_unanswered)
     else:
         e.ledger(w, delivered=e.policy.max_messages_per_day)

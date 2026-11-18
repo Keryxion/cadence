@@ -243,7 +243,7 @@ class Tool:
                         candidate, clamps = result.wake, result.clamped
                         until = args.get('until') if isinstance(args.get('until'),dict) else {}
                         timing = ('trigger_json','kind','next_due_at','deadline_at','base_interval_s','eff_interval_s','pacing_min_s','pacing_max_s')
-                        # Urgency changes quiet-hours behaviour; title and reason are cosmetic and keep owner status.
+                        # Urgency changes wake priority; title and reason are cosmetic and keep owner status.
                         edited = [*timing,'note','urgent']
                         # Lifetime fields revoke only when the agent set them, never via a policy re-clamp.
                         edited += [f for f,present in (('expires_at','expires' in until),('max_fires','max_fires' in until),
@@ -332,19 +332,17 @@ class Tool:
         if p.wake_spacing_minutes>0 and session and session.last_wake_turn_at is not None:
             point=max(point,session.last_wake_turn_at+p.wake_spacing_minutes*60)
         if w.kind in {'at','owner_silent'} or watcher:
-            from .commands import quiet_until
             point=max(point,e.clock.now())
-            point=quiet_until(e,w.session_key,urgent=w.urgent,now=point) or point
         max_life=p.max_life_s(w)
         hard_end=(w.created_at or e.clock.now())+max_life
         due_bound=p.due_bound_s(w)
         latest=(w.created_at or e.clock.now())+due_bound
         reminder=p.lifetime_setting(w)=='max_reminder_days' and not w.babysit
-        # A long owner reminder's own due may equal its bound; quiet hours and spacing may then hold it into the grace.
+        # A long owner reminder's own due may equal its bound; spacing may then hold it into the grace.
         if not w.role and (nominal>latest if reminder else point>=latest):
             raise Infeasible(f'{label} after the maximum lifetime of {due_bound/86400:g} days ({p.lifetime_setting(w)} setting)')
         if not w.role and point>=hard_end:
-            raise Infeasible(f'{label} held past the maximum lifetime of {max_life/86400:g} days by quiet hours or wake spacing')
+            raise Infeasible(f'{label} held past the maximum lifetime of {max_life/86400:g} days by wake spacing')
         if point<w.expires_at: return w
         if explicit_expiry or e.store.get_wake(w.id) is not None:
             local=lambda t: datetime.fromtimestamp(t,p.resolved_timezone()).strftime('%a %d %b %H:%M')
@@ -379,20 +377,13 @@ class Tool:
             from .policy import owner_requested
             if owner_requested(w): parts.append('Counts as your own reminder: not muted or capped.')
             if w.kind in TIME_KINDS or watcher or w.kind=='owner_silent' and not w.trigger_json.get('builtin'):
-                from .commands import quiet_until
                 due=((s.last_human_at or e.clock.now())+parse_duration(w.trigger_json.get('after',p.checkin_after_hours*3600)) if w.kind=='owner_silent' else
                      (w.next_due_at if w.next_due_at is not None else e.clock.now()) if w.kind in TIME_KINDS else
                      w.deadline_at if w.deadline_at is not None else w.next_due_at if w.kind in PROBE_KINDS and w.next_due_at is not None else e.clock.now())
                 due=max(due,e.clock.now())
-                skip=w.kind in RECURRING_KINDS  # Poller.gate drops a recurring tick in quiet hours before spacing
-                release=quiet_until(e,w.session_key,urgent=w.urgent,now=due) if skip and not holds_messages(w) else None
-                if release and release>due: parts.append(f'Quiet hours skip its ticks until {local(release)}.'); due=release
-                if p.wake_spacing_minutes>0 and s.last_wake_turn_at is not None and not (release and skip and due==release):
+                if p.wake_spacing_minutes>0 and s.last_wake_turn_at is not None:
                     spacing=s.last_wake_turn_at+p.wake_spacing_minutes*60
                     if spacing>due: parts.append(f'Wake spacing holds it until {local(spacing)}.')
-                    due=max(due,spacing)
-                release=quiet_until(e,w.session_key,urgent=w.urgent,now=due)
-                if release and release>due: parts.append(f'Quiet hours {"hold its messages" if holds_messages(w) else "skip its ticks" if skip else "hold it"} until {local(release)}.')
             if not owner_class(w) and s.unanswered_count>=p.max_unanswered:
                 parts.append('Muted: messages are held; work still runs.' if holds_messages(w) else
                              'Muted: it waits for your reply.' if watcher else 'Muted: it is dropped unless you reply first.')

@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .clock import Clock, SystemClock
 from .model import Wake, RECURRING_KINDS, PROBE_KINDS, EVENT_KINDS, KINDS, agent_authored
-from .schedule import parse_duration, quiet_end
+from .schedule import parse_duration
 
 
 def is_owner(wake):
@@ -86,8 +86,6 @@ class Policy:
     agent_can_create: str = "yes"
     dm_only: bool = True
     timezone: str = ""
-    quiet_hours: str = "22:00-08:00"
-    quiet_hours_urgent: bool = False
     max_model_wakes_per_day: int = 24
     daily_cost_limit_usd: float = 0.0
     own_time_hours: int = 0
@@ -204,7 +202,6 @@ class Policy:
                 ZoneInfo(result.timezone)
             except (ZoneInfoNotFoundError, ValueError) as exc:
                 raise ValueError(f"invalid timezone: {result.timezone}") from exc
-        quiet_end(result.clock.now(), result.quiet_hours, result.resolved_timezone())
         return result
 
     def resolved_timezone(self) -> tzinfo:
@@ -424,12 +421,6 @@ class Policy:
                 snapped=interval(replace(wake,**updates),value,cache_ttl,floor)
                 if snapped!=value: change(attr,snapped,attr,'prompt_cache')
         return ClampedWake(replace(wake, **updates), clamped)
-
-    def quiet_until(self, *, urgent: bool = False, now: float | None = None) -> float | None:
-        if urgent and self.quiet_hours_urgent:
-            return None
-        return quiet_end(self.clock.now() if now is None else now, self.quiet_hours,
-                         self.resolved_timezone())
 
     def role_budget(self, wake):
         return max(1, min(wake.budget_turns_per_day if wake.budget_turns_per_day is not None

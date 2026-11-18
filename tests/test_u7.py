@@ -57,15 +57,13 @@ def test_R7_L5_builtin_checkin_stays_muted(engine):
     assert not e.ctx.calls
 
 
-@pytest.mark.parametrize('gate', ['quiet_hours', 'daily_model_cap', 'daily_message_cap',
+@pytest.mark.parametrize('gate', ['daily_model_cap', 'daily_message_cap',
                                    'busy', 'provider_unavailable'])
 def test_R7_L5_owner_obeys_other_gates(engine, gate):
     e = engine
     e.acquire()  # Startup reconciliation clears stale busy flags first.
     session(e, unanswered_count=e.policy.max_unanswered)
-    if gate == 'quiet_hours':
-        e.store.set_meta('quiet:' + KEY, json.dumps({'until': e.clock.now() + 180}))
-    elif gate.startswith('daily_'):
+    if gate.startswith('daily_'):
         name = 'max_model_wakes_per_day' if gate == 'daily_model_cap' else 'max_messages_per_day'
         e.policy = replace(e.policy, **{name: 0})
     elif gate == 'busy':
@@ -78,43 +76,10 @@ def test_R7_L5_owner_obeys_other_gates(engine, gate):
     assert o.error == gate and not e.ctx.calls
 
 
-@pytest.mark.parametrize('creator', ['agent', 'user'])
-def test_R7_L6_command_quiet_defers_before_unanswered(runtime, creator):
-    e = runtime.get_engine()
-    assert 'quiet' in commands.handle('quiet for 3m', runtime).lower()
-    quiet_end = e.clock.now() + 180
-    if creator == 'user':
-        assert 'w_' in commands.handle('add in 1m Owner reminder', runtime)
-        w, = e.store.list_wakes()
-    else:
-        w = arm(e, creator='agent', next_due_at=e.clock.now() + 60)
-    session(e, unanswered_count=e.policy.max_unanswered)
-    e.clock.advance(60)
-    e.tick()
-    o, = e.store.list_occurrences(w.id)
-    assert o.state == 'pending' and o.error == 'quiet_hours'
-    assert float(e.store.get_meta('not_before:' + o.id)) == quiet_end
-    assert e.store.get_wake(w.id).status == 'active' and not e.ctx.calls
-    e.clock.advance(119)
-    e.tick()
-    assert e.store.get_occurrence(w.id, o.dedupe_key).state == 'pending'
-    assert not e.ctx.calls
-    e.clock.advance(1)
-    e.tick()
-    if creator == 'agent':
-        current = e.store.get_occurrence(w.id, o.dedupe_key)
-        assert current.state == 'skipped' and current.error == 'unanswered'
-        assert e.store.get_wake(w.id).status == 'failed' and not e.ctx.calls
-    else:
-        assert len(e.ctx.calls) == 1
-        start(e)
-        assert end(e, outcome='done', notify=True) is None
-        assert e.store.list_occurrences(w.id)[0].delivered
-        assert e.store.get_wake(w.id).status == 'done'
 
 
 @pytest.mark.parametrize('drop', ['unanswered', 'daily_model_cap', 'daily_message_cap'])
-@pytest.mark.parametrize('window', ['session_paused', 'provider_unavailable', 'quiet_hours'])
+@pytest.mark.parametrize('window', ['session_paused', 'provider_unavailable'])
 def test_R7_L6_windows_before_dropping_gates(engine, window, drop):
     e = engine
     if drop == 'unanswered':
@@ -132,7 +97,7 @@ def test_R7_L6_windows_before_dropping_gates(engine, window, drop):
         from datetime import datetime, timezone
         e.clock.wall = datetime(2026, 10, 12, 22, 0, tzinfo=timezone.utc).timestamp()
         session(e, last_human_at=e.clock.now(), last_activity_at=e.clock.now())
-        e.policy = replace(e.policy, quiet_hours='22:00-22:05')
+        e.policy = replace(e.policy)
         until = e.clock.now() + 300
     w = arm(e, creator='agent')
     e.tick()

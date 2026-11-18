@@ -39,7 +39,7 @@ def delivery_cost(e):
 def preview(schedule, until_day, soak_dir):
     soak_dir = Path(soak_dir).expanduser().resolve()
     print('rubric_sha256', hashlib.sha256(Path(__file__).with_name('RUBRIC.md').read_bytes()).hexdigest())
-    print('setup: read-only preflight (refuse pre-existing non-built-in wakes, pending occurrences, invalid revision or soak usage/budget); /new; /approve; archive/hash starting transcript; /pulse quiet default; cancel only wakes appearing during setup; enable; verify baseline')
+    print('setup: read-only preflight (refuse pre-existing non-built-in wakes, pending occurrences, invalid revision or soak usage/budget); /new; /approve; archive/hash starting transcript; cancel only wakes appearing during setup; enable; verify baseline')
     for e in schedule['episodes']:
         if e['day'] > until_day: continue
         if e['kind'] == 'W': print(e['sends'][0]['at'], e['id'], 'write RUNNING\\n', e['path'].replace('{soak_dir}', str(soak_dir)))
@@ -156,9 +156,6 @@ class Runner:
                 elif text.startswith('/pulse cancel '):
                     wake = self.pulse.wake(text.split()[-1]); ok &= bool(wake and wake['status'] == 'cancelled')
                 elif text == '/pulse on': ok &= bool(session and session['enabled'])
-                elif text == '/pulse quiet default':
-                    state = self.pulse.baseline_state(self.chat_key,self.schedule['start'],(self.frozen or self.state() or {}).get('quiet_hours'))
-                    ok &= state['effective_quiet'] == '22:00-08:00' and not state['quiet_override']
                 if ok:
                     self.emit('command_reply',eid,key=key,message_id=message['id'],replies=replies,session_id=sid,before=before,snapshot=self.snapshot())
                     self.pending.remove(item)
@@ -351,7 +348,7 @@ class Runner:
             if attempt < 2: self.clock.sleep(5)
         sid = self.transcript.current_session(self.chat_key)
         session = self.pulse.session(self.chat_key)
-        state = self.pulse.baseline_state(self.chat_key, self.schedule['start'], self.frozen['quiet_hours'])
+        state = self.pulse.baseline_state(self.chat_key, self.schedule['start'])
         wakes = self.pulse.wakes(self.chat_key)
         builtin = {w['id'] for w in wakes if (decoded(w['trigger_json']) or {}).get('builtin')}
         dirty = [w['id'] for w in wakes if w['status'] in ('active','proposed','paused') and w['id'] not in builtin]
@@ -385,17 +382,17 @@ class Runner:
         if not self.preflight(): return False  # Recheck usage/wakes after waiting for active hours.
         preflight = next(r for r in reversed(self.rows) if r['kind'] == 'preflight')
         old_sid = preflight['session_id']
-        for key, text in [('new', '/new'), ('approve','/approve'), ('quiet', '/pulse quiet default')]:
+        for key, text in [('new', '/new'), ('approve','/approve'), ('status', '/pulse status')]:
             if not self.setup_send(setup, key, text): return False
         for w in self.pulse.wakes(self.chat_key):
             if w['status'] in ('active', 'proposed', 'paused') and not (decoded(w['trigger_json']) or {}).get('builtin'):
                 if not self.setup_send(setup, 'cancel:'+w['id'], '/pulse cancel '+w['id']): return False
         if not self.pulse.session(self.chat_key)['enabled'] and not self.setup_send(setup, 'on', '/pulse on'): return False
         session = self.pulse.session(self.chat_key)
-        state = self.pulse.baseline_state(self.chat_key, self.schedule['start'], self.frozen['quiet_hours'])
+        state = self.pulse.baseline_state(self.chat_key, self.schedule['start'])
         sid = self.transcript.current_session(self.chat_key)
         dirty = any(w['status'] in ('active', 'proposed', 'paused') and not (decoded(w['trigger_json']) or {}).get('builtin') for w in self.pulse.wakes(self.chat_key))
-        checks = [('session_not_rotated', sid and sid != old_sid), ('quiet_window_mismatch', state['effective_quiet'] == '22:00-08:00'),
+        checks = [('session_not_rotated', sid and sid != old_sid),
                   ('unanswered_not_zero', session and session['unanswered_count'] == 0), ('chat_disabled', session and session['enabled']),
                   ('dirty_wakes', not dirty), ('pending_occurrences', not state['pending'])]
         reason = next((reason for reason, ok in checks if not ok), None)

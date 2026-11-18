@@ -172,17 +172,6 @@ def test_governor_ignored_engagement_and_ratio(engine):
     assert e.store.get_wake(r.id).status_reason=='governor:ratio'
 
 
-def test_quiet_one_shot_defers_then_fires(engine):
-    e=engine
-    e.clock.wall=datetime.fromisoformat('2025-10-12T23:00:00+00:00').timestamp()
-    e.policy=replace(e.policy,quiet_hours='22:00-08:00')
-    w=arm(e)
-    e.tick()
-    assert not e.ctx.calls
-    o=e.store.list_occurrences(w.id)[0]
-    assert o.state=='pending' and o.error=='quiet_hours'
-    e.clock.advance(9*3600); e.tick()
-    assert len(e.ctx.calls)==1
 
 
 def test_gateway_event_mapping_fail_open_and_manifest(engine):

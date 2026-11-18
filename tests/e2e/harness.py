@@ -125,7 +125,7 @@ class PulseRig:
         cfg = _deep_merge(self.driver.gateway_config(), {
             "plugins": {"enabled": ["cadence"], "entries": {"cadence": {
                 "enabled": True, "allow_gateway_injection": True, "settings": {
-                    "quiet_hours": "", "timezone": "UTC", "wake_spacing_minutes": 0,
+                    "timezone": "UTC", "wake_spacing_minutes": 0,
                     "min_interval_minutes": 1, "agent_ungated_floor_minutes": 1,
                     "probe_floor_seconds": 1, "max_unanswered": 2, "max_active": 10,
                     "max_messages_per_day": 20, "max_model_wakes_per_day": 40,

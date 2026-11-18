@@ -246,7 +246,6 @@ falls back to the chat that asked.
 | Requests in flight | One `ask` per pair of chats; a second waits for the first to end. |
 | Tells | At most one every 15 seconds from one chat to another. Notes sent sooner are delivered together in the next turn. |
 | Depth | A request turn cannot `ask` a third chat. |
-| Quiet hours | An `ask` or `tell` the owner just made is not held. One made from a wake turn is held by the other chat's quiet hours, unless it is `urgent` and the owner allows urgent wakes through. |
 | Busy chat | The request waits for the asked chat's current exchange, within the 60 seconds. |
 
 Request and answer turns are not wakes: they do not count toward `max_active`

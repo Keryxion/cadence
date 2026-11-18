@@ -31,7 +31,7 @@ CLAIM_CLASS = ('isolated-rig live-model journey smoke: pinned Hermes, loopback B
 STOP_LABEL = 'stop before first tick'
 FAKE_BANNER = 'FAKE UPSTREAM: plumbing check only; no claim.'
 # Infrastructure VOIDs only. Model-behaviour VOIDs (no_reply, gateway_not_idle, turn_not_settled) and
-# model-dependent observation limits (quiet_hours, observation_incomplete) stay final: rerunning them resamples.
+# model-dependent observation limits (observation_incomplete) stay final: rerunning them resamples.
 RERUNNABLE = {'upstream_unavailable', 'gateway_exited', 'rig_config', 'incomplete_evidence', 'cleanup_failed',
               'send_slipped'}
 
@@ -44,24 +44,6 @@ def variants(seed, rep):
 
 def deadline_allows(cell, now, until):
     return until is None or now + WINDOWS[cell] + 600 <= until
-
-
-def quiet_intersects(start, end, tz):
-    """Closed observation interval versus the manifest's local quiet hours."""
-    from cadence.schedule import quiet_end
-    quiet = yaml.safe_load((ROOT / 'plugin.yaml').read_text())['config_schema']['quiet_hours']['default']
-    if quiet_end(start, quiet, tz) is not None:
-        return True
-    if not quiet:
-        return False
-    hour, minute = map(int, quiet.split('-')[0].split(':'))
-    zone = ZoneInfo(tz)
-    day = datetime.fromtimestamp(start, zone).replace(hour=hour, minute=minute, second=0, microsecond=0)
-    while day.timestamp() <= end:
-        if day.timestamp() >= start and quiet_end(day.timestamp(), quiet, tz) is not None:
-            return True
-        day += timedelta(days=1)
-    return False
 
 
 def upstream_name(args):
@@ -603,8 +585,6 @@ def cell(args, sid, rep):
             text = f'remind me in {minutes} minutes to {task["task"]}'
         arm = send(text, minutes=minutes, match=task['match'])
         end = result['sent_at'] + WINDOWS[sid]
-        if quiet_intersects(result['sent_at'], end, args.tz):
-            raise RuntimeError('quiet_hours')
         if sid == 'R-clock' and result['sent_at'] > result['target_due'] - 720:
             raise RuntimeError('send_slipped')
         if sid == 'C-reply':
@@ -614,8 +594,6 @@ def cell(args, sid, rep):
             send('stop checking in on me', 'stop')
             if len(arm['created']) == 1 and arm['created'][0].get('next_due_at'):
                 end = max(end, arm['created'][0]['next_due_at'] + 600)
-                if quiet_intersects(result['sent_at'], end, args.tz):
-                    raise RuntimeError('quiet_hours')
                 if args.until is not None and end > args.until:
                     raise RuntimeError('observation_incomplete')
         elif sid == 'M':
@@ -770,8 +748,7 @@ def orchestrate(args, argv, selected):
             while jobs and len(active) < args.workers and not stop_reason:
                 sid, rep, attempt = jobs.pop(0)
                 now = time.time()
-                reason = 'deadline' if not deadline_allows(sid, now, args.until) else (
-                    'quiet_hours' if quiet_intersects(now, now + WINDOWS[sid] + 600, args.tz) else '')
+                reason = 'deadline' if not deadline_allows(sid, now, args.until) else ''
                 if reason:
                     record(sid, rep, reason, rerun=bool(attempt))
                     continue

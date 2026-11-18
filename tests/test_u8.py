@@ -291,7 +291,7 @@ def test_R8_F5_url_timeout_reaps_worker(monkeypatch,phase):
     finally: stop.set(); listener.close(); thread.join(1)
 
 
-@pytest.mark.parametrize('quiet,failed,stop,held,late',[(True,False,False,300,0),(True,True,False,300,1300),(False,True,True,15,1280)])
+@pytest.mark.parametrize('quiet,failed,stop,held,late',[(False,True,True,15,1280)])
 def test_R8_F14_measured_holds_preserve_lateness(tmp_path,quiet,failed,stop,held,late):
     sc=load_scenarios('positive-followup')[0]
     sc['arms'][0]['command']='add in 5m Check the task.'

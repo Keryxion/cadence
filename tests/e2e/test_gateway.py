@@ -377,14 +377,14 @@ def test_invalid_setting_does_not_halt_wakes(make_rig):
     wid = rig.arm("invalid-setting", delay="10s")
     path = rig.gateway.hermes_home / "config.yaml"
     config = yaml.safe_load(path.read_text())
-    config["plugins"]["entries"]["cadence"]["settings"]["quiet_hours"] = "10pm-6am"
+    config["plugins"]["entries"]["cadence"]["settings"]["timezone"] = "Europe/Pari"
     path.write_text(yaml.safe_dump(config, sort_keys=False))
     row = rig.settled(wid)
     rig.tick_barrier()
     assert row["delivered"] == 1 and row["attempt"] == 1, row
     assert rig.injections() == 1 and len(rig.wake_openers()) == 1
     assert sum("WAKE-DELIVERED" in t for t in rig.texts()) == 1
-    assert any(line.startswith("Setting ignored: quiet_hours")
+    assert any(line.startswith("Setting ignored: timezone")
                for text in rig.texts() for line in text.splitlines()), rig.texts()
     rig.assert_tools_ok()
 

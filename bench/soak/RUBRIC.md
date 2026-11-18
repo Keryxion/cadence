@@ -7,7 +7,6 @@ B1 checks the engine in a simulator, and B2 checks one model turn in an isolated
 - **It does not show:**
   - real usefulness: the owner's own use is the full B3 (#14);
   - other models or other profiles;
-  - quiet hours, which the episodes avoid;
   - the daily-cap exemption: the schedule stays under the default caps, and B1's cap scenarios cover it. It is reported as **not tested**.
 
 The bars below are frozen once this file merges. The soak code that runs them comes later and may not loosen them. Until day 1 starts, a reviewed PR may tighten a bar (never loosen one); each such change is listed under "Amendments" with its date and PR.
@@ -26,7 +25,6 @@ The bars below are frozen once this file merges. The soak code that runs them co
   - send `/new`, verify its confirmation prompt, send `/approve` once, verify the fresh DM session from Hermes state, and archive and hash the old session transcript; never send `always`;
   - the chat is enabled;
   - no non-built-in wake is active, proposed or paused; cancellation is only a safety net for wakes appearing during setup;
-  - run `/pulse quiet default` and record the effective quiet window; it must be 22:00–08:00 or setup fails;
   - the stored unanswered count is 0;
   - day 1 starts on a fresh calendar day; built-in usage on that day is recorded and budgeted, not carried-over usage.
 
@@ -34,7 +32,7 @@ The bars below are frozen once this file merges. The soak code that runs them co
 - **Smoke:** not a soak day; record delivered-today usage and the cap without rejecting usage. Its owner one-shot asks `remind me in 5 minutes to check the smoke receipt`, closes at due + 15 min, and reports unexercised bars as `NOT_EXERCISED`.
 - **Scripted owner:** a runner sends from the owner's Telegram account through a user client, so the gateway sees ordinary owner messages.
 - **Timezone:** both the registered schedule and the plugin's resolved timezone must be Asia/Tokyo; setup fails closed otherwise.
-- **Hours:** the first send is at 08:30 or later, every due time is at 21:30 or earlier, and every episode window closes by 21:45 (profile timezone). No episode crosses quiet hours (default 22:00–08:00).
+- **Hours:** the first send is at 08:30 or later, every due time is at 21:30 or earlier, and every episode window closes by 21:45 (profile timezone). This is a benchmark observation window, not a Cadence scheduling restriction.
 - **Schedule:** deterministic from the registered seed **20261014**.
   - The generator is code committed to this repository and reviewed before day 1. The run declaration records the generator's commit, the seed, the first day's date and the schedule's SHA-256. The scorer regenerates the schedule and refuses a mismatch.
   - **Draw order:**
@@ -111,7 +109,7 @@ C alternates by seed: 4 C-reply and 3 C-silent.
 
 **Between-episode setup.** After each episode's window closes and its evidence is archived, the runner:
 - sends `/pulse cancel <id>` for every wake created in that episode that is active, proposed or paused and non-built-in, including wakes created inside wake turns (a delivered watcher, an S wake, or any non-matching wake);
-- confirmation of each setup command requires its transport reply and read-only state (cancelled wake, enabled chat, or effective default quiet window); slash commands have no transcript turn; baseline mismatches stop setup, while episode cleanup retries unresolved targets at most every 2 minutes, up to 6 attempts per runner session;
+- confirmation of each setup command requires its transport reply and read-only state (cancelled wake, enabled chat, or status); slash commands have no transcript turn; baseline mismatches stop setup, while episode cleanup retries unresolved targets at most every 2 minutes, up to 6 attempts per runner session;
 - after any episode, also sends `/pulse on` if the chat is off;
 - checks that the chat is enabled before the next episode.
 
@@ -233,7 +231,6 @@ Rules:
 5. **2026-10-14 (runner PR): Day-8 caps.** Run at most 5 W/S cap-consuming deliveries; excess replacements are INCOMPLETE and unrun.
 6. **2026-10-14 (runner PR): Fresh session.** Send `/new` as setup; archive and hash the starting transcript.
 7. **2026-10-14 (runner PR): Paused baseline wakes.** Cancel paused non-built-in wakes too.
-8. **2026-10-14 (runner PR): Quiet baseline.** Send `/pulse quiet default`; record effective 22:00–08:00, failing setup otherwise.
 9. **2026-10-14 (runner PR): Serialized M turns.** Wait for the previous arming turn, then one minute. A turn still running at send + 5 min voids and requeues M.
 10. **2026-10-14 (runner PR): C snapshot.** Score cancellation immediately after the reply turn ends, before cleanup.
 11. **2026-10-14 (runner PR): Hermes freeze.** Record Hermes version and commit with frozen hashes; a change aborts the soak (ABORTED, exit 3).

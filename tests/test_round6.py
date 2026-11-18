@@ -16,7 +16,7 @@ import pytest
 
 from bench.live.round6 import (CallBudget, JourneyUpstream, ROOT, aggregate, decoded,
                                deadline_allows, orchestrate, score_cell, variants, write_score,
-                               capture_turn, cleanup_cell, declaration_for, main, merge_verdicts, quiet_intersects)
+                               capture_turn, cleanup_cell, declaration_for, main, merge_verdicts)
 from bench.live.score import VERDICT_KEYS
 
 
@@ -299,24 +299,8 @@ def test_orchestrator_without_subprocesses(monkeypatch, tmp_path, mode):
         assert len(list(tmp_path.glob('*-void.json'))) == 3
 
 
-@pytest.mark.parametrize('start,end,expected', [
-    ('2026-10-16T10:00+09:00', '2026-10-16T11:00+09:00', False),
-    ('2026-10-16T21:30+09:00', '2026-10-16T22:10+09:00', True),
-    ('2026-10-16T07:50+09:00', '2026-10-16T08:30+09:00', True),
-    ('2026-10-16T21:30+09:00', '2026-10-17T08:30+09:00', True),
-    ('2026-10-16T08:00+09:00', '2026-10-16T22:00+09:00', True),
-])
-def test_quiet_hours(start, end, expected):
-    assert quiet_intersects(datetime.fromisoformat(start).timestamp(), datetime.fromisoformat(end).timestamp(),
-                            'Asia/Tokyo') is expected
 
 
-def test_quiet_hours_read_manifest_and_timezone(monkeypatch, tmp_path):
-    (tmp_path / 'plugin.yaml').write_text('config_schema:\n  quiet_hours:\n    default: "12:00-13:00"\n')
-    monkeypatch.setattr('bench.live.round6.ROOT', tmp_path)
-    start = datetime.fromisoformat('2026-10-16T03:15+00:00').timestamp()
-    assert quiet_intersects(start, start + 60, 'Asia/Tokyo')
-    assert not quiet_intersects(start, start + 60, 'UTC')
 
 
 def test_m_separate_delivery_bars():
@@ -711,7 +695,7 @@ def test_cleanup_always_closes_and_writes_after_signal_ignore(monkeypatch, tmp_p
     assert score_cell(json.loads(path.read_text())) == dict(state='NOT_RUN', reason='terminated', bars={})
 
 
-@pytest.mark.parametrize('mode', ['quiet', 'rerun_deadline', 'rerun_quiet', 'void_twice', 'void_model', 'refused', 'sigterm', 'sigint'])
+@pytest.mark.parametrize('mode', ['rerun_deadline', 'void_twice', 'void_model', 'refused', 'sigterm', 'sigint'])
 def test_orchestrator_final_states(monkeypatch, tmp_path, mode):
     launched, handlers, waits = [], {}, []
     now = [datetime.fromisoformat('2026-10-16T10:00+09:00').timestamp()]

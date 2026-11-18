@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from cadence import commands
 from cadence.desk import render_desk
-from test_engine import KEY, arm, end, engine, pending, start
+from test_engine import KEY, arm, end, engine, pending, start, session
 
 
 def _desk(e):
@@ -59,10 +59,10 @@ def test_a_turn_whose_messages_are_held_holds_no_message_slot(engine):
     e = engine
     role = _role(e)
     e.ledger(role, delivered=2)
-    e.store.set_meta('quiet:' + KEY, '{"range":"00:00-23:59"}')
+    session(e, unanswered_count=e.policy.max_unanswered)
     e.dispatch(pending(e, role))
     text = e.ctx.calls[-1][0]
-    assert 'Messages are held right now (quiet hours)' in text
+    assert "Messages are held right now (the owner hasn't replied yet)" in text
     assert 'messages today 2/6 ·' in text and 'in progress' not in text
 
 

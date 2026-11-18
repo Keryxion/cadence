@@ -112,60 +112,12 @@ def test_all_time_kinds_compare_final_due(engine, kind, trigger):
     assert not engine.store.list_wakes(KEY)
 
 
-def test_quiet_receipt_and_explicit_expiry(engine):
-    engine.policy = replace(engine.policy, quiet_hours='22:00-08:00')
-    result = create(engine, {'kind':'at','at':'tomorrow 23:00'})
-    assert result.get('ok'), result
-    w = engine.store.get_wake(result['wake']['id'])
-    assert f'Fires once at {local(engine,w.next_due_at)}.' in receipt(result)
-    release = w.next_due_at+9*3600
-    assert f'Quiet hours hold it until {local(engine,release)}.' in receipt(result)
-    for end in (release-3600, release):
-        expiry = datetime.fromtimestamp(end, engine.policy.resolved_timezone()).isoformat()
-        rejected = create(engine, {'kind':'at','at':'tomorrow 23:00'}, until={'expires':expiry})
-        assert rejected.get('error') == 'invalid_request', rejected
-        assert 'due after expiry' in rejected['detail']
-    assert len(engine.store.list_wakes(KEY)) == 1
 
 
-@pytest.mark.parametrize('bypass', ['urgent', 'off', 'range', 'elapsed'])
-def test_quiet_override_is_evaluated_at_due(engine, command, bypass):
-    engine.policy = replace(engine.policy, quiet_hours='22:00-08:00', quiet_hours_urgent=True)
-    if bypass == 'off': command('quiet off')
-    if bypass == 'range': command('quiet 09:00-10:00')
-    if bypass == 'elapsed': command('quiet for 1h')
-    result = create(engine, {'kind':'at','at':'tomorrow 23:00'}, urgent=bypass=='urgent')
-    assert result.get('ok'), result
-    text = receipt(result)
-    assert ('Quiet hours hold' in text) is (bypass == 'elapsed')
 
 
-def test_timed_quiet_applies_only_before_override_end(engine, command):
-    command('quiet for 2h')
-    result = create(engine, until={'expires':'in 90m'})
-    assert result.get('error') == 'invalid_request', result
-    result = create(engine)
-    assert result.get('ok'), result
-    assert f'Quiet hours hold it until {local(engine,engine.clock.now()+7200)}.' in receipt(result)
-    result = create(engine, {'kind':'at','at':'in 3h'}, until={'expires':'in 4h'})
-    assert result.get('ok'), result
-    assert 'Quiet' not in receipt(result)
 
 
-def test_quiet_implicit_extension_and_recurring_skip(engine):
-    engine.policy = replace(engine.policy, quiet_hours='22:00-08:00')
-    result = create(engine, {'kind':'at','at':'tomorrow 23:00'})
-    w = engine.store.get_wake(result['wake']['id'])
-    engine.store.cas_wake(w.id, w.status, expires_at=w.next_due_at+3600)
-    updated = engine.tool.handle({'action':'update','id':w.id,'title':'Report'}, session_id='sid')
-    assert updated.get('error') == 'invalid_request', updated
-    assert updated['detail'].endswith('; set until.expires to extend it')
-    assert engine.store.get_wake(w.id).expires_at == w.next_due_at+3600
-    # The agent's recurring work runs in quiet hours (since 0.3.0); only its messages are held.
-    recurring = create(engine, {'kind':'every','every':'1d at 23:00'},
-                       until={'expires':'tomorrow 07:00'})
-    assert recurring.get('ok'), recurring
-    assert 'Quiet hours hold its messages until' in receipt(recurring) and 'skip its ticks' not in receipt(recurring)
 
 
 @pytest.mark.parametrize('kind', ['command', 'subagent_done'])
@@ -303,18 +255,18 @@ def test_id_all_returns_receipts_and_rolls_back_on_reject(engine):
 
 
 def test_receipt_timezone_spacing_and_maximum_length(engine):
-    engine.policy = replace(engine.policy, timezone='Asia/Tokyo',quiet_hours='22:00-08:00')
+    engine.policy = replace(engine.policy, timezone='Asia/Tokyo')
     session(engine, unanswered_count=engine.policy.max_unanswered)
     result = create(engine, {'kind':'at','at':'tomorrow 23:00'}, until={'owner_replies':True})
     assert result.get('ok'), result
     text = receipt(result)
     w = engine.store.get_wake(result['wake']['id'])
-    assert local(engine,w.next_due_at) in text and 'Muted' in text and 'Quiet' in text
+    assert local(engine,w.next_due_at) in text and 'Muted' in text and 'Quiet' not in text
     assert 'Expires' in text and 'Cancels if you reply.' in text
     # The receipt no longer warns about wake spacing, whatever the spacing is.
     assert engine.policy.wake_spacing_minutes > 0
     assert 'min apart' not in text and 'minutes late' not in text
-    engine.policy = replace(engine.policy, wake_spacing_minutes=0, quiet_hours='')
+    engine.policy = replace(engine.policy, wake_spacing_minutes=0)
     assert 'min apart' not in receipt(create(engine))
 
 
@@ -377,22 +329,6 @@ def test_governor_slow_keeps_explicit_expiry(engine, command):
     assert engine.store.get_wake(wid) == w
 
 
-@pytest.mark.parametrize('bypass', ['none','urgent','off','range','timed'])
-def test_watcher_deadline_accounts_for_quiet_release(engine, command, bypass):
-    engine.policy = replace(engine.policy, quiet_hours='22:00-08:00', quiet_hours_urgent=True)
-    if bypass == 'off': command('quiet off')
-    if bypass == 'range': command('quiet 09:00-10:00')
-    if bypass == 'timed': command('quiet for 2d')
-    expiry = datetime.fromtimestamp(parse_at('tomorrow 23:00',now=engine.clock.now(),
-        timezone=engine.policy.resolved_timezone())+3600,engine.policy.resolved_timezone()).isoformat()
-    result = create(engine, {'kind':'command','command':['git','status'],'deadline':'tomorrow 23:00'},
-                    until={'expires':expiry}, urgent=bypass=='urgent')
-    if bypass in {'none','timed'}:
-        assert result.get('error') == 'invalid_request', result
-        assert 'deadline after expiry' in result['detail']
-        assert not engine.store.list_wakes(KEY)
-    else:
-        assert result.get('ok'), result
 
 
 @pytest.mark.parametrize('trigger', [
@@ -541,14 +477,14 @@ def test_owner_silent_receipt_names_duration(engine, after, expected):
 
 
 def test_long_muted_event_deadline_receipt_is_bounded(engine):
-    engine.policy = replace(engine.policy, quiet_hours='22:00-08:00')
+    engine.policy = replace(engine.policy)
     session(engine, unanswered_count=engine.policy.max_unanswered)
     result = create(engine, {'kind':'kanban_worker_exited','deadline':'tomorrow 23:00'},
                     until={'owner_replies':True})
     assert result.get('ok'), result
     text = receipt(result)
     assert text.startswith('Waits for kanban_worker_exited events; if nothing happens by ')
-    assert 'Quiet hours hold it until' in text and 'Muted' in text
+    assert 'Quiet hours' not in text and 'Muted' in text
     # The spacing sentence goes first, so expiry and reply-cancel survive.
     assert len(text) <= 240 and 'Wakes at' not in text and text.endswith('Cancels if you reply.')
 
@@ -560,49 +496,13 @@ def test_receipt_without_sentence_boundary_truncates_to_240(engine):
 
 
 def night(engine, hour=21, minute=0):
-    engine.policy = replace(engine.policy, quiet_hours='22:00-08:00')
+    engine.policy = replace(engine.policy)
     engine.clock.wall = datetime(2026,10,14,hour,minute,tzinfo=engine.policy.resolved_timezone()).timestamp()
     return engine.clock.now()
 
 
-def test_timed_quiet_chains_default_for_feasibility_and_receipt(engine, command):
-    now = night(engine)
-    assert command('quiet for 3h') == 'Quiet for this chat: for 3h.'
-    result = create(engine, {'kind':'at','at':'in 150m'}, until={'expires':'in 4h'})
-    assert result.get('error') == 'invalid_request', result
-    assert not engine.store.list_wakes(KEY)
-    result = create(engine, {'kind':'at','at':'in 150m'})
-    assert result.get('ok'), result
-    assert f'Quiet hours hold it until {local(engine,now+11*3600)}.' in receipt(result)
 
 
-@pytest.mark.parametrize('kind', ['at','every','kanban_worker_exited'])
-def test_timed_quiet_chain_preserves_live_gate_decisions(engine, command, monkeypatch, kind):
-    now = night(engine)
-    command('quiet for 3h')
-    w = arm(engine,kind)
-    engine.store.add_occurrence(w.id,'t:quiet')
-    o = engine.store.get_occurrence(w.id,'t:quiet')
-    s = engine.store.get_session(KEY)
-    chained = commands.quiet_until
-    def old_quiet(e, key, *, urgent=False, now=None):
-        if urgent and e.policy.quiet_hours_urgent: return None
-        now = e.clock.now() if now is None else now
-        until = json.loads(e.store.get_meta('quiet:'+key))['until']
-        return until if until>now else e.policy.quiet_until(urgent=urgent,now=now)
-    for hours in (0, 2.5, 3, 4, 11):
-        engine.clock.wall = now+hours*3600
-        monkeypatch.setattr(commands,'quiet_until',old_quiet)
-        old = engine.gate(w,o,s)
-        monkeypatch.setattr(commands,'quiet_until',chained)
-        new = engine.gate(w,o,s)
-        assert new[:2] == old[:2]
-        assert new == (('quiet_hours',True,now+11*3600) if hours<11 and kind!='every' else ('',False,None))
-        if kind=='every':
-            assert engine.message_hold_reason(w,s) == ('quiet_hours' if hours<11 else '')
-    engine.clock.wall = now
-    engine.policy = replace(engine.policy, quiet_hours_urgent=True)
-    assert commands.quiet_until(engine,KEY,urgent=True) is None
 
 
 @pytest.mark.parametrize('kind', ['at','command','subagent_done','owner_silent'])
@@ -626,20 +526,6 @@ def test_existing_and_babysit_hard_end_precede_expiry_hint(engine):
         assert 'until.expires' not in str(caught.value)
 
 
-@pytest.mark.parametrize('kind', ['at','command'])
-def test_overdue_dispatch_uses_current_quiet_hours(engine, kind):
-    now = night(engine,22,2)
-    when = '2026-10-14T22:01:30+00:00' if kind=='at' else '2026-10-14T21:59:00+00:00'
-    trigger = {'kind':kind, 'at':when} if kind=='at' else {
-        'kind':'command','command':['git','status'],'deadline':when}
-    rejected = create(engine, trigger, until={'expires':'2026-10-14T23:00:00+00:00'})
-    assert rejected.get('error') == 'invalid_request', rejected
-    assert 'after expiry' in rejected['detail']
-    assert not engine.store.list_wakes(KEY)
-    result = create(engine, trigger)
-    assert result.get('ok'), result
-    release = now+(9*60+58)*60
-    assert f'Quiet hours hold it until {local(engine,release)}.' in receipt(result)
 
 
 @pytest.mark.parametrize('kind', ['file','process','url','command'])

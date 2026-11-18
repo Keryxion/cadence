@@ -202,29 +202,6 @@ def test_other_malformed_inputs_do_not_leak_python_errors(engine, args):
     assert result['detail'].startswith(('invalid request', 'invalid URL')), result
 
 
-@pytest.mark.parametrize('kind', ['every', 'cron', 'self'])
-@pytest.mark.parametrize('hold,spacing,lines', [
-    ('neither', 10, []), ('spacing', 180, ['spacing']), ('quiet', 10, ['quiet']),
-    # Since 0.3.0 the agent's recurring work runs in quiet hours with its messages held, so wake
-    # spacing really holds the turn; a spacing hold past the quiet end leaves no quiet line.
-    ('quiet', 180, ['quiet', 'spacing']), ('quiet', 720, ['spacing'])])
-def test_recurring_receipt_names_holds(engine, kind, hold, spacing, lines):
-    now = night(engine, 21 if hold == 'quiet' else 8)
-    engine.policy = replace(engine.policy, wake_spacing_minutes=spacing)
-    session(engine, last_wake_turn_at=now if spacing > 10 else now-3600)
-    result = create(engine, {'kind':kind, **({'cron':'0 22 * * *' if hold == 'quiet' else '0 9 * * *'}
-                    if kind == 'cron' else {'every':'1h'})})
-    assert result.get('ok'), result
-    text = receipt(result)
-    found = [x for x, key in (('spacing', 'Wake spacing holds'), ('quiet', 'Quiet hours hold its messages'))
-             if key in text]
-    assert sorted(found) == sorted(lines), text
-    assert 'skip its ticks' not in text  # since 0.3.0 the agent's recurring work runs in quiet hours; only its messages are held
-    if 'spacing' in lines:
-        assert f'Wake spacing holds it until {local(engine, now+spacing*60)}.' in text
-    if 'quiet' in lines:
-        assert f'Quiet hours hold its messages until {local(engine, now+11*3600)}.' in text
-    if len(lines) == 2: assert text.index('Wake spacing holds') < text.index('Quiet hours hold')
 
 
 @pytest.mark.parametrize('now,expected', [

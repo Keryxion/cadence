@@ -125,12 +125,11 @@ def test_own_time_trigger_protection_pacing_and_children(engine):
     assert e.store.get_wake(w.id).next_due_at == e.clock.now() + 7200
 
 
-@pytest.mark.parametrize('hold', ['quiet_hours', 'unanswered', 'daily_message_cap'])
+@pytest.mark.parametrize('hold', ['unanswered', 'daily_message_cap'])
 def test_own_time_holds_messages_and_model_cap_drops(engine, hold):
     e = engine
     w = own(e)
-    if hold == 'quiet_hours': e.policy = replace(e.policy, quiet_hours='00:00-23:59')
-    elif hold == 'unanswered': session(e, unanswered_count=e.policy.max_unanswered)
+    if hold == 'unanswered': session(e, unanswered_count=e.policy.max_unanswered)
     else: e.ledger(w, delivered=e.policy.max_messages_per_day)
     e.dispatch(pending(e, w))
     o, = e.store.list_occurrences(w.id)
@@ -179,9 +178,6 @@ def test_desk_records_counts_local_times_and_bound(engine, monkeypatch):
     assert 'Owner last wrote 3h 10m ago · unanswered 1 · messages today 2/6 · turns today 5/24' in out
     assert 'cost today $0.42 of $2.00 · 2 unpriced' in out
     assert 'Messages held now:' not in out
-    e.store.set_meta('quiet:' + KEY, '{"range":"00:00-23:59"}')
-    assert 'Messages held now: quiet hours' in desk(e)
-    e.store.set_meta('quiet:' + KEY, '{"range":""}')
     session(e, unanswered_count=e.policy.max_unanswered)
     assert "Messages held now: the owner hasn't replied yet" in desk(e)
     session(e, unanswered_count=0)

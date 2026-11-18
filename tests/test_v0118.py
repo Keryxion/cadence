@@ -161,11 +161,11 @@ def test_worst_case_receipt_keeps_exemption(engine):
     result = create(engine, owner_asked=True, until={'owner_replies':True})
     assert result.get('ok'), result
     w = engine.store.get_wake(result['wake']['id'])
-    engine.policy = replace(engine.policy, quiet_hours='00:00-23:59')
+    engine.policy = replace(engine.policy)
     session(engine, last_wake_turn_at=w.next_due_at-60)
     text = engine.tool.receipt(w, engine.store.get_session(KEY))
     assert 'Wake spacing holds it until ' in text
-    assert 'Quiet hours hold it until ' in text
+    assert 'Quiet hours' not in text
     assert len(text) <= 240 and EXEMPTION in text
     assert text.split('. ')[1] == EXEMPTION[:-1]
     assert 'Wakes are at least ' not in text  # The lower-priority sentence is trimmed.
@@ -199,22 +199,6 @@ def test_due_bound_never_exceeds_the_hard_end(engine):
         assert engine.policy.due_bound_s(wake) <= engine.policy.max_life_s(wake), wake
 
 
-@pytest.mark.parametrize('path', ['command', 'agent'])
-def test_quiet_hours_at_the_due_bound_hold_into_the_grace(engine, command, path):
-    # The due time 365 days on falls in quiet hours: the reminder is held into its grace, not refused.
-    hour = int(engine.clock.now()//3600)%24
-    engine.policy = replace(engine.policy, quiet_hours=f'{(hour-1)%24:02d}:00-{(hour+2)%24:02d}:00')
-    w = reminder(engine, command, path)
-    assert w.next_due_at == w.created_at+365*DAY
-    assert w.next_due_at < w.expires_at <= w.created_at+379*DAY
-    finish(engine)
-    engine.clock.advance(365*DAY)
-    engine.tick()
-    assert not engine.ctx.calls
-    engine.clock.advance(3*3600)
-    engine.tick()
-    assert len(engine.ctx.calls) == 1
-    assert engine.store.get_wake(w.id).status != 'expired'
 
 
 def test_lowered_reminder_bound_expires_a_reminder_not_yet_due(engine):

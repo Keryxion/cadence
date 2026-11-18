@@ -59,5 +59,4 @@ profile_settings:
   a:
     max_model_wakes_per_day: 1
   b:
-    quiet_hours: 12:00-12:30
 baseline_interval_s: 300

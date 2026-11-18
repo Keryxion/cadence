@@ -35,30 +35,6 @@ SCENARIOS={'replay_slots':['sleep-62294','hermes-scale-zero'],'claim_cas_off':['
 SCENARIOS.update(governor_pause_off=['ignored-ladder'], caps_off=['caps-owner-bypass'],
                  mute_class_regress=['mute-classes'], dm_only_off=['dm-only'])
 CONTROL_SCENARIOS = sorted({scenario for mutant in MUTANTS for scenario in SCENARIOS[mutant]})
-GATE_ORDER_MUTANT=[('cadence/poller.py',
-    '        from .commands import quiet_until\n        quiet=quiet_until(self,s.session_key,urgent=w.urgent)',
-    '        mute=self.policy.unanswered_gate(w,s.unanswered_count)\n        if mute: return mute,False,None\n        from .commands import quiet_until\n        quiet=quiet_until(self,s.session_key,urgent=w.urgent)')]
-GATE_ORDER_DRIVER='''import json,tempfile
-from bench.sim.gateway import FakeGateway
-scenario={'settings':{},'arms':[],'model_policy':{},'timeline':[]}
-with tempfile.TemporaryDirectory() as home:
-    gateway=FakeGateway(scenario,home)
-    try:
-        assert 'quiet' in gateway.command('owner','quiet for 3m').lower()
-        gateway.arm({'ref':'task','args':{'note':'Check the task.','trigger':{'kind':'at','at':'in 1m'}}})
-        engine=gateway.engine_for('owner')
-        w,=engine.store.list_wakes()
-        session=engine.store.get_session(w.session_key)
-        assert engine.store.cas_session(w.session_key,{'unanswered_count':session.unanswered_count},
-                                        unanswered_count=engine.policy.max_unanswered)
-        gateway.clock.advance(60)
-        gateway.tick()
-        occurrence,=engine.store.list_occurrences(w.id)
-        failures=[] if occurrence.state=='pending' and occurrence.error=='quiet_hours' else ['quiet window dropped: '+occurrence.state+':'+occurrence.error]
-        print(json.dumps({'quiet-window':failures} if failures else {}))
-    finally:
-        gateway.close()
-'''
 DRIVER='''import json,tempfile
 from pathlib import Path
 from bench.run import load_scenarios
@@ -124,11 +100,3 @@ with tempfile.TemporaryDirectory() as home:
 print(json.dumps(probes.COMMAND_DEADLINE_S==30 and rc==0 and body.strip()==b'["a b"]'))
 '''
     assert scratch_run(tmp_path,[mutation],driver) is False
-
-
-def test_R7_L6_gate_order_unanswered_first(tmp_path):
-    control=scratch_run(tmp_path/'control',[],GATE_ORDER_DRIVER)
-    assert not control,control
-    failures=scratch_run(tmp_path/'mutant',GATE_ORDER_MUTANT,GATE_ORDER_DRIVER)
-    assert failures,'gate_order_unanswered_first survived'
-    print('gate_order_unanswered_first',failures)
