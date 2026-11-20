@@ -50,3 +50,9 @@ your change touches them.
 ## Security
 
 Report vulnerabilities privately: https://github.com/Keryxion/cadence/security/advisories/new
+
+## Shared with other repos
+
+These files have copies or dependents in other Keryxion repositories; a change here also belongs there.
+
+- `.github/workflows/alpha.yml` and `.crow/alpha.yaml` are the same deploy pipeline as Keryxion/hermes-converse's: a deploy fix here is needed there.
