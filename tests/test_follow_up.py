@@ -239,3 +239,51 @@ def test_existing_timer_request_snapshot_is_ignored(engine):
     e.tick()
     assert start(e) is None
     assert e.ctx.calls[-1][0].startswith('Follow-up fired\nScheduled for ')
+
+def test_owner_correction_does_not_require_exact_message_text(engine):
+    e = engine
+    owner(e, 'first', 'Check the build')
+    e.intake.on_session_end(session_id='sid', turn_id='first', interrupted=True)
+    admit(e, mid='correction', text='Check again')
+    e.intake.pre_llm_call(session_id='sid', turn_id='correction', platform='telegram',
+                         user_message='[Owner correction]\nCheck again\n[Response interrupted]')
+    assert call(e, {'at':'30s'})['armed'] is True
+
+
+def test_owner_correction_in_current_turn_can_arm_follow_up(engine):
+    e = engine
+    owner(e, 'first', 'Check the build')
+    e.intake.on_session_end(session_id='sid', turn_id='first')
+    # Runtime starts an owner turn without the optional ingress observer.
+    e.intake.pre_llm_call(session_id='sid', turn_id='correction', platform='telegram',
+                         user_message='Gateway-wrapped correction', conversation_history=[
+                             {'role':'user','content':'Check again','platform_message_id':'correction'}])
+    assert call(e, {'at':'30s'})['armed'] is True
+
+def test_owner_correction_folded_into_pulse_is_verified_by_runtime(engine):
+    from test_engine import fold
+    e = engine
+    wake = arm(e, 'every', role=True)
+    e.dispatch(pending(e, wake))
+    start(e)
+    assert call(e, {'at':'30s'})['error'] == 'verified_owner_turn_required'
+    fold(e, mid='correction', text='Follow up on my correction in 30 seconds')
+    assert call(e, {'at':'30s'})['armed'] is True
+
+
+def test_old_turn_cleanup_does_not_revoke_current_correction(engine):
+    e = engine
+    owner(e, 'first', 'Check the build')
+    owner(e, 'correction', 'Check again')
+    e.intake.on_session_end(session_id='sid', turn_id='first', interrupted=True)
+    assert call(e, {'at':'30s'})['armed'] is True
+    e.intake.on_session_end(session_id='sid', turn_id='correction')
+    assert call(e, {'at':'30s'})['error'] == 'verified_owner_turn_required'
+
+
+def test_bot_message_cannot_supply_owner_authority(engine):
+    e = engine
+    e.store.set_meta('nonhuman:'+KEY+':bot-message', '1')
+    e.intake.pre_llm_call(session_id='sid', turn_id='bot', platform='telegram', user_message='Check again',
+        conversation_history=[{'role':'user','content':'Check again','platform_message_id':'bot-message'}])
+    assert call(e, {'at':'30s'})['error'] == 'verified_owner_turn_required'

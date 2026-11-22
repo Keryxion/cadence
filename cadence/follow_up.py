@@ -61,9 +61,12 @@ def handle(tool, args, *, session_id='', **kwargs):
             parent = e.store.get_wake(flight.wake_id)
             occurrence = e.store.get_occurrence(flight.wake_id, flight.dedupe_key)
             if parent and occurrence and occurrence.state == 'started' and occurrence.attempt == flight.attempt:
-                origin = parent.trigger_json.get('continuation')
+                if flight.owner_replied and verified_owner(e, session_id, key):
+                    origin = e.intake.owner_turn_refs[session_id]
+                else:
+                    origin = parent.trigger_json.get('continuation')
         elif not flight and verified_owner(e, session_id, key):
-            origin = e.intake.owner_contexts[session_id]
+            origin = e.intake.owner_turn_refs[session_id]
         if not origin or origin['chat'] != key:
             return {'error': 'verified_owner_turn_required'}
         active = [w for w in e.store.list_wakes() if w.status in {'active', 'proposed'}]
@@ -83,6 +86,8 @@ def handle(tool, args, *, session_id='', **kwargs):
 
 
 def verified_owner(engine, session_id, key):
-    context = engine.intake.owner_contexts.get(session_id)
-    return (bool(context) and context['chat'] == key
+    context = engine.intake.owner_turn_refs.get(session_id)
+    session = engine.store.get_session(key)
+    return (bool(context) and session is not None and session.busy_since is not None
+            and context['chat'] == key
             and context['turn'] == engine.intake.turns.get(session_id))
