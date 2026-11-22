@@ -141,11 +141,11 @@ class Tool:
                 if action == 'list':
                     wakes = [w for w in e.store.list_wakes(s.session_key) if 'continuation' not in w.trigger_json]
                     if args.get('detailed', False):
-                        return {'ok':True,'wakes':[{**asdict(w),'cache':self.cache_result(w)} for w in wakes]}
+                        return {'ok':True,'wakes':[self.list_item(w, s, detailed=True) for w in wakes]}
                     current = [w for w in wakes if w.status not in FINISHED_WAKE_STATUSES]
                     current.sort(key=lambda w: (w.status != 'active', w.next_due_at is None,
                                                 w.next_due_at or 0, w.created_at))
-                    return {'ok':True,'wakes':[self.list_item(w) for w in current]}
+                    return {'ok':True,'wakes':[self.list_item(w, s) for w in current]}
                 if action == 'create':
                     if not s.enabled:
                         return {'error':'session_off'}
@@ -233,8 +233,8 @@ class Tool:
                             if w.status == 'paused' and (sum(x.status in {'active','proposed'} for x in e.store.list_wakes(s.session_key)) >= e.policy.max_active or sum(x.status in {'active','proposed'} for x in e.store.list_wakes()) >= 50):
                                 return {'error':'max_active'}
                         # An update without a trigger keeps a stored relative deadline instead of re-reading it.
-                        fresh = 'trigger' in args
                         trig = args.get('trigger')
+                        fresh = 'trigger' in args and not (w.kind == 'startup' and trig == w.trigger_json)
                         new_kind = trig.get('kind',w.kind) if isinstance(trig,dict) else w.kind
                         # The owner's grant applies before the first feasibility pass, so a requested retime gets the reminder bound.
                         base = (replace(w,owner_requested=True) if action == 'update' and w.creator == 'agent'
@@ -298,7 +298,7 @@ class Tool:
                     updates = {k:v for k,v in asdict(candidate).items() if k not in {'id','session_key','created_at','updated_at','version'} and v != getattr(w,k)}
                     if updates and not e.store.cas_wake(w.id,w.status,expected_version=w.version,**updates):
                         return {'error':'concurrent_change'}
-                    if action == 'update' and 'trigger' in args and 'startup' in {w.kind, candidate.kind}:
+                    if action == 'update' and w.kind != candidate.kind and 'startup' in {w.kind, candidate.kind}:
                         e.cancel_occurrences(w.id, 'trigger_replaced', preserve_started=True)
                     if action in {'pause','cancel'}:
                         e.cancel_occurrences(w.id,'paused' if action=='pause' else 'cancelled',preserve_started=True)
@@ -548,25 +548,43 @@ class Tool:
             result.clamped['expires']=f'{format_timestamp(feasible.expires_at)} (covers the first due time)'
         return replace(result,wake=feasible)
 
-    def list_item(self, wake):
+    def list_item(self, wake, session, *, detailed=False):
         occurrences = self.engine.store.list_occurrences(wake.id)
         completed = [o for o in occurrences if o.ended_at is not None]
         last = max(completed, key=lambda o: o.ended_at) if completed else None
         pending = [o for o in occurrences if o.state in {'pending','claimed','started'}]
-        latest = max(pending, key=lambda o: o.created_at) if pending else None
+        latest = max(pending, key=lambda o: (o.state != 'pending', o.created_at), default=None)
         times = [t for t in (wake.next_due_at, wake.deadline_at) if t is not None]
         item = {'id':wake.id, 'title':' '.join((wake.title or wake.note).split())[:160],
                 'status':wake.status, 'kind':wake.kind, 'role':wake.role,
                 'next_check_at':format_timestamp(min(times)) if times else None}
+        if detailed:
+            item = {**item, **asdict(wake), 'cache':self.cache_result(wake)}
+        if latest:
+            current = {'state':latest.state}
+            if latest.state == 'pending' and latest.error:
+                current['hold_reason'] = latest.error
+                at = None
+                if latest.error == 'wake_spacing' and session.last_wake_turn_at is not None:
+                    at = session.last_wake_turn_at + self.engine.policy.wake_spacing_minutes * 60
+                elif latest.error == 'session_paused':
+                    at = session.paused_until
+                elif latest.error == 'provider_unavailable':
+                    at = json.loads(self.engine.store.get_meta('provider_health') or '{}').get('until')
+                elif latest.error in {'not_before', 'inject_failed'}:
+                    at = self.engine.store.get_meta('not_before:' + latest.id)
+                if at and float(at) > self.engine.clock.now():
+                    current['next_eligible_at'] = format_timestamp(float(at))
+            item['occurrence'] = current
         if latest and latest.state == 'started' and latest.outcome:
             item['pending_outcome'] = latest.outcome
         if last:
             item['last_result'] = {'outcome':last.outcome or last.state, 'summary':last.summary,
                                    'at':format_timestamp(last.ended_at)}
-        reason = (latest.held_reason or latest.error) if latest else wake.status_reason
+        reason = (latest.error or latest.held_reason) if latest else wake.status_reason
         if not reason and wake.kind == 'startup' and wake.status == 'active' and not pending:
             reason = 'Waiting for the next gateway startup.'
-        if reason:
+        if reason and not detailed:
             item['reason'] = reason
         return item
 

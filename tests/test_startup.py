@@ -83,6 +83,12 @@ def test_startup_waits_for_token_and_retries_same_occurrence(engine, monkeypatch
     e.tick()
     held, = e.store.list_occurrences(wid)
     assert held.error == 'held_interruptions' and not e.ctx.calls
+    original_arm = e.store.get_wake(wid).probe_state_json
+    updated = e.tool.handle({'action':'update', 'id':wid, 'title':'Renamed',
+                             'trigger':{'kind':'startup'}}, session_id='sid')
+    assert updated['armed'] and updated['wake']['title'] == 'Renamed'
+    assert e.store.get_occurrence(wid, held.dedupe_key) == held
+    assert e.store.get_wake(wid).probe_state_json == original_arm
     e.clock.advance(300)
     e.ctx.accept = False
     e.tick()
@@ -95,7 +101,35 @@ def test_startup_waits_for_token_and_retries_same_occurrence(engine, monkeypatch
     end(e, 'progress', False)
     done, = e.store.list_occurrences(wid)
     assert done.dedupe_key == held.dedupe_key and done.state == 'done'
+    assert e.store.get_wake(wid).fires == 1
     assert e.store.get_wake(wid).status == 'active'
+
+
+def test_startup_lists_detected_match_and_spacing_deadline(engine, monkeypatch):
+    from cadence.clock import format_timestamp
+    from test_engine import session
+
+    e = engine
+    e.policy = replace(e.policy, wake_spacing_minutes=5)
+    birth = e.clock.now() - 60
+    monkeypatch.setattr('cadence.poller.gateway_process_start', lambda: (f'startup:{birth}', birth))
+    create(e)
+    e.tick()
+    last_start = e.clock.now()
+    session(e, last_wake_turn_at=last_start)
+    e.clock.advance(1)
+    birth = e.clock.now()
+    e.release()
+    e.tick()
+    for detailed in (False, True):
+        row, = e.tool.handle({'action':'list', 'detailed':detailed})['wakes']
+        assert row['occurrence'] == {'state':'pending', 'hold_reason':'wake_spacing',
+                                     'next_eligible_at':format_timestamp(last_start + 300)}
+    e.clock.advance(299)
+    e.tick()
+    start(e)
+    row, = e.tool.handle({'action':'list'})['wakes']
+    assert row['occurrence'] == {'state':'started'}
 
 
 def test_startup_rejects_deadline_or_command(engine):
