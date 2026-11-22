@@ -27,13 +27,13 @@ def test_snapshot(clock, held_by, after_restart, why):
     wake, occ, session = records(clock)
     result = render_wake(wake, occ, session, clock=clock, timezone="UTC",
                          recent_outcomes=["no_change", "progress"], messages_today=1,
-                         max_messages=6, held_by=held_by, after_restart=after_restart)
+                         held_by=held_by, after_restart=after_restart)
     assert result == '''⟦pulse o:w_abcdefgh/t:100 a:2⟧ [Cadence · wake w_abcdefgh · Build · armed by you 1h ago]
 Local time: Sun 12 Oct 16:05 (UTC) · owner last wrote 2h 03m ago · fire 2 of 4
 Why: Follow up
 Your note: Check whether the build finished.
 Scratch: Build 12 is running.
-Recent outcomes: no_change, progress · wake messages today: 1 of 6
+Recent outcomes: no_change, progress · wake messages today: 1
 Contract: this turn is yours to act on. Do the work the note describes, then call pulse(action="respond", outcome=…, notify=true|false, summary=…); notify is required.
 - outcome: progress when you did something useful, even silently (always include a summary of what you did, written as a plain sentence, since the owner sees role summaries on the desk; silent progress without one counts as idle); no_change when there was nothing to do; done when the work is finished for good; blocked or needs_attention when you need the owner.
 - notify=true → your reply is delivered to the owner: one short, specific, warm message that leads with the result or the question. No guilt about silence, no mention of this mechanism, ids or ledgers.

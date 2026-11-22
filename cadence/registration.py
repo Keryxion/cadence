@@ -231,6 +231,7 @@ class Runtime:
                         from .poller import Poller
                         e=self.get_engine()
                         runner=Poller(self.ctx,e.store,e.policy,self.clock,boot_at=self.boot_at)
+                        runner.interruption_buckets=e.interruption_buckets
                         runner.refresh_policy=self.policy
                         runner.process_start=not self._reconciled
                         self._runner=runner

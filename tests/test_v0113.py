@@ -62,13 +62,11 @@ def test_requested_reminder_survives_mute(engine):
     assert engine.daily(KEY)['model_turns'] == 1
 
 
-@pytest.mark.parametrize('cap', ['daily_model_cap', 'daily_message_cap'])
-def test_requested_reminder_bypasses_daily_caps(engine, cap):
+def test_requested_reminder_bypasses_empty_bucket(engine):
     owner_turn(engine)
     w, _ = create(engine)
     finish(engine)
-    setting = 'max_model_wakes_per_day' if cap == 'daily_model_cap' else 'max_messages_per_day'
-    engine.policy = replace(engine.policy, **{setting:0})
+    engine.policy = replace(engine.policy, interruption_capacity=0)
     engine.clock.advance(61)
     engine.tick()
     o, = engine.store.list_occurrences(w.id)
@@ -99,13 +97,9 @@ def test_negative_controls(engine, control):
     expected = 'held_unanswered' if kind == 'subagent_done' else '' if kind == 'every' else 'unanswered'
     assert engine.gate(w, o, engine.store.get_session(KEY))[0] == expected
     session(engine, unanswered_count=0)
-    for setting, expected in [('max_model_wakes_per_day','daily_model_cap'),
-                              ('max_messages_per_day','daily_message_cap')]:
-        old = engine.policy
-        engine.policy = replace(old, **{setting:0})
-        assert engine.gate(w, o, engine.store.get_session(KEY))[0] == ('held_daily_cap' if kind == 'subagent_done'
-            else '' if kind == 'every' and setting == 'max_messages_per_day' else expected)
-        engine.policy = old
+    engine.policy = replace(engine.policy, interruption_capacity=0)
+    expected = 'held_interruptions' if kind == 'subagent_done' else '' if kind == 'every' else 'interruption_limit'
+    assert engine.gate(w, o, engine.store.get_session(KEY))[0] == expected
 
 
 def test_wake_turn_never_grants(engine):
@@ -205,7 +199,7 @@ def test_builtin_and_slash_owner_unchanged(engine, command):
     call(engine, {'action':'update','id':w.id,'title':'Invoice','owner_asked':True})
     assert not flag(engine.store.get_wake(w.id)) and not engine.store.get_wake(w.id).agent_edited
     session(engine, unanswered_count=engine.policy.max_unanswered)
-    engine.policy = replace(engine.policy, max_model_wakes_per_day=0, max_messages_per_day=0)
+    engine.policy = replace(engine.policy, interruption_capacity=0)
     engine.clock.advance(61)
     engine.tick()
     assert len(engine.ctx.calls) == 1

@@ -899,6 +899,7 @@ class Intake:
             if f.scratch is not None:
                 s.cas_wake(w.id,w.status,expected_version=w.version,scratch=f.scratch)
             if delivered and session:
+                e.interruption_tokens(key, spend=True)
                 session=s.get_session(key)
                 s.cas_session(key,{'unanswered_count':session.unanswered_count},
                               unanswered_count=session.unanswered_count+1,first_notice_sent=True)

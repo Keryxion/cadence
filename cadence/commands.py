@@ -20,10 +20,10 @@ HELP = ('/pulse status | desk | list [all] | ledger [7d] | why <id> | add in 2h 
         'ok|keep|slow|stop|watch <id>')
 
 
-def messages_count(delivered, in_flight, cap):
-    """Messages sent today against the cap. A running wake turn holds a slot until it ends; show it as in progress, not sent."""
+def messages_count(delivered, in_flight):
+    """Messages sent today. A running wake turn holds a slot until it ends; show it as in progress, not sent."""
     sent = max(0, delivered - in_flight)
-    return f'{sent}/{cap}' + (f' (+{in_flight} in progress)' if in_flight else '')
+    return f'{sent}' + (f' (+{in_flight} in progress)' if in_flight else '')
 
 
 def _activation(engine, session, wake):
@@ -116,9 +116,9 @@ def _item(engine, wake, today_budget=None):
 
 
 def _occurrences(engine, wake):
-    reasons={'held_unanswered':'held: waiting for your reply', 'held_daily_cap':'held: waiting for daily capacity', 'held_paused':'held: wake paused',
-        'unanswered':'dropped: unanswered mute', 'daily_model_cap':f'dropped: daily model cap ({engine.policy.max_model_wakes_per_day})',
-        'daily_message_cap':f'dropped: daily message cap ({engine.policy.max_messages_per_day})', 'expired_held':'expired while held'}
+    reasons={'held_interruptions':'held: waiting for an interruption token', 'interruption_limit':'dropped: no interruption tokens', 'held_unanswered':'held: waiting for your reply', 'held_daily_cap':'held: waiting for daily capacity', 'held_paused':'held: wake paused',
+        'unanswered':'dropped: unanswered mute', 'daily_model_cap':'dropped: daily model cap',
+        'daily_message_cap':'dropped: daily message cap', 'expired_held':'expired while held'}
     return '\n'.join(f'{o.dedupe_key} · {o.state} · {reasons.get(o.error,o.error.replace("_"," ") or o.outcome or "none")} · '
         f'matched/created {_time(engine,o.matched_at) if o.matched_at is not None else _time(engine,o.created_at) if o.created_at else "before v0.1.2"} · held-since {_time(engine,o.held_since)} · delivered {"yes" if o.delivered else "no"}'
         for o in engine.store.list_occurrences(wake.id)[-10:])
@@ -231,7 +231,7 @@ def handle(raw_args, runtime):
                          + (f' ({status["reason"]})' if status.get('reason') else ''),
                          f'allow_gateway_injection: {str(engine.injection_allowed()).lower()}',
                          f'Local time: {_time(engine,engine.clock.now())}',
-                         f'Today: fires {counts.get("fires",0)} · checks {counts.get("checks",0)} · model wakes {daily["model_turns"]}/{engine.policy.max_model_wakes_per_day} · messages {messages_count(daily["delivered"],engine.store.messages_in_flight(key),engine.policy.max_messages_per_day)} · engaged {counts.get("engaged",0)} · {cache.display(counts)}',
+                         f'Today: fires {counts.get("fires",0)} · checks {counts.get("checks",0)} · model wakes {daily["model_turns"]} · messages {messages_count(daily["delivered"],engine.store.messages_in_flight(key))} · interruption tokens {engine.interruption_tokens(key)}/{engine.policy.interruption_capacity} · engaged {counts.get("engaged",0)} · {cache.display(counts)}',
                          f'Active items: {sum(w.status=="active" for w in active)} · next due: {_time(engine,next_due)}']
                 held=sum(o.held_since is not None for o in engine.store.list_occurrences(session_key=key,state='pending'))
                 if engine.policy.daily_cost_limit_usd:

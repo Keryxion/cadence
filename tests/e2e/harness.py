@@ -128,7 +128,7 @@ class PulseRig:
                     "timezone": "UTC", "wake_spacing_minutes": 0,
                     "min_interval_minutes": 1, "agent_ungated_floor_minutes": 1,
                     "probe_floor_seconds": 1, "max_unanswered": 2, "max_active": 10,
-                    "max_messages_per_day": 20, "max_model_wakes_per_day": 40,
+                    "interruption_capacity": 20,
                     "owner_silent_checkin": False}}}},
             "model": {"supports_vision": True},
             "display": {"busy_input_mode": busy, "tool_progress": "off", "show_reasoning": False,

@@ -29,7 +29,7 @@ def assert_held_turn(e, w, reason, label, *, notify=False):
     assert held_line in e.ctx.calls[-1][0]
     # A held turn reserves no message slot, so the count it shows is never off by one.
     delivered = e.store.daily_counts(KEY, e.policy.resolved_timezone())['delivered']
-    assert f'wake messages today: {delivered} of ' in e.ctx.calls[-1][0]
+    assert f'wake messages today: {delivered}' in e.ctx.calls[-1][0]
     before = e.store.get_session(KEY).unanswered_count
     start(e)
     assert end(e, 'progress', notify, summary='did X') == '[SILENT]'
@@ -100,21 +100,12 @@ def test_unanswered_holds_only_agent_recurring_messages(engine):
 
 
 
-
-def test_message_cap_holds_messages_model_cap_still_drops(engine):
+def test_empty_bucket_holds_recurring_messages(engine):
     e = engine
     w = arm(e, 'every')
-    e.ledger(w, delivered=e.policy.max_messages_per_day)
+    e.policy = replace(e.policy, interruption_capacity=0)
     e.tick()
-    assert_held_turn(e, w, 'daily_message_cap', "today's message limit")
-    e.ledger(w, model_turns=e.policy.max_model_wakes_per_day)
-    session(e, unanswered_count=e.policy.max_unanswered)
-    e.policy = replace(e.policy)
-    other = arm(e, 'every')
-    e.dispatch(pending(e, other))
-    o, = e.store.list_occurrences(other.id)
-    assert o.state == 'skipped' and o.error == 'daily_model_cap'
-    assert len(e.ctx.calls) == 1
+    assert_held_turn(e, w, 'interruption_limit', "waiting for an interruption token")
 
 
 def test_wake_contract_and_optional_message_hold(engine):
@@ -131,16 +122,16 @@ def test_wake_contract_and_optional_message_hold(engine):
     assert held.index(CONTRACT[-1]) < held.index('Messages are held right now')
 
 
-@pytest.mark.parametrize('gate', ['unanswered', 'daily_message_cap'])
+@pytest.mark.parametrize('gate', ['unanswered', 'interruption_limit'])
 def test_notify_true_cannot_deliver_held_turn_or_spend_message_budget(engine, gate):
     e = engine
     w = arm(e, 'every')
     label = {'unanswered': "the owner hasn't replied yet",
-             'daily_message_cap': "today's message limit"}[gate]
+             'interruption_limit': "waiting for an interruption token"}[gate]
     if gate == 'unanswered':
         session(e, unanswered_count=e.policy.max_unanswered)
     else:
-        e.ledger(w, delivered=e.policy.max_messages_per_day)
+        e.policy = replace(e.policy, interruption_capacity=0)
     before = e.daily(KEY)['delivered']
     e.tick()
     assert_held_turn(e, w, gate, label, notify=True)

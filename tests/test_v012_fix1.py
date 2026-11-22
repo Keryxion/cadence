@@ -17,7 +17,7 @@ from test_v012 import hermes_helpers
     {'pacing': {'min': '2h'}},
 ])
 def test_R1_agent_owner_edit_revokes_owner_privilege(engine, edit):
-    engine.policy = replace(engine.policy, max_model_wakes_per_day=0, max_messages_per_day=0)
+    engine.policy = replace(engine.policy, interruption_capacity=0)
     w = arm(engine, 'every', creator='user', trigger_json={'kind': 'every', 'every': '1d'})
     result = engine.tool.handle({'action': 'update', 'id': w.id, **edit}, session_id='sid')
     assert result['ok']
@@ -25,13 +25,16 @@ def test_R1_agent_owner_edit_revokes_owner_privilege(engine, edit):
     assert getattr(changed, 'agent_edited', False) is True
     engine.clock.advance(61)
     engine.dispatch(pending(engine, changed, 'e:due'))
-    assert not engine.ctx.calls
-    assert engine.store.list_occurrences(w.id)[0].error == 'daily_model_cap'
+    occurrence, = engine.store.list_occurrences(w.id)
+    if changed.kind == 'every':
+        assert occurrence.force_silent
+    else:
+        assert occurrence.error == 'interruption_limit'
 
 
 def test_R1_builtin_repro_is_settings_owned_and_capped(engine):
     engine.policy = replace(engine.policy, owner_silent_checkin=True,
-                            max_model_wakes_per_day=0, max_messages_per_day=0)
+                            interruption_capacity=0)
     engine.tick()
     w, = engine.store.list_wakes(KEY)
     result = engine.tool.handle({'action': 'update', 'id': w.id,
@@ -70,8 +73,8 @@ def test_final_rule_owner_watcher_bypasses_mute_but_holds_caps(engine, kind):
     w = arm(engine, kind, creator='user')
     session(engine, unanswered_count=2)
     assert engine.policy.unanswered_gate(w, 2) is None
-    engine.policy = replace(engine.policy, max_messages_per_day=0)
-    assert engine.gate(w, pending(engine, w, 'e:match'), engine.store.get_session(KEY)) == ('held_daily_cap', True, None)
+    engine.policy = replace(engine.policy, interruption_capacity=0)
+    assert engine.gate(w, pending(engine, w, 'e:match'), engine.store.get_session(KEY)) == ('held_interruptions', True, None)
 
 
 def test_R2_url_held_match_survives_five_errors_pause_resume(engine):
@@ -111,8 +114,8 @@ def test_R2_explicit_pause_preserves_held_match(engine):
     assert engine.store.get_occurrence(w.id, o.dedupe_key).error == 'held_paused'
 
 
-def test_R3_cap_reservation_releases_next_tick_before_midnight(engine):
-    engine.policy = replace(engine.policy, max_messages_per_day=6, wake_spacing_minutes=0)
+def test_R3_watcher_runs_after_silent_turn_finishes(engine):
+    engine.policy = replace(engine.policy, interruption_capacity=6, wake_spacing_minutes=0)
     timer = arm(engine)
     engine.ledger(timer, delivered=5)
     engine.tick()
@@ -121,9 +124,7 @@ def test_R3_cap_reservation_releases_next_tick_before_midnight(engine):
     o = pending(engine, watcher, 'e:match')
     engine.tick()
     held = engine.store.get_occurrence(watcher.id, o.dedupe_key)
-    assert held.state == 'pending' and held.error == 'held_daily_cap'
-    # Simulate an old persisted deadline so upgrade also releases promptly.
-    engine.store.set_meta('not_before:' + o.id, str(engine.clock.now() + 12*3600))
+    assert held.state == 'pending' and held.error == 'busy'
     end(engine, notify=False)
     engine.clock.advance(1)
     engine.tick()
@@ -133,7 +134,7 @@ def test_R3_cap_reservation_releases_next_tick_before_midnight(engine):
 
 
 def test_R4_codex_normal_end_without_usage_counts_and_caps(engine):
-    engine.policy = replace(engine.policy, max_model_wakes_per_day=1, wake_spacing_minutes=0)
+    engine.policy = replace(engine.policy, interruption_capacity=1, wake_spacing_minutes=0)
     first = arm(engine)
     engine.tick()
     start(engine)
@@ -145,7 +146,7 @@ def test_R4_codex_normal_end_without_usage_counts_and_caps(engine):
     engine.clock.advance(1)
     engine.tick()
     assert len(engine.ctx.calls) == 1
-    assert engine.store.list_occurrences(second.id)[0].error == 'daily_model_cap'
+    assert engine.store.list_occurrences(second.id)[0].error == 'interruption_limit'
 
 
 @pytest.mark.parametrize('cause', ['failed', 'no_session_end', 'restart'])
@@ -185,14 +186,14 @@ def test_N2_released_text_uses_latest_hold_reason(engine):
     o = pending(engine, w, 'e:match')
     engine.dispatch(o)
     session(engine, unanswered_count=0)
-    engine.policy = replace(engine.policy, max_messages_per_day=0)
+    engine.policy = replace(engine.policy, interruption_capacity=0)
     engine.dispatch(engine.store.get_occurrence(w.id, o.dedupe_key))
-    assert engine.store.get_occurrence(w.id, o.dedupe_key).held_reason == 'held_daily_cap'
-    engine.policy = replace(engine.policy, max_messages_per_day=6)
+    assert engine.store.get_occurrence(w.id, o.dedupe_key).held_reason == 'held_interruptions'
+    engine.policy = replace(engine.policy, interruption_capacity=6)
     engine.clock.advance(86400)
     engine.dispatch(engine.store.get_occurrence(w.id, o.dedupe_key))
     text = engine.ctx.calls[-1][0]
-    assert 'daily cap' in text and "you hadn't replied" not in text
+    assert 'waiting for an interruption token' in text and "you hadn't replied" not in text
 
 
 def test_N3_released_started_expiry_keeps_normal_reason(engine):
@@ -224,7 +225,7 @@ def test_N4_cache_line_floor_at_edge_says_wakes_cold(engine, hermes_helpers, mon
         assert 'next warm ≤57m' in text and 'wakes cold' not in text
 
 
-@pytest.mark.parametrize('reason,label', [('held_unanswered', "you hadn't replied"), ('held_daily_cap', 'daily cap'),
+@pytest.mark.parametrize('reason,label', [('held_unanswered', "you hadn't replied"), ('held_interruptions', 'waiting for an interruption token'),
                                           ('held_paused', 'wake was paused')])
 def test_released_hold_text_names_its_reason(engine, reason, label):
     from cadence.wake_text import render_wake
@@ -233,7 +234,7 @@ def test_released_hold_text_names_its_reason(engine, reason, label):
     engine.store.update_occurrence(w.id, o.dedupe_key, 'pending', held_since=engine.clock.now(), held_reason=reason, held_matches=1)
     o = engine.store.get_occurrence(w.id, o.dedupe_key)
     text = render_wake(w, o, engine.store.get_session(KEY), clock=engine.clock, timezone='UTC', recent_outcomes=[],
-                       messages_today=0, max_messages=6)
+                       messages_today=0)
     assert f'({label})' in text
 
 

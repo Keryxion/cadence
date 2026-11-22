@@ -25,14 +25,13 @@ def test_R7_L5_owner_wake_exempt_from_unanswered(engine, urgent):
     assert e.store.get_wake(w.id).status == 'done'
 
 
-@pytest.mark.parametrize('reason', ['unanswered', 'daily_model_cap', 'daily_message_cap'])
+@pytest.mark.parametrize('reason', ['unanswered', 'interruption_limit'])
 def test_R7_L5_dispatch_skip_terminal_one_shot(runtime, reason):
     e = runtime.get_engine()
     if reason == 'unanswered':
         session(e, unanswered_count=e.policy.max_unanswered)
     else:
-        setting = 'max_model_wakes_per_day' if reason == 'daily_model_cap' else 'max_messages_per_day'
-        e.policy = replace(e.policy, **{setting: 0})
+        e.policy = replace(e.policy, interruption_capacity=0)
     w = arm(e, creator='agent')
     e.tick()
     o, = e.store.list_occurrences(w.id)
@@ -57,20 +56,19 @@ def test_R7_L5_builtin_checkin_stays_muted(engine):
     assert not e.ctx.calls
 
 
-@pytest.mark.parametrize('gate', ['daily_model_cap', 'daily_message_cap',
+@pytest.mark.parametrize('gate', ['interruption_limit',
                                    'busy', 'provider_unavailable'])
 def test_R7_L5_owner_obeys_other_gates(engine, gate):
     e = engine
     e.acquire()  # Startup reconciliation clears stale busy flags first.
     session(e, unanswered_count=e.policy.max_unanswered)
-    if gate.startswith('daily_'):
-        name = 'max_model_wakes_per_day' if gate == 'daily_model_cap' else 'max_messages_per_day'
-        e.policy = replace(e.policy, **{name: 0})
+    if gate == 'interruption_limit':
+        e.policy = replace(e.policy, interruption_capacity=0)
     elif gate == 'busy':
         session(e, busy_since=e.clock.now())
     else:
         e.provider_failure('rate_limit')
-    w = arm(e, 'every' if gate.startswith('daily_') else 'at', creator='user')
+    w = arm(e, 'every' if gate == 'interruption_limit' else 'at', creator='user')
     e.tick()
     o, = e.store.list_occurrences(w.id)
     assert o.error == gate and not e.ctx.calls
@@ -78,15 +76,14 @@ def test_R7_L5_owner_obeys_other_gates(engine, gate):
 
 
 
-@pytest.mark.parametrize('drop', ['unanswered', 'daily_model_cap', 'daily_message_cap'])
+@pytest.mark.parametrize('drop', ['unanswered', 'interruption_limit'])
 @pytest.mark.parametrize('window', ['session_paused', 'provider_unavailable'])
 def test_R7_L6_windows_before_dropping_gates(engine, window, drop):
     e = engine
     if drop == 'unanswered':
         session(e, unanswered_count=e.policy.max_unanswered)
     else:
-        setting = 'max_model_wakes_per_day' if drop == 'daily_model_cap' else 'max_messages_per_day'
-        e.policy = replace(e.policy, **{setting: 0})
+        e.policy = replace(e.policy, interruption_capacity=0)
     until = e.clock.now() + 300
     if window == 'session_paused':
         session(e, paused_until=until)

@@ -51,16 +51,18 @@ config_schema:
     default: ""
     label: "Time zone"
     description: "IANA name such as Europe/Paris. Blank uses the profile's time zone."
-  max_model_wakes_per_day:
+  interruption_capacity:
     type: int
-    default: 24
-    label: "Wake turns per day"
-    description: "Per chat, local day. Each wake turn is a full model turn."
-  max_messages_per_day:
+    default: 15
+    min: 0
+    label: "Interruption capacity"
+    description: "Initial and maximum interruption tokens per chat."
+  interruption_refill_seconds:
     type: int
-    default: 6
-    label: "Wake messages per day"
-    description: "Per chat, local day."
+    default: 300
+    min: 1
+    label: "Interruption refill interval (seconds)"
+    description: "Elapsed time to regain one interruption token."
   own_time_hours:
     type: int
     default: 0
@@ -83,7 +85,7 @@ config_schema:
     type: int
     default: 12
     label: "Most turns a role may take per day"
-    description: "Caps any budget a role sets. The chat's wake-turn limit still applies."
+    description: "Caps the daily turn budget for each role."
   max_children_per_wake_turn:
     type: int
     default: 3

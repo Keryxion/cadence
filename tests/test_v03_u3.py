@@ -30,7 +30,7 @@ def own(e, hours=6):
 
 def desk(e):
     from cadence.desk import render_desk
-    return render_desk(e.store, e.store.get_session(KEY), clock=e.clock,
+    return render_desk(e, e.store.get_session(KEY), clock=e.clock,
                        timezone=e.policy.resolved_timezone(), policy=e.policy)
 
 
@@ -125,21 +125,19 @@ def test_own_time_trigger_protection_pacing_and_children(engine):
     assert e.store.get_wake(w.id).next_due_at == e.clock.now() + 7200
 
 
-@pytest.mark.parametrize('hold', ['unanswered', 'daily_message_cap'])
-def test_own_time_holds_messages_and_model_cap_drops(engine, hold):
+@pytest.mark.parametrize('hold', ['unanswered', 'interruption_limit'])
+def test_own_time_holds_messages(engine, hold):
     e = engine
     w = own(e)
     if hold == 'unanswered': session(e, unanswered_count=e.policy.max_unanswered)
-    else: e.ledger(w, delivered=e.policy.max_messages_per_day)
+    else: e.policy = replace(e.policy, interruption_capacity=0)
     e.dispatch(pending(e, w))
     o, = e.store.list_occurrences(w.id)
     assert o.state == 'claimed' and o.force_silent and o.held_reason == 'message_held:' + hold
     start(e)
     assert end(e, 'no_change', True, summary='rested') == '[SILENT]'
     assert e.store.get_wake(w.id).noop_streak == 1
-    e.ledger(w, model_turns=e.policy.max_model_wakes_per_day)
-    e.dispatch(pending(e, e.store.get_wake(w.id), 'model-cap'))
-    assert e.store.get_occurrence(w.id, 'model-cap').error == 'daily_model_cap'
+
 
 
 @pytest.mark.parametrize('kind', ['own', 'role'])
@@ -175,14 +173,14 @@ def test_desk_records_counts_local_times_and_bound(engine, monkeypatch):
     assert f'- role {role.id} Release notes · self-paced · last: Wrote release notes · next 12:01 · today 1/6' in out
     assert f'- role {paused.id}' in out and 'paused · command' in out
     assert '- Other: 1 wakes, 1 watchers · next due 12:02 (Next item)' in out
-    assert 'Owner last wrote 3h 10m ago · unanswered 1 · messages today 2/6 · turns today 5/24' in out
+    assert 'Owner last wrote 3h 10m ago · unanswered 1 · messages today 2 · turns today 5' in out
     assert 'cost today $0.42 of $2.00 · 2 unpriced' in out
     assert 'Messages held now:' not in out
     session(e, unanswered_count=e.policy.max_unanswered)
     assert "Messages held now: the owner hasn't replied yet" in desk(e)
     session(e, unanswered_count=0)
-    e.ledger(role, delivered=4)
-    assert "Messages held now: today's message limit" in desk(e)
+    e.policy = replace(e.policy, interruption_capacity=0)
+    assert "Messages held now: waiting for an interruption token" in desk(e)
     # Old rows are removed first; newest-touched role and all non-role lines survive.
     for n in range(30):
         e.clock.advance(1)

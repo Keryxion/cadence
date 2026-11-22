@@ -218,8 +218,8 @@ def test_R8_F9_restart_scope_is_occurrence(engine,skip_first):
     e.tick(); e.clock.advance(3900); e.close()
     e2=Poller(e.ctx,e.store,e.policy,e.clock,session_key_fn=lambda:KEY,paused=lambda:False,jitter=lambda:0,compression_tip=lambda sid:sid)
     try:
-        # A spent daily cap drops the recovered tick, so the next occurrence is the first to run.
-        if skip_first: e2.policy=replace(e.policy,max_model_wakes_per_day=0)
+        # An empty interruption bucket drops the recovered tick, so the next occurrence is the first to run.
+        if skip_first: e2.policy=replace(e.policy,interruption_capacity=0)
         e2.tick()
         e2.policy=e.policy
         if not skip_first:

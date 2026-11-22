@@ -53,7 +53,7 @@ sessions:
   chat_id: shared
 profile_settings:
   a:
-    max_model_wakes_per_day: 1
+    interruption_capacity: 1
   b:
-    max_model_wakes_per_day: 0
+    interruption_capacity: 0
 baseline_interval_s: 300

@@ -1,4 +1,5 @@
 """0.3.4: a running wake turn shows as a message in progress, not a sent one; summaries are asked for in plain words."""
+from dataclasses import replace
 from types import SimpleNamespace
 
 from cadence import commands
@@ -7,7 +8,7 @@ from test_engine import KEY, arm, end, engine, pending, start, session
 
 
 def _desk(e):
-    return render_desk(e.store, e.store.get_session(KEY), clock=e.clock,
+    return render_desk(e, e.store.get_session(KEY), clock=e.clock,
                        timezone=e.policy.resolved_timezone(), policy=e.policy)
 
 
@@ -24,35 +25,36 @@ def test_a_running_turn_is_in_progress_on_the_desk_status_and_its_own_wake_text(
     e = engine
     role = _role(e)
     e.ledger(role, delivered=2)
-    assert 'messages today 2/6 ·' in _desk(e)
+    assert 'messages today 2 ·' in _desk(e)
     e.dispatch(pending(e, role))
     text = e.ctx.calls[-1][0]
-    assert 'messages today 2/6 (+1 in progress) ·' in text  # the desk inside the turn's own wake text
-    assert 'wake messages today: 2 of 6' in text            # agrees with the line the agent already had
+    assert 'messages today 2 (+1 in progress) ·' in text  # the desk inside the turn's own wake text
+    assert 'wake messages today: 2' in text            # agrees with the line the agent already had
     start(e)
-    assert 'messages today 2/6 (+1 in progress) ·' in _desk(e)
-    assert '· messages 2/6 (+1 in progress) ·' in _status(e, monkeypatch)
+    assert 'messages today 2 (+1 in progress) ·' in _desk(e)
+    assert '· messages 2 (+1 in progress) ·' in _status(e, monkeypatch)
     end(e, 'progress', True, summary='Drafted the notes.')
     out = _desk(e)
-    assert 'messages today 3/6 ·' in out and 'in progress' not in out
-    assert '· messages 3/6 ·' in _status(e, monkeypatch)
+    assert 'messages today 3 ·' in out and 'in progress' not in out
+    assert '· messages 3 ·' in _status(e, monkeypatch)
 
 
 def test_the_turn_that_takes_the_last_message_is_not_told_its_message_is_held(engine):
     e = engine
     role = _role(e)
+    e.policy = replace(e.policy, interruption_capacity=1)
     e.ledger(role, delivered=5)
     e.dispatch(pending(e, role))
     text = e.ctx.calls[-1][0]
-    assert 'messages today 5/6 (+1 in progress) ·' in text
+    assert 'messages today 5 (+1 in progress) ·' in text
     assert 'Messages held now' not in text and 'Messages are held right now' not in text
     start(e)
     # The owner's own desk during that turn: any other wake's message would be held now.
     out = _desk(e)
-    assert 'messages today 5/6 (+1 in progress) ·' in out and "Messages held now: today's message limit" in out
+    assert 'messages today 5 (+1 in progress) ·' in out and 'Messages held now' not in out
     end(e, 'progress', True, summary='Drafted the notes.')
     out = _desk(e)
-    assert 'messages today 6/6 ·' in out and "Messages held now: today's message limit" in out
+    assert 'messages today 6 ·' in out and "Messages held now: waiting for an interruption token" in out
 
 
 def test_a_turn_whose_messages_are_held_holds_no_message_slot(engine):
@@ -63,7 +65,7 @@ def test_a_turn_whose_messages_are_held_holds_no_message_slot(engine):
     e.dispatch(pending(e, role))
     text = e.ctx.calls[-1][0]
     assert "Messages are held right now (the owner hasn't replied yet)" in text
-    assert 'messages today 2/6 ·' in text and 'in progress' not in text
+    assert 'messages today 2 ·' in text and 'in progress' not in text
 
 
 def test_the_contract_asks_for_a_plain_sentence_summary(engine):
@@ -75,9 +77,10 @@ def test_the_contract_asks_for_a_plain_sentence_summary(engine):
 def test_a_turn_held_by_the_message_limit_still_sees_the_limit_on_its_desk(engine):
     e = engine
     role = _role(e)
+    e.policy = replace(e.policy, interruption_capacity=0)
     e.ledger(role, delivered=6)
     e.dispatch(pending(e, role))
     text = e.ctx.calls[-1][0]
-    assert "Messages are held right now (today's message limit)" in text
-    assert "messages today 6/6 ·" in text and 'in progress' not in text
-    assert "Messages held now: today's message limit" in text
+    assert "Messages are held right now (waiting for an interruption token)" in text
+    assert "messages today 6 ·" in text and 'in progress' not in text
+    assert "Messages held now: waiting for an interruption token" in text

@@ -16,7 +16,7 @@ from cadence.registration import Runtime, register
 from test_engine import engine, arm, pending, session, start, end, admit, GatewayCtx, KEY
 
 
-BAD_SETTINGS = [('max_messages_per_day', 1.5),
+BAD_SETTINGS = [('interruption_capacity', 1.5),
                 ('min_interval_minutes', 0), ('timezone', 'Europe/Pari'), ('max_active', -1)]
 
 
@@ -67,11 +67,11 @@ def test_bad_live_setting_keeps_policy_and_fires(runtime, key, value):
 @pytest.mark.parametrize('key,value', BAD_SETTINGS)
 def test_bad_startup_setting_builds_engine_and_hooks(runtime, key, value):
     runtime.ctx.settings[key] = value
-    runtime.ctx.settings['max_messages_per_day'] = value if key == 'max_messages_per_day' else 3
+    runtime.ctx.settings['interruption_capacity'] = value if key == 'interruption_capacity' else 3
     e = bind(runtime)
     assert getattr(e.policy, key) == getattr(Policy(), key)
-    if key != 'max_messages_per_day':
-        assert e.policy.max_messages_per_day == 3
+    if key != 'interruption_capacity':
+        assert e.policy.interruption_capacity == 3
     hook, = runtime.ctx.hooks['pre_llm_call']
     hook(session_id='sid', turn_id='owner', user_message='hello', platform='telegram')
     assert e.store.get_session(KEY).busy_since is not None
@@ -108,7 +108,7 @@ def test_runtime_bootstrap_shares_last_good_policy(runtime, monkeypatch):
     monkeypatch.setattr(Poller, 'acquire', lambda self: True)
     def refresh_sequence(runner):
         runtime.ctx.settings.update({'timezone': 'Asia/Tokyo',
-                                     'max_model_wakes_per_day': 5})
+                                     'interruption_capacity': 5})
         runner.refresh()
         observed['before'] = (e.policy.timezone, runner.policy.timezone)
         runtime.ctx.settings['timezone'] = 'Europe/Pari'
@@ -123,7 +123,7 @@ def test_runtime_bootstrap_shares_last_good_policy(runtime, monkeypatch):
     engine_policy, runner_policy = observed['policies']
     assert engine_policy == runner_policy
     assert runner_policy.timezone == 'Asia/Tokyo'
-    assert runner_policy.max_model_wakes_per_day == 5
+    assert runner_policy.interruption_capacity == 5
     assert observed['notice'][0]['effective'] == runner_policy.timezone
 
 

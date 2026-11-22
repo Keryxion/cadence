@@ -4,7 +4,7 @@ cites:
 - https://github.com/openclaw/openclaw/issues/39536
 settings:
   max_unanswered: 10
-  max_messages_per_day: 10
+  interruption_capacity: 10
 arms:
 - ref: task0
   session: owner

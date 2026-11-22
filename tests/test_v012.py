@@ -63,27 +63,24 @@ def test_mute_holds_recurring_messages_but_drops_builtin_checkin(engine, kind, c
 
 @pytest.mark.parametrize('creator,expected', [('user','claimed'), ('agent','skipped')])
 def test_caps_owner_at_bypasses_agent_at_drops(engine, creator, expected):
-    engine.policy = replace(engine.policy, max_model_wakes_per_day=0, max_messages_per_day=0)
+    engine.policy = replace(engine.policy, interruption_capacity=0)
     w = arm(engine, creator=creator)
     engine.tick()
     assert engine.store.list_occurrences(w.id)[0].state == expected
     assert len(engine.ctx.calls) == int(creator == 'user')
 
 
-@pytest.mark.parametrize('date,hours', [('2026-03-08T00:30:00',22.5), ('2026-11-01T00:30:00',24.5)])
-@pytest.mark.parametrize('cap', ['max_model_wakes_per_day', 'max_messages_per_day'])
-def test_watcher_cap_holds_to_local_day_dst(engine, date, hours, cap):
-    engine.clock.wall = datetime.fromisoformat(date).replace(tzinfo=ZoneInfo('America/New_York')).timestamp()
-    engine.policy = replace(engine.policy, timezone='America/New_York', **{cap:1})
+def test_watcher_waits_for_refill(engine):
+    engine.policy = replace(engine.policy, interruption_capacity=1)
     w = arm(engine, 'subagent_done')
-    engine.ledger(w, **{'model_turns' if cap=='max_model_wakes_per_day' else 'delivered':1})
+    engine.interruption_tokens(KEY, spend=True)
     o = pending(engine, w, 'e:match')
     reason, defer, until = engine.gate(w, o, engine.store.get_session(KEY))
-    assert (reason, defer) == ('held_daily_cap', True)
+    assert (reason, defer) == ('held_interruptions', True)
     assert until is None
     engine.dispatch(o)
     assert not engine.store.get_meta('not_before:'+o.id)
-    engine.clock.advance(hours*3600-1)
+    engine.clock.advance(299)
     engine.dispatch(engine.store.get_occurrence(w.id, o.dedupe_key))
     assert not engine.ctx.calls
     engine.clock.advance(1)
@@ -332,17 +329,17 @@ def test_pending_burst_becomes_one_hold_and_keeps_latest(engine):
     assert engine.store.get_wake(w.id).noop_streak==0
 
 
-def test_daily_hold_releases_with_unchanged_cap_at_midnight(engine):
-    engine.policy=replace(engine.policy,max_messages_per_day=1)
+def test_watcher_refills_across_midnight(engine):
+    engine.policy=replace(engine.policy,interruption_capacity=1)
     engine.clock.wall=datetime.fromisoformat('2026-03-08T23:59:00+00:00').timestamp()
     w=arm(engine,'subagent_done')
-    engine.ledger(w,delivered=1)
+    engine.interruption_tokens(KEY, spend=True)
     o=pending(engine,w,'e:held')
     engine.dispatch(o)
     assert not engine.ctx.calls
-    engine.clock.advance(60)
+    engine.clock.advance(300)
     engine.dispatch(engine.store.get_occurrence(w.id,o.dedupe_key))
-    assert len(engine.ctx.calls)==1 and engine.policy.max_messages_per_day==1
+    assert len(engine.ctx.calls)==1 and engine.policy.interruption_capacity==1
 
 
 def test_cache_tool_consumers_and_owner_result(engine, hermes_helpers, monkeypatch):

@@ -21,7 +21,7 @@ from . import governor
 
 LOG = logging.getLogger('cadence')
 RETRY_DELAYS = (30,60,300,900,3600)
-FINAL_SKIP_REASONS = frozenset({'unanswered','daily_model_cap','daily_cost_cap','daily_message_cap','dm_only',
+FINAL_SKIP_REASONS = frozenset({'unanswered','interruption_limit','daily_model_cap','daily_cost_cap','daily_message_cap','dm_only',
     'non_gateway','session_off','source_disabled','cancel_on_reply','expired','max_fires'})
 # Every claim records its poller's epoch; an epoch outside this set was minted
 # by another (for a startup replay: the crashed) process.
@@ -44,6 +44,7 @@ class Poller:
     def __init__(self,ctx,store,policy,clock,*,paused=check_paused,jitter=None,
                  compression_tip=None,session_key_fn=None,probe_runner=None,boot_at=None):
         self.ctx,self.store,self.policy,self.clock=ctx,store,policy,clock
+        self.interruption_buckets={}
         self.boot_at=clock.now() if boot_at is None else boot_at
         self.paused,self.jitter=paused,jitter or (lambda: random.uniform(-1,1))
         self.compression_tip=compression_tip or self._compression_tip
@@ -192,6 +193,23 @@ class Poller:
         ttl=ttl_for_session(self.store,self.store.get_session(w.session_key))[0]
         return {'cache_ttl':ttl if agent_authored(w) and w.kind in {'every','self'} and not w.trigger_json.get('at') else None,
                 'minimum_s':max(self.policy.interval_floor(w),w.pacing_min_s or 0)}
+
+    def interruption_tokens(self, key, *, spend=False):
+        """Use elapsed time so wall-clock corrections never refill a chat.
+
+        A single in-flight wake per chat lets finalization charge only a delivered
+        message. The runner and gateway hooks share this in-memory mapping.
+        """
+        now = self.clock.monotonic()
+        capacity = self.policy.interruption_capacity
+        interval = self.policy.interruption_refill_seconds
+        tokens, anchor = self.interruption_buckets.get(key, (capacity, now))
+        refill = int((now - anchor) // interval)
+        tokens = min(capacity, tokens + refill)
+        if spend:
+            anchor = now if tokens == capacity else anchor + refill * interval
+            self.interruption_buckets[key] = (max(0, tokens - 1), anchor)
+        return tokens
 
     def daily(self,key):
         return self.store.daily_counts(key,self.policy.resolved_timezone())
@@ -515,8 +533,8 @@ class Poller:
             return ''
         if self.policy.unanswered_gate(w,s.unanswered_count):
             return 'unanswered'
-        if self.daily(s.session_key)['delivered']>=self.policy.max_messages_per_day:
-            return 'daily_message_cap'
+        if not self.interruption_tokens(s.session_key):
+            return 'interruption_limit'
         return ''
 
     def gate(self,w,o,s):
@@ -564,12 +582,8 @@ class Poller:
         message_held=self.message_hold_reason(w,s)
         mute=self.policy.unanswered_gate(w,s.unanswered_count)
         if mute and not message_held: return mute,mute=='held_unanswered',None
-        totals=self.daily(s.session_key)
-        cap='daily_model_cap' if totals['model_turns']>=self.policy.max_model_wakes_per_day else 'daily_message_cap' if totals['delivered']>=self.policy.max_messages_per_day else ''
-        if cap and not (cap=='daily_message_cap' and message_held) and not (owner_class(w) and one_shot(w)):
-            if is_watcher(w):
-                return 'held_daily_cap',True,None
-            return cap,False,None
+        if not message_held and not self.interruption_tokens(s.session_key) and not (owner_class(w) and one_shot(w)):
+            return ('held_interruptions', True, None) if is_watcher(w) else ('interruption_limit', False, None)
         flood=json.loads(self.store.get_meta('injections') or '[]')
         if sum(now-t<60 for t in flood)>=5: return 'global_flood',True,None
         if now<float(self.store.get_meta('not_before:'+o.id) or 0): return 'not_before',True,None
@@ -651,8 +665,9 @@ class Poller:
             try: late=max(0,self.clock.now()-float(o.dedupe_key[2:]))
             except ValueError: pass
         text=render_wake(w,o,session,clock=self.clock,timezone=self.policy.resolved_timezone(),
-             recent_outcomes=recent,messages_today=self.daily(session.session_key)['delivered']-(0 if o.force_silent else 1),
-             max_messages=self.policy.max_messages_per_day,governor_hint=governor.hint(self,w),late_by_s=late,
+             recent_outcomes=recent,messages_today=self.daily(session.session_key)['delivered']-int(not o.force_silent),
+             interruption_tokens=self.interruption_tokens(session.session_key),
+             governor_hint=governor.hint(self,w),late_by_s=late,
              after_restart=bool(s.get_meta('recovered:'+o.id)),held_by=held_by,message_held=message_held,
              cache_line=cache_line,marker_tag=tag,
              desk=render_desk(self,session,clock=self.clock,timezone=self.policy.resolved_timezone(),policy=self.policy,

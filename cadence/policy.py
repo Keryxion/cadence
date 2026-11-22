@@ -86,13 +86,13 @@ class Policy:
     agent_can_create: str = "yes"
     dm_only: bool = True
     timezone: str = ""
-    max_model_wakes_per_day: int = 24
+    interruption_capacity: int = 15
+    interruption_refill_seconds: int = 300
     daily_cost_limit_usd: float = 0.0
     own_time_hours: int = 0
     role_turns_per_day_default: int = 6
     role_turns_per_day_max: int = 12
     max_children_per_wake_turn: int = 3
-    max_messages_per_day: int = 6
     max_unanswered: int = 2
     min_interval_minutes: int = 15
     agent_ungated_floor_minutes: int = 55
@@ -171,13 +171,13 @@ class Policy:
                      profile_timezone=profile_timezone)
         if result.agent_can_create not in {"yes", "ask_first", "no"}:
             raise ValueError("agent_can_create must be yes, ask_first, or no")
-        role_max = max(1, min(result.role_turns_per_day_max, result.max_model_wakes_per_day))
+        role_max = max(1, result.role_turns_per_day_max)
         result = replace(result, role_turns_per_day_max=role_max,
                          role_turns_per_day_default=max(1, min(result.role_turns_per_day_default, role_max)),
                          max_children_per_wake_turn=max(1, min(result.max_children_per_wake_turn, 50)))
         for name in ("min_interval_minutes", "agent_ungated_floor_minutes", "probe_floor_seconds",
                      "max_lifetime_days", "max_reminder_days", "checkin_after_hours", "noop_backoff_factor",
-                     "noop_max_backoff_hours", "ledger_days"):
+                     "noop_max_backoff_hours", "ledger_days", "interruption_refill_seconds"):
             if getattr(result, name) < 1:
                 raise ValueError(f"{name} must be positive")
         # Readable upper bounds, each far inside the value where date, float

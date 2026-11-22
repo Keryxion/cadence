@@ -58,7 +58,7 @@ def test_g3_watch_refuses_recurring_responsibilities(engine, monkeypatch, kind):
 @pytest.mark.parametrize('state', ['claimed', 'started'])
 def test_g4_force_silent_does_not_reserve_message_slot(engine, state):
     e = engine
-    e.policy = replace(e.policy, max_messages_per_day=1)
+    e.policy = replace(e.policy, interruption_capacity=1)
     w = arm(e, 'every')
     o = pending(e, w)
     e.store.update_occurrence(w.id, o.dedupe_key, 'pending', force_silent=True)
@@ -67,7 +67,7 @@ def test_g4_force_silent_does_not_reserve_message_slot(engine, state):
     due = arm(e, creator='agent')
     e.dispatch(pending(e, due))
     o = e.store.get_occurrence(due.id, 't:test')
-    assert o.state == 'pending' and o.error != 'daily_message_cap'
+    assert o.state == 'pending' and o.error != 'interruption_limit'
     assert e.store.get_wake(due.id).status == 'active'
     assert e.daily(KEY) == {'model_turns': 1, 'delivered': 0}
 
