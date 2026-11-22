@@ -51,7 +51,8 @@ def test_unresolvable_follow_up_is_recorded_without_injection(engine):
     assert e.store.get_wake(timer).status_reason == 'skipped:continuation_context_missing'
 
 
-def test_registered_follow_up_returns_only_the_timer_id(engine,monkeypatch):
+def test_registered_follow_up_returns_armed_receipt(engine,monkeypatch):
+    from datetime import datetime
     import json
     from cadence.registration import Runtime, register
     monkeypatch.setattr(Runtime,'start',lambda self: None)
@@ -61,7 +62,12 @@ def test_registered_follow_up_returns_only_the_timer_id(engine,monkeypatch):
         owner(engine,'owner','Check the running build')
         handler = engine.ctx.tools['follow_up']['handler']
         result = json.loads(handler({'at':'30s'},session_id='sid'))
-        assert set(result) == {'id'}
+        assert set(result) == {'id', 'armed', 'due_at'}
+        assert result['armed'] is True
+        due = datetime.fromisoformat(result['due_at'])
+        assert due.utcoffset().total_seconds() == 0
+        assert due.timestamp() == engine.clock.now()+30
+        assert due.timestamp() == engine.store.get_wake(result['id']).next_due_at
         assert json.loads(handler({'cancel':result['id']},session_id='sid'))['status']=='cancelled'
     finally:
         runtime._engine = None

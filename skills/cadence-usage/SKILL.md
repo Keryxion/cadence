@@ -177,3 +177,5 @@ For a recurring, self or role wake, you may request the next check:
 Use `pulse(action="list")` for compact current responsibilities. Pass `detailed=true` to include full records and finished history. Follow-up timers remain separate.
 
 `follow_up` accepts relative durations such as `30s`, `2 minutes`, or `1m30s`, within 15 seconds through 15 minutes. Each call creates an independent timer. Cancel an earlier ID explicitly to replace it. Timers survive gateway restarts, and `/new` orphans them. If a turn is underway in the conversation when a timer becomes due, it is consumed without queuing a continuation.
+
+A successful `follow_up` arm returns `id`, `armed: true`, and `due_at` as an absolute ISO 8601 UTC timestamp. Use that receipt to confirm the scheduled time.

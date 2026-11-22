@@ -1,9 +1,12 @@
 """One continuation bound to a verified owner turn in this chat."""
+from datetime import datetime, timezone
+
 from .model import Wake
 from .schedule import parse_duration
 
 DESCRIPTION = ("Resume work already underway in this conversation once, in 15 seconds to 15 minutes. "
                "Pass exactly one field: at to arm, or cancel with a returned ID. "
+               "Arming returns id, armed=true, and due_at as an absolute ISO 8601 UTC timestamp. "
                "at accepts relative durations such as 30s, 2 minutes, or 1m30s (15s–15m inclusive). "
                "Each call creates an independent timer; cancel an earlier ID explicitly to replace it. "
                "When due, it gives you one chance to resume the originating owner turn. "
@@ -74,7 +77,8 @@ def handle(tool, args, *, session_id='', **kwargs):
             armed_session_id=session_id, next_due_at=e.clock.now()+seconds, owner_requested=True,
             trigger_json={'kind': 'at', 'continuation': origin}))
     e.signal()
-    return {'id': w.id}
+    return {'id': w.id, 'armed': True,
+            'due_at': datetime.fromtimestamp(w.next_due_at, timezone.utc).isoformat()}
 
 
 def verified_owner(engine, session_id, key):
