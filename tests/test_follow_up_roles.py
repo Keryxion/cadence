@@ -232,3 +232,12 @@ def test_failed_finalization_after_release_retains_charge(engine):
     assert engine.store.get_meta('admitted:'+occurrence.id) == 'adapter outcome unknown'
     assert engine.interruption_tokens(KEY) == balance-1
     assert engine.store.get_occurrence(role.id, occurrence.dedupe_key).state == 'interrupted'
+
+
+def test_session_reset_revokes_owner_turn_authority(engine):
+    owner(engine, 'original', 'Remind me about the oven')
+    engine.intake.on_session_reset(old_session_id='sid', new_session_id='new')
+    assert 'error' in call(engine, {'at': '30s'})
+    result = engine.tool.handle(dict(action='create', note='Oven', owner_asked=True,
+                                     trigger={'kind':'at', 'at':'in 20m'}), session_id='sid')
+    assert result['error'] == 'verified_owner_reminder_required'

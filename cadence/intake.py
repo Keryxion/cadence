@@ -967,6 +967,7 @@ class Intake:
         old=old_session_id or session_id
         if not old: return None
         self.anchors.pop(old,None)
+        self.owner_contexts.pop(old,None)
         with s.atomic():
             keys=set()
             for w in s.list_wakes():
