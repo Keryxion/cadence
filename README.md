@@ -182,8 +182,9 @@ These live under `plugins.entries.cadence.settings` and appear in **Settings ▸
 | Agent can arm wakes | `agent_can_create` | `yes` | yes · ask_first (the agent's wakes wait for `/pulse ok <id>`) · no |
 | Direct messages only | `dm_only` | on | Refuse group chats. Unknown chat types are refused too. When off, group and topic wakes are recognised behind the gateway's sender prefix. |
 | Time zone | `timezone` | (blank) | IANA name such as Europe/Paris. Blank uses the profile's time zone. |
-| Interruption capacity | `interruption_capacity` | 15 | Initial and maximum tokens per chat. Each delivered wake message spends one token. Reloading the plugin starts each chat full. |
-| Interruption refill interval | `interruption_refill_seconds` | 300 | Seconds to regain one token, up to capacity. |
+| Interruption capacity | `interruptions.capacity` | 15 | Maximum saved tokens per chat. |
+| Initial interruptions | `interruptions.initial` | 15 | Tokens after restart, capped at capacity. |
+| Interruptions restored per hour | `interruptions.refill_per_hour` | 12 | Restore one whole token every 3600 / rate seconds. |
 | Unanswered messages before mute | `max_unanswered` | 2 | Wakes you armed, and one-time reminders you ask for in chat, always fire; agent watchers wait for your reply; other one-time agent reminders are dropped. The agent's recurring work and roles keep running silently, with their messages held until you reply. An agent edit revokes the exemption (for a chat reminder, so does an agent resume), except a watcher-only conversion you requested with `/pulse watch`. |
 | Shortest repeat (minutes) | `min_interval_minutes` | 15 | Floor for every recurring time wake. |
 | Shortest agent timer without a watcher (minutes) | `agent_ungated_floor_minutes` | 55 | Floor for recurring timers the agent arms without a watcher. |
@@ -308,3 +309,18 @@ Credits: claim, refund and coalescing semantics follow Hermes core `/heartbeat`.
 Built for [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Electric Sheep. Apache-2.0.
 
 Known issues: provider-exhaustion settlement (#27) remains blocked by [NousResearch/hermes-agent#137357](https://github.com/NousResearch/hermes-agent/issues/137357).
+
+Example plugin settings in the profile config.yaml
+
+```yaml
+plugins:
+  entries:
+    cadence:
+      settings:
+        interruptions:
+          capacity: 15
+          initial: 15
+          refill_per_hour: 12
+```
+
+Capacity controls the burst and refill controls the sustained rate. A full 15-token bucket can release 15 messages immediately and restore 12 more tokens over the next hour.

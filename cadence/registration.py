@@ -87,7 +87,19 @@ class Runtime:
         from .policy import Policy
         with self._policy_lock,home_scope(self.home):
             settings={f.name:self.ctx.get_config(f.name,getattr(Policy(),f.name))
-                      for f in fields(Policy) if f.name not in {'clock','profile_timezone'}}
+                      for f in fields(Policy) if f.name not in {'clock','profile_timezone','interruption_capacity','interruption_initial','interruption_refill_seconds'}}
+            interruptions = self.ctx.get_config('interruptions', {})
+            if not isinstance(interruptions, dict):
+                interruptions = {'capacity': 'invalid interruptions mapping'}
+            settings['interruption_capacity'] = interruptions.get('capacity', 15)
+            settings['interruption_initial'] = interruptions.get('initial', 15)
+            rate = interruptions.get('refill_per_hour', 12)
+            try:
+                rate = float(rate) if not isinstance(rate, bool) else 0
+                interval = 3600 / rate if rate > 0 else 0
+            except (ValueError, TypeError, OverflowError):
+                interval = 0
+            settings['interruption_refill_seconds'] = interval
             profile=''
             try:
                 from hermes_time import get_timezone_name
