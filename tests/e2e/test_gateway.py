@@ -63,6 +63,29 @@ def test_owner_at_wake_delivers_once(make_rig):
     rig.assert_tools_ok()
 
 
+def test_requested_follow_up_is_acknowledged_and_delivered_at_zero(make_rig):
+    from tests.e2e.core.history._helpers import Script
+    from tests.fakes.fake_llm_provider import Text, ToolCall
+
+    config = {"plugins": {"entries": {"cadence": {"settings": {
+        "interruptions": {"capacity": 0, "initial": 0}
+    }}}}}
+    rig = make_rig(config=config)
+    script = Script()
+    script.actions = [ToolCall("follow_up", {"at": "15s"}), Text("TIMER-ARMED"),
+                      Text("CONTINUATION-DELIVERED")]
+    rig.llm._responder = script
+    rig.owner("Check back in 15 seconds.", "TIMER-ARMED")
+    rig.assert_tools_ok()
+    timers = [w for w in rig.rows("wakes") if "continuation" in json.loads(w["trigger_json"])]
+    assert len(timers) == 1
+    wid = timers[0]["id"]
+    row = rig.settled(wid)
+    assert row["delivered"] == 1 and row["attempt"] == 1, row
+    assert sum("CONTINUATION-DELIVERED" in text for text in rig.texts()) == 1
+    script.raise_errors("requested follow-up")
+
+
 @pytest.mark.parametrize("loud", [False, True], ids=["default", "tool-progress-reasoning"])
 def test_silent_verdict_shows_nothing(make_rig, loud):
     rig = make_rig(loud=loud)
