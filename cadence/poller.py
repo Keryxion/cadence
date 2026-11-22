@@ -314,8 +314,7 @@ class Poller:
             for o in s.list_occurrences(state='pending'):
                 if not self.eligible(): break
                 w=s.get_wake(o.wake_id)
-                cache_line=self.cache_line(w)  # Pricing may fetch metadata; never hold the write lock.
-                self.evaluate(w,lambda o=o,cache_line=cache_line:self.dispatch(o,cache_line=cache_line))
+                self.evaluate(w,lambda o=o:self.dispatch(o))
         except Exception as exc:
             self.log.warning('cadence tick failed',exc_info=True)
             try: self.store.set_meta('last_error',type(exc).__name__)
@@ -392,7 +391,7 @@ class Poller:
             elif armed_at >= payload['started_at']:
                 return  # A separate tool worker can only attest its arming time.
             from .clock import format_timestamp
-            payload = {'message': 'Gateway started at ' + format_timestamp(payload['started_at'])}
+            payload = {'started_at': payload['started_at'], 'message': 'Gateway started at ' + format_timestamp(payload['started_at'])}
         if w.kind=='reaction' and filters.get('emojis') and not set(filters['emojis']) & set(payload.get('emojis',[])): return
         if any(filters.get(k) is not None and payload.get(k)!=filters[k] for k in ('task_id','board')): return
         if w.kind=='api_error':
@@ -664,7 +663,7 @@ class Poller:
         if not self.injection_allowed(): return 'injection_disabled',True,None
         return '',False,None
 
-    def dispatch(self,o,*,cache_line=None):
+    def dispatch(self,o):
         # The served set can shrink mid-tick; an unserved home's wake stays untouched for its own gateway.
         if not self.eligible(): return
         s=self.store
@@ -706,8 +705,6 @@ class Poller:
             self.terminal_one_shot(s.get_wake(w.id))
             governor.error(self,s.get_wake(w.id))
             return
-        if cache_line is None:
-            cache_line='' if s.connection.in_transaction else self.cache_line(w)
         held_by=o.error  # Claim clears the stored deferral; retain it for this prompt.
         message_held=self.message_hold_reason(w,session)
         if message_held and (not o.force_silent or o.held_reason.startswith('message_held:')):
@@ -727,17 +724,15 @@ class Poller:
         from .desk import render_desk
         from .intake import marker_tag
         tag=marker_tag(s.marker_secret(),o.id,o.attempt) if session.chat_type!='dm' else None
-        recent=[x.outcome or x.state for x in s.list_occurrences(w.id) if x.state=='done'][-3:]
+        self.interruption_tokens(session.session_key)  # Settle the previous dispatch before replacing its claim.
         late=None
         if o.dedupe_key.startswith('t:'):
             try: late=max(0,self.clock.now()-float(o.dedupe_key[2:]))
             except ValueError: pass
         text=render_wake(w,o,session,clock=self.clock,timezone=self.policy.resolved_timezone(),
-             recent_outcomes=recent,messages_today=self.daily(session.session_key)['delivered']-int(not o.force_silent),
-             interruption_tokens=self.interruption_tokens(session.session_key),
              governor_hint=governor.hint(self,w),late_by_s=late,
              after_restart=bool(s.get_meta('recovered:'+o.id)),held_by=held_by,message_held=message_held,
-             cache_line=cache_line,marker_tag=tag,
+             marker_tag=tag,
              desk=render_desk(self,session,clock=self.clock,timezone=self.policy.resolved_timezone(),policy=self.policy,
                               measure=lambda text: len(escape_text(text)),turn=o)
                   if w.role or w.trigger_json.get('own_time') else '')
@@ -747,7 +742,7 @@ class Poller:
                 health.pop('trial',None); s.set_meta('provider_health',json.dumps(health))
             s.refund(w.id,o.dedupe_key,attempt=o.attempt,error=held_by)
             return
-        # Rendering has settled the previous delivery. Only one claim can be
+        # Reading the balance has settled the previous delivery. Only one claim can be
         # in flight per chat; fence its receipt by occurrence, attempt and epoch.
         self.interruption_buckets[w.session_key].pending = [o.id, o.attempt, o.epoch]
         continuation = 'continuation' in w.trigger_json

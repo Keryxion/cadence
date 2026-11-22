@@ -30,10 +30,10 @@ def test_R9_W1_dispatch_hold_label(engine, reason, label, recovered):
         e.store.set_meta('recovered:'+o.id, '1')
     e.dispatch(o)
     text, _ = e.ctx.calls[-1]
-    suffix = ' after restart' if recovered else ''
-    assert f'Why: at (held by {label}{suffix})' in text
+    suffix = " after_restart='true'" if recovered else ''
+    assert f"delayed_by='{reason}'{suffix}" in text
     assert 'late by' not in text
-    assert ('after restart' in text) == recovered
+    assert ('after_restart=' in text) == recovered
 
 
 @pytest.mark.parametrize('reason', ['', 'ack_timeout', 'injection_disabled'])
@@ -49,16 +49,17 @@ def test_R9_W1_no_designed_hold_still_late(engine, reason, recovered):
     if recovered:
         e.store.set_meta('recovered:'+o.id, '1')
     e.dispatch(o)
-    suffix = ' after restart' if recovered else ''
-    assert f'Why: at (late by 2m{suffix})' in e.ctx.calls[-1][0]
+    suffix = " after_restart='true'" if recovered else ''
+    assert "late_by='2m'" + suffix in e.ctx.calls[-1][0]
 
 
-@pytest.mark.parametrize('seconds,expected', [(59, 'Why: Follow up'),
-                                             (60, 'Why: Follow up (late by 1m)')])
+@pytest.mark.parametrize('seconds,expected', [(59, ''),
+                                             (60, "late_by='1m'")])
 def test_R9_W1_late_threshold(clock, seconds, expected):
     w, o, s = records(clock)
     text = render_wake(w, o, s, clock=clock, late_by_s=seconds)
-    assert text.splitlines()[2] == expected
+    assert ('late_by=' in text.splitlines()[0]) == bool(expected)
+    assert expected in text.splitlines()[0]
 
 
 @pytest.mark.parametrize('reason,label', HOLDS)
@@ -72,7 +73,7 @@ def test_R9_W2_claim_clears_error_and_done_stays_clear(engine, reason, label):
     e.dispatch(e.store.get_occurrence(w.id, key))
     claimed = e.store.get_occurrence(w.id, key)
     assert claimed.state == 'claimed' and claimed.error == ''
-    assert f'(held by {label})' in e.ctx.calls[-1][0]
+    assert f"delayed_by='{reason}'" in e.ctx.calls[-1][0]
     start(e)
     assert end(e, outcome='done', notify=True) is None  # Leave the gateway reply unchanged.
     done = e.store.get_occurrence(w.id, key)

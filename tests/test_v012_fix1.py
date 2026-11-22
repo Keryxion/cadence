@@ -233,8 +233,7 @@ def test_released_hold_text_names_its_reason(engine, reason, label):
     o = pending(engine, w, 'e:x')
     engine.store.update_occurrence(w.id, o.dedupe_key, 'pending', held_since=engine.clock.now(), held_reason=reason, held_matches=1)
     o = engine.store.get_occurrence(w.id, o.dedupe_key)
-    text = render_wake(w, o, engine.store.get_session(KEY), clock=engine.clock, timezone='UTC', recent_outcomes=[],
-                       messages_today=0)
+    text = render_wake(w, o, engine.store.get_session(KEY), clock=engine.clock, timezone='UTC')
     assert f'({label})' in text
 
 

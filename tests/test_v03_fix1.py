@@ -286,7 +286,7 @@ def test_f9_embedded_desk_is_bounded_after_escaping(engine):
     w = e.store.list_wakes(KEY)[0]
     e.dispatch(pending(e, w))
     text = e.ctx.calls[-1][0]
-    desk = text[text.index('Your desk:'):text.index('\nRecent outcomes:')]
+    desk = text[text.index('Your desk:'):text.index('\nCall pulse respond')]
     assert len(desk) <= 1800
     assert desk.splitlines()[-1].startswith('… ') and desk.endswith(' more')
     assert '&amp;' in desk and '&lt;' in desk and '&gt;' in desk

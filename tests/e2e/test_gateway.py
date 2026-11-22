@@ -478,14 +478,14 @@ def test_mute_holds_watcher_until_reply(make_rig):
     released = rig.wake_openers()[openers:]
     assert len(released) == 1, released
     text = rig.director._text(released[0]["messages"][-1])
-    assert f"watcher {watcher}" in text and "you hadn't replied" in text, text
+    assert f"o:{watcher}/" in text and "you hadn't replied" in text, text
     assert "MATCH-LATEST" in text and "MATCH-FIRST" not in text, text
     assert sum("WAKE-DELIVERED" in t for t in rig.new_visible(before)) == 1
     record_latency(rig, first['matched_at'], wall_offset)
     rig.assert_tools_ok()
 
 
-def test_wake_text_carries_cache_line(make_rig):
+def test_cache_stays_in_receipt_and_wake_starts_with_metadata(make_rig):
     rig = make_rig()
     before = rig.session()["last_cache_touch_at"]
     wid = rig.agent_arm("cache-line", {"kind": "at", "at": "in 10s"})
@@ -511,6 +511,7 @@ def test_wake_text_carries_cache_line(make_rig):
     assert row["delivered"] == 1 and len(rig.wake_openers()) == 1, row
     text = rig.director._text(rig.wake_openers()[0]["messages"][-1])
     lines = [line for line in text.splitlines() if line.startswith("Cache:")]
-    assert len(lines) == 1 and len(lines[0]) <= 220, text
-    assert lines[0].startswith(f"Cache: {provider} TTL unknown"), lines
+    assert not lines, text
+    assert "[pulse trigger='at'" in text.splitlines()[0]
+    assert text.splitlines()[1] == "cache-line"
     rig.assert_tools_ok()

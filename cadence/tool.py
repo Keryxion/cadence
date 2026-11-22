@@ -560,8 +560,13 @@ class Tool:
                 'next_check_at':format_timestamp(min(times)) if times else None}
         if detailed:
             item = {**item, **asdict(wake), 'cache':self.cache_result(wake)}
+            item['recent_outcomes'] = [o.outcome or o.state for o in sorted(completed, key=lambda o: o.ended_at)[-3:]]
+            if wake.session_key in self.engine.interruption_buckets:
+                item['interruption_tokens'] = self.engine.interruption_tokens(wake.session_key)
         if latest:
             current = {'state':latest.state}
+            if detailed:
+                item['latest_attempt'] = latest.attempt
             if latest.state == 'pending' and latest.error:
                 current['hold_reason'] = latest.error
                 at = None

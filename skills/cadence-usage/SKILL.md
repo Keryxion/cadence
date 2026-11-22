@@ -162,7 +162,7 @@ Wake on a Telegram reaction in this conversation:
 
 ## Respond on every wake turn
 
-Use the UTC time, note, trigger or delay reason, and any scratch or role desk to decide what work remains. A message hold affects whether the owner can hear from you. Counts, token balance and cache information explain scheduling and delivery policy. The occurrence ID and attempt identify the dispatch internally. The runtime supplies them to `respond` automatically.
+The first line identifies the pulse trigger and gives UTC timing, including a delay reason when available. The next line is your task. Use any scratch, role desk or watcher finding that follows. A delivery hold tells you when to keep a finding in your notes. For a one-off task that the conversation has already settled, respond with `outcome="done", notify=false`.
 
 Do the work, then call:
 

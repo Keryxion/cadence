@@ -228,9 +228,9 @@ def test_role_prompt_keeps_explicit_ending(engine):
     w = arm(e, 'self', role=True)
     o = pending(e, w)
     text = render_wake(w, o, e.store.get_session(KEY), clock=e.clock)
-    assert f'· role {w.id} ·' in text and "- If the chat shows the note's subject was settled" not in text
+    assert "role='true'" in text.splitlines()[0]
     ordinary = render_wake(replace(w, role=False), o, e.store.get_session(KEY), clock=e.clock)
-    assert f'· wake {w.id} ·' in ordinary and "- If the chat shows the note's subject was settled" in ordinary
+    assert "role='true'" not in ordinary.splitlines()[0]
     e.dispatch(o)
     start(e)
     end(e, 'done', False)

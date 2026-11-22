@@ -10,12 +10,6 @@ from test_engine import KEY, arm, end, engine, pending, session, start
 from test_v03_fix1 import command, own
 
 
-CONTRACT = ('- outcome: progress when you did something useful, even silently '
-            '(always include a summary of what you did, written as a plain sentence, since the owner sees role summaries on the desk; silent progress without one counts as idle); '
-            'no_change when there was nothing to do; done when the work is finished for good; '
-            'blocked or needs_attention when you need the owner.')
-
-
 def test_g1_desk_uses_last_dispatched_turn(engine):
     e = engine
     w = arm(e, 'self', role=True, budget_turns_per_day=1)
@@ -34,7 +28,7 @@ def test_g1_desk_uses_last_dispatched_turn(engine):
 def test_g2_rendered_contract_requires_progress_summary(engine):
     e = engine
     e.dispatch(pending(e, arm(e)))
-    assert CONTRACT in e.ctx.calls[-1][0].splitlines()
+    assert 'a brief summary' in e.ctx.calls[-1][0]
 
 
 def test_g2_tool_description_requires_progress_summary():

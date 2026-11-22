@@ -229,8 +229,8 @@ def test_requested_text_and_command_rendering(engine, command):
     owner_turn(engine)
     w, _ = create(engine)
     text = render_wake(w, pending(engine, w), engine.store.get_session(KEY), clock=engine.clock)
-    assert "armed by you at the owner's request" in text
-    assert 'wake messages today:' in text
+    assert "owner_requested='true'" in text
+    assert 'wake messages today:' not in text
     assert 'Why: you asked in chat' in command('why '+w.id)
     assert ' · you asked' in command('list') and ' · you asked' in command('status')
     assert 'owner_asked=true' in DESCRIPTION

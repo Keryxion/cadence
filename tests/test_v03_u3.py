@@ -147,9 +147,9 @@ def test_desk_prompt_placement_and_settled_line(engine, kind):
     e.dispatch(pending(e, w))
     text = e.ctx.calls[-1][0]
     assert 'Your desk:' in text and 'subject was settled' not in text
-    assert text.index('Your desk:') > text.index('Scratch:' if w.scratch else 'Your note:')
-    assert text.index('Your desk:') < text.index('Recent outcomes:')
-    assert 'Contract: this turn is yours to act on.' in text
+    assert text.index('Your desk:') > text.index('Scratch:' if w.scratch else w.note)
+    assert text.index('Your desk:') < text.index('Call pulse respond')
+    assert 'Call pulse respond' in text
     start(e)
     end(e, 'progress', False)
     e.clock.advance(601)

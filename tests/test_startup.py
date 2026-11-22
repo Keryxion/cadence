@@ -127,6 +127,11 @@ def test_startup_lists_detected_match_and_spacing_deadline(engine, monkeypatch):
                                      'next_eligible_at':format_timestamp(last_start + 300)}
     e.clock.advance(299)
     e.tick()
+    header, note, *body = e.ctx.calls[-1][0].splitlines()
+    assert f"trigger='startup' occurred='{format_timestamp(birth)}'" in header
+    assert f"current='{format_timestamp(e.clock.now())}' delayed_by='wake_spacing'" in header
+    assert note == 'Retest the time tools and report results.'
+    assert body == ['Call pulse respond with the outcome, a brief summary, and whether to notify the owner.']
     start(e)
     row, = e.tool.handle({'action':'list'})['wakes']
     assert row['occurrence'] == {'state':'started'}

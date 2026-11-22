@@ -105,8 +105,7 @@ E15 arms two agent nudges and a file watcher in one owner turn. After two
 unanswered deliveries, two observed file matches coalesce into one held pending
 occurrence retaining the latest match. An owner reply releases it once, with
 the hold reason in the model's wake text and one visible delivery. E16 checks
-real prompt-usage route/cache touches, the create tool's cache line, and exactly
-one bounded `Cache:` line in the injected wake text. The fake route has unknown
+real prompt-usage route/cache touches, the create tool's cache line, and the metadata header and task note in the injected wake. The fake route has unknown
 TTL; neither test establishes real cache warmth or price.
 
 The owner-at and muted-watcher cells print `E2E_LATENCY` JSON with raw

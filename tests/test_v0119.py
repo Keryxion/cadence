@@ -11,7 +11,6 @@ from test_engine import engine, KEY, arm
 from test_v0114 import create, receipt
 
 ROOT = Path(__file__).resolve().parents[1]
-SETTLED = '- If the chat shows the note\'s subject was settled after this wake was armed, end it silently: outcome="done", notify=false.'
 
 
 def test_proposal_result_is_not_armed_and_its_receipt_leads_with_not_set(engine):
@@ -37,8 +36,8 @@ def test_wake_text_ends_a_settled_subject_silently(clock):
     wake = Wake('s', 'Check the deploy.', 'at', id='w_abcdefgh', created_at=clock.now()-60)
     text = render_wake(wake, Occurrence(wake.id, 't:1', attempt=1), Session('s'), clock=clock)
     lines = text.splitlines()
-    assert SETTLED in lines
-    assert lines.index(SETTLED) == lines.index(next(l for l in lines if l.startswith('- notify=false'))) + 1
+    assert lines[1] == wake.note
+    assert 'outcome="done", notify=false' in (ROOT/'skills/cadence-usage/SKILL.md').read_text()
 
 
 def test_report_problem_skill_is_registered_with_its_description(fake_ctx):

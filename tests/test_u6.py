@@ -50,9 +50,9 @@ def test_R6_L2_natural_snapshot(clock,late,restart):
     w=Wake('s','Task','at',id='w_test',created_at=clock.now()); o=Occurrence(w.id,'t:1')
     kw={'after_restart':True} if restart else {}
     text=render_wake(w,o,Session('s'),clock=clock,late_by_s=late,**kw)
-    assert 'fire 1 of 1' in text and 'unknown ago' not in text
-    assert ('late by' in text)==(late>=60)
-    assert ('after restart' in text)==restart
+    assert "trigger='at'" in text and 'unknown ago' not in text
+    assert ('late_by=' in text)==(late>=60)
+    assert ('after_restart=' in text)==restart
 
 
 @pytest.mark.parametrize('reason,code,klass', [('rate_limit',429,'rate_limit'),('quota_exhausted',429,'quota'),('auth',403,'auth'),('billing',402,'billing'),('server_error',503,'server')])
@@ -311,7 +311,7 @@ def test_R6_L2_engine_restart_wording(engine):
     e=engine; w=arm(e,next_due_at=e.clock.now()+60)
     e.tick(); session(e,busy_since=e.clock.now()); e.clock.advance(3600); e.tick()
     session(e,busy_since=None); e.tick()
-    assert 'held by a busy chat' in e.ctx.calls[-1][0] and 'after restart' not in e.ctx.calls[-1][0]
+    assert "delayed_by='busy'" in e.ctx.calls[-1][0] and 'after restart' not in e.ctx.calls[-1][0]
 
 
 def test_R6_E9_ABA_retarget_generation(engine):
