@@ -79,16 +79,16 @@ def _clip(text, limit):
     return cut.rstrip(' \t\r\n.,;:·') + '…'
 
 
-def _time(engine, epoch):
+def _time(epoch):
     if epoch is None: return 'none'
-    return format_timestamp(epoch, engine.policy.resolved_timezone())
+    return format_timestamp(epoch)
 
 
 def _paused(engine, wake):
     # Only a governor pause takes keep; only a timed /pulse pause resumes on its own (resume_timed).
     if wake.status_reason.startswith('governor:'): return 'paused · resumes on keep/resume'
     until = float(engine.store.get_meta('resume_after:'+wake.id) or 0) if wake.status_reason == 'command' else 0
-    return f'paused · resumes {_time(engine, until)} or on resume' if until else 'paused · resumes on resume'
+    return f'paused · resumes {_time(until)} or on resume' if until else 'paused · resumes on resume'
 
 
 def _role_today(engine, wake):
@@ -109,7 +109,7 @@ def _item(engine, wake, today_budget=None):
     if wake.status in FINISHED_STATUSES: due = ''
     elif wake.status == 'paused': due = _paused(engine, wake)
     elif today_budget and wake.status == 'active' and today_budget[0] >= today_budget[1]: due = 'resting until tomorrow'
-    else: due = 'next '+_time(engine,wake.next_due_at or wake.deadline_at)
+    else: due = 'next '+_time(wake.next_due_at or wake.deadline_at)
     role = f' · today {today_budget[0]}/{today_budget[1]}' if today_budget else ''
     return f'{wake.id} {wake.status} · {_oneline(wake.title) or _clip(_oneline(wake.note),60)} · ' + ('role · ' if wake.role else '') + wake.kind + (f' · {due}' if due else '') + role + (' · you asked' if owner_requested(wake) else '') + (f' · {wake.status_reason}' if wake.status_reason else '')
 
@@ -119,7 +119,7 @@ def _occurrences(engine, wake):
         'unanswered':'dropped: unanswered mute', 'daily_model_cap':'dropped: daily model cap',
         'daily_message_cap':'dropped: daily message cap', 'expired_held':'expired while held'}
     return '\n'.join(f'{o.dedupe_key} · {o.state} · {reasons.get(o.error,o.error.replace("_"," ") or o.outcome or "none")} · '
-        f'matched/created {_time(engine,o.matched_at) if o.matched_at is not None else _time(engine,o.created_at) if o.created_at else "before v0.1.2"} · held-since {_time(engine,o.held_since)} · delivered {"yes" if o.delivered else "no"}'
+        f'matched/created {_time(o.matched_at) if o.matched_at is not None else _time(o.created_at) if o.created_at else "before v0.1.2"} · held-since {_time(o.held_since)} · delivered {"yes" if o.delivered else "no"}'
         for o in engine.store.list_occurrences(wake.id)[-10:])
 
 
@@ -230,9 +230,9 @@ def handle(raw_args, runtime):
                 lines = [f'Cadence: {"on" if session.enabled and engine.policy.enabled else "off"} · poller {status["state"]}'
                          + (f' ({status["reason"]})' if status.get('reason') else ''),
                          f'allow_gateway_injection: {str(engine.injection_allowed()).lower()}',
-                         f'Local time: {_time(engine,engine.clock.now())}',
+                         f'UTC time: {_time(engine.clock.now())}',
                          f'Today: fires {counts.get("fires",0)} · checks {counts.get("checks",0)} · model wakes {daily["model_turns"]} · messages {messages_count(daily["delivered"],engine.store.messages_in_flight(key))} · interruption tokens {engine.interruption_tokens(key)}/{engine.policy.interruption_capacity} · engaged {counts.get("engaged",0)} · {cache.display(counts)}',
-                         f'Active items: {sum(w.status=="active" for w in active)} · next due: {_time(engine,next_due)}']
+                         f'Active items: {sum(w.status=="active" for w in active)} · next due: {_time(next_due)}']
                 held=sum(o.held_since is not None for o in engine.store.list_occurrences(session_key=key,state='pending'))
                 if engine.policy.daily_cost_limit_usd:
                     from .desk import cost_line
@@ -243,8 +243,8 @@ def handle(raw_args, runtime):
                     lines.append('your Claude cache lasts 5 min, so every wake is cold; set `prompt_caching: {cache_ttl: auto}` (1h for chat) in config.yaml')
                 health=json.loads(engine.store.get_meta('provider_health') or '{}')
                 if health:
-                    lines.append(f'Provider gate: provider_unavailable ({health["class"]}) · next recovery attempt: {_time(engine,health["until"])}; any successful model call clears it.')
-                if status.get('state')=='stalled': lines.append('Stalled since '+_time(engine,status.get('since')))
+                    lines.append(f'Provider gate: provider_unavailable ({health["class"]}) · next recovery attempt: {_time(health["until"])}; any successful model call clears it.')
+                if status.get('state')=='stalled': lines.append('Stalled since '+_time(status.get('since')))
                 if not engine.injection_allowed(): lines.append(INJECTION_CONFIG)
                 lines.extend(_item(engine,w,role_today.get(w.id)) for w in active)
                 lines.extend(f'{w.id}: keep / slow / stop / watch' for w in active if w.status_reason.startswith('governor:'))

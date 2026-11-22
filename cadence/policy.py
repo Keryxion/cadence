@@ -359,7 +359,7 @@ class Policy:
             if old != value:
                 updates[attr] = value
                 if attr == "expires_at":
-                    clamped[label] = f"{format_timestamp(value, self.resolved_timezone())} ({rule})"
+                    clamped[label] = f"{format_timestamp(value)} ({rule})"
                 else:
                     clamped[label] = f"{old} → {value} ({rule})"
         for attr, limit in (("title", 80), ("note", 2000), ("reason", 280), ("scratch", 4000)):

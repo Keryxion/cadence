@@ -22,7 +22,7 @@ def test_status_says_a_spent_role_rests_and_leaves_it_out_of_next_due(engine, mo
     later = arm(e, 'at', title='Later', next_due_at=now + 3 * 3600)
     out = _status(e, monkeypatch)
     assert '· next ' in _row(out, role) and _row(out, role).endswith('today 0/1')
-    assert f'next due: {commands._time(e, now + 120)}' in out
+    assert f'next due: {commands._time(now + 120)}' in out
 
     e.dispatch(pending(e, role))
     start(e)
@@ -31,7 +31,7 @@ def test_status_says_a_spent_role_rests_and_leaves_it_out_of_next_due(engine, mo
     out = _status(e, monkeypatch)
     row = _row(out, role)
     assert '· resting until tomorrow · today 1/1' in row and '· next ' not in row
-    assert f'next due: {commands._time(e, later.next_due_at)}' in out
+    assert f'next due: {commands._time(later.next_due_at)}' in out
     assert '· next ' in _row(out, later)
 
 

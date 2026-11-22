@@ -326,8 +326,8 @@ class Tool:
         # Catch-up is for wakes missed while the gateway was down, not for arming one in the past:
         # that fires at once, which is never what "remind me at T" meant.
         if w.kind=='at' and point is not None and point<e.clock.now()-PAST_TOLERANCE_S:
-            now_local=format_timestamp(e.clock.now(), p.resolved_timezone())
-            raise Infeasible(f'that time has already passed (it is now {now_local}); for a delay use a relative time such as "in 10m"')
+            now_text=format_timestamp(e.clock.now())
+            raise Infeasible(f'that time has already passed (it is now {now_text}); for a delay use a relative time such as "in 10m"')
         watcher=w.kind in PROBE_KINDS | EVENT_KINDS
         if watcher:
             point,label=(w.deadline_at,'deadline') if w.deadline_at is not None else (w.next_due_at if w.kind in PROBE_KINDS else e.clock.now(),'due')
@@ -355,8 +355,7 @@ class Tool:
             raise Infeasible(f'{label} held past the maximum lifetime of {max_life/86400:g} days by wake spacing')
         if point<w.expires_at: return w
         if explicit_expiry or e.store.get_wake(w.id) is not None:
-            local=lambda t: format_timestamp(t, p.resolved_timezone())
-            raise Infeasible(f'{label} after expiry: {local(point)} >= {local(w.expires_at)}; set until.expires to extend it')
+            raise Infeasible(f'{label} after expiry: {format_timestamp(point)} >= {format_timestamp(w.expires_at)}; set until.expires to extend it')
         # A long owner reminder keeps the grace a short one has, so downtime at its due time doesn't drop it.
         grace=p.max_lifetime_days*86400 if p.lifetime_setting(w)=='max_reminder_days' and not w.babysit else 3600
         end=min(hard_end,point+grace)
@@ -365,7 +364,6 @@ class Tool:
     def receipt(self,w,s):
         """One truthful line from the stored wake and current chat limits."""
         e,p=self.engine,self.engine.policy
-        local=lambda t: format_timestamp(t, p.resolved_timezone())
         def duration(seconds):
             for unit,size in (('d',86400),('h',3600),('m',60)):
                 if seconds>=size and seconds%size==0: return f'{seconds/size:g}{unit}'
@@ -374,15 +372,15 @@ class Tool:
         if w.status=='proposed': parts=[f'Not set yet: it is armed only after the owner sends /pulse ok {w.id}.']
         elif w.status=='paused': parts=['Paused.']
         elif w.kind=='at': parts=['Already due; awaiting its wake turn.' if w.next_due_at is None else
-            'Due now; it fires on the next check.' if w.next_due_at<=e.clock.now() else f'Fires once at {local(w.next_due_at)}.']
+            'Due now; it fires on the next check.' if w.next_due_at<=e.clock.now() else f'Fires once at {format_timestamp(w.next_due_at)}.']
         elif w.kind in RECURRING_KINDS:
-            parts=[f'Next at {local(w.next_due_at)}'+(' (cron).' if w.kind=='cron' else f', then every {duration(w.eff_interval_s)}.')]
+            parts=[f'Next at {format_timestamp(w.next_due_at)}'+(' (cron).' if w.kind=='cron' else f', then every {duration(w.eff_interval_s)}.')]
         else:
-            first=('Checks now' if w.next_due_at is None or w.next_due_at<=e.clock.now() else f'First check {local(w.next_due_at)}')
+            first=('Checks now' if w.next_due_at is None or w.next_due_at<=e.clock.now() else f'First check {format_timestamp(w.next_due_at)}')
             lead=(f'{first}, then every {duration(w.trigger_json["check_every"])}' if w.kind in PROBE_KINDS else
                   f'Waits for {w.kind} events' if watcher else
                   f'Waits for {duration(parse_duration(w.trigger_json.get("after",p.checkin_after_hours*3600)))} of owner silence')
-            parts=[lead+(f'; if nothing happens by {local(w.deadline_at)}, it tells you once' if watcher and w.deadline_at is not None else '')+'.']
+            parts=[lead+(f'; if nothing happens by {format_timestamp(w.deadline_at)}, it tells you once' if watcher and w.deadline_at is not None else '')+'.']
         if w.status not in {'proposed','paused'}:
             from .policy import owner_requested
             if owner_requested(w): parts.append('Counts as your own reminder: not muted or capped.')
@@ -393,11 +391,11 @@ class Tool:
                 due=max(due,e.clock.now())
                 if p.wake_spacing_minutes>0 and s.last_wake_turn_at is not None:
                     spacing=s.last_wake_turn_at+p.wake_spacing_minutes*60
-                    if spacing>due: parts.append(f'Wake spacing holds it until {local(spacing)}.')
+                    if spacing>due: parts.append(f'Wake spacing holds it until {format_timestamp(spacing)}.')
             if not owner_class(w) and s.unanswered_count>=p.max_unanswered:
                 parts.append('Muted: messages are held; work still runs.' if holds_messages(w) else
                              'Muted: it waits for your reply.' if watcher else 'Muted: it is dropped unless you reply first.')
-        if w.expires_at is not None: parts.append(f'Expires {local(w.expires_at)}.')
+        if w.expires_at is not None: parts.append(f'Expires {format_timestamp(w.expires_at)}.')
         if w.cancel_on_reply: parts.append('Cancels if you reply.')
         text=' '.join(parts)
         if len(text)>240:
@@ -533,7 +531,7 @@ class Tool:
             w=replace(w,next_due_at=due)
         feasible=self.feasible(w,explicit_expiry='expires' in until)
         if feasible.expires_at!=w.expires_at:
-            result.clamped['expires']=f'{format_timestamp(feasible.expires_at, e.policy.resolved_timezone())} (covers the first due time)'
+            result.clamped['expires']=f'{format_timestamp(feasible.expires_at)} (covers the first due time)'
         return replace(result,wake=feasible)
 
     def list_item(self, wake):
@@ -545,10 +543,10 @@ class Tool:
         times = [t for t in (wake.next_due_at, wake.deadline_at) if t is not None]
         item = {'id':wake.id, 'title':' '.join((wake.title or wake.note).split())[:160],
                 'status':wake.status, 'kind':wake.kind, 'role':wake.role,
-                'next_check_at':format_timestamp(min(times), self.engine.policy.resolved_timezone()) if times else None}
+                'next_check_at':format_timestamp(min(times)) if times else None}
         if last:
             item['last_result'] = {'outcome':last.outcome or last.state, 'summary':last.summary,
-                                   'at':format_timestamp(last.ended_at, self.engine.policy.resolved_timezone())}
+                                   'at':format_timestamp(last.ended_at)}
         reason = (latest.held_reason or latest.error) if latest else wake.status_reason
         if reason:
             item['reason'] = reason

@@ -46,6 +46,8 @@ def test_registered_pulse_serializes_absolute_times(engine, monkeypatch):
     import json
     from cadence.registration import Runtime, register
 
+    from test_follow_up import owner
+    engine.policy = replace(engine.policy, timezone='America/New_York')
     monkeypatch.setattr(Runtime, 'start', lambda self: None)
     runtime = register(engine.ctx, clock=engine.clock)
     runtime._engine = engine
@@ -56,7 +58,10 @@ def test_registered_pulse_serializes_absolute_times(engine, monkeypatch):
 
         args = dict(action='create', note='Check the build', trigger={'kind':'at', 'after':'10m'})
         created = pulse(**args)
-        due = '2025-10-12T12:10:00+00:00'
+        due = '2025-10-12T12:10:00Z'
+        owner(engine, 'test-turn', 'Check again later')
+        follow = engine.ctx.tools['follow_up']['handler']
+        assert json.loads(follow({'at':'10m'}, session_id='sid'))['due_at'] == due
         assert created['wake']['next_due_at'] == due
         assert due in created['receipt']
         assert pulse(action='list')['wakes'][0]['next_check_at'] == due

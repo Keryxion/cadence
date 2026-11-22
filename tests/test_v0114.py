@@ -1,6 +1,6 @@
 """Arming feasibility and receipts: real store/tool/command paths, fake time."""
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -36,7 +36,7 @@ def receipt(result):
 
 
 def local(e, epoch):
-    return datetime.fromtimestamp(epoch, e.policy.resolved_timezone()).isoformat(timespec='seconds')
+    return datetime.fromtimestamp(epoch, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def test_beyond_maximum_tool_and_command_do_not_store(engine, command):

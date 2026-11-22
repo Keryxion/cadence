@@ -195,7 +195,7 @@ def test_dm_snapshot_and_legacy_marker(engine, clock):
     w, o, s = records(clock)
     text = render_wake(w, o, replace(s, chat_type='dm'), clock=clock)
     assert text == '''⟦pulse o:w_abcdefgh/t:100 a:2⟧ [Cadence · wake w_abcdefgh · Build · armed by you 1h ago]
-Local time: 2025-10-12T16:05:00+00:00 · owner last wrote 2h 03m ago · fire 2 of 4
+UTC time: 2025-10-12T16:05:00Z · owner last wrote 2h 03m ago · fire 2 of 4
 Why: Follow up
 Your note: Check whether the build finished.
 Scratch: Build 12 is running.

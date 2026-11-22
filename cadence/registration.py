@@ -192,11 +192,10 @@ class Runtime:
                 records = list(result.get('wakes', ()))
                 records.extend(item['wake'] for item in result.get('results', [result]) if 'wake' in item)
                 if records:
-                    tz = tool.engine.policy.resolved_timezone()
                     for record in records:
                         for name, value in record.items():
                             if name.endswith('_at') and isinstance(value, (float, int)):
-                                record[name] = format_timestamp(value, tz)
+                                record[name] = format_timestamp(value)
                 return json.dumps(result, ensure_ascii=False)
         except Exception:
             LOG.warning('cadence tool adapter failed',exc_info=True)
@@ -312,7 +311,14 @@ def _register_surfaces(ctx,runtime):
     def tool(args,**kwargs):
         return runtime.tool(args,**kwargs) if runtime else json.dumps({'error':'engine_unavailable'})
     ctx.register_tool(name='pulse',toolset='cadence',schema=SCHEMA,handler=tool,description=DESCRIPTION)
-    from . import follow_up
+    from . import get_time, follow_up
+    def read_clock(args, **kwargs):
+        if runtime is None:
+            return json.dumps({'error': 'engine_unavailable'})
+        with home_scope(runtime.home):
+            return json.dumps(get_time.handle(args, runtime.clock))
+    ctx.register_tool(name='get_time',toolset='cadence',schema=get_time.SCHEMA,handler=read_clock,
+                      description=get_time.SCHEMA['description'])
     ctx.register_tool(name='follow_up',toolset='cadence',schema=follow_up.SCHEMA,description=follow_up.DESCRIPTION,
                       handler=lambda args,**kw:runtime.tool(args,continuation=True,**kw) if runtime else json.dumps({'error':'engine_unavailable'}))
     from .requests import SCHEMA as REQUEST_SCHEMA,DESCRIPTION as REQUEST_DESCRIPTION

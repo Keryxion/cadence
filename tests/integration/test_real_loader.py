@@ -104,6 +104,10 @@ def test_real_loader_worker_registration_and_same_session_silence(tmp_path, monk
         assert not {'target','session','chat','platform','model'} & set(tool_schema['properties'])
         # The real loader must have put a valid definition into Hermes' global ToolRegistry.
         from tools.registry import registry as hermes_registry
+        time_schema, = hermes_registry.get_definitions({'get_time'}, quiet=True)
+        assert time_schema['function']['name'] == 'get_time'
+        result = json.loads(hermes_registry.dispatch('get_time', {'timezone':'UTC'}))
+        assert result['utc'] == result['local'].replace('+00:00', 'Z')
         definition = hermes_registry.get_definitions({'pulse'}, quiet=True)[0]['function']
         assert definition['parameters']['required'] == ['action']
         clock.advance(60)

@@ -310,6 +310,8 @@ Built for [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Electr
 
 Known issues: provider-exhaustion settlement (#27) remains blocked by [NousResearch/hermes-agent#137357](https://github.com/NousResearch/hermes-agent/issues/137357).
 
+Call `get_time({})` to read the host clock in UTC and the Hermes profile timezone (UTC when unset). Pass an IANA name such as `{"timezone":"America/New_York"}` to select another local timezone. Cadence reports scheduled instants in UTC at second precision, with a trailing `Z`.
+
 Use `follow_up({"at":"30s"})` to get another turn in the current conversation once, after 15 seconds through 15 minutes inclusive. Cancel with `follow_up({"cancel":"<id>"})`. Timers retain chat, session and turn identity as internal metadata. On expiry the model receives `Follow-up fired` with scheduled and current timestamps, plus the current conversation history, including intervening messages. A continuation can arm the next timer. Requested follow-ups leave the interruption bucket unchanged.
 
 Example plugin settings in the profile config.yaml

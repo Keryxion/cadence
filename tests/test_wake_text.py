@@ -29,7 +29,7 @@ def test_snapshot(clock, held_by, after_restart, why):
                          recent_outcomes=["no_change", "progress"], messages_today=1,
                          held_by=held_by, after_restart=after_restart)
     assert result == '''⟦pulse o:w_abcdefgh/t:100 a:2⟧ [Cadence · wake w_abcdefgh · Build · armed by you 1h ago]
-Local time: 2025-10-12T16:05:00+00:00 · owner last wrote 2h 03m ago · fire 2 of 4
+UTC time: 2025-10-12T16:05:00Z · owner last wrote 2h 03m ago · fire 2 of 4
 Why: Follow up
 Your note: Check whether the build finished.
 Scratch: Build 12 is running.
@@ -67,7 +67,7 @@ def test_optional_fields_late_governor_and_owner(clock):
 
 def test_register_is_import_light_and_stub(fake_ctx, plugin):
     plugin.register(fake_ctx)
-    assert set(fake_ctx.tools)=={'pulse','request','follow_up'}
+    assert set(fake_ctx.tools)=={'pulse','request','follow_up','get_time'}
     assert 'pre_llm_call' in fake_ctx.hooks
     assert set(fake_ctx.commands)=={'pulse'}
     # A fresh isolated interpreter proves import-light behavior independently
@@ -98,6 +98,6 @@ def test_follow_up_contains_timing_without_task_instructions(clock):
     wake = replace(wake, kind='at', trigger_json={'continuation': {'turn':'owner'}})
     occurrence = replace(occurrence, dedupe_key=f't:{clock.now()-30}')
     text = render_wake(wake, occurrence, session, clock=clock, timezone='America/New_York')
-    assert text == ("[follow_up id='w_abcdefgh' scheduled='2025-10-12T12:04:30-04:00' "
-                    "current='2025-10-12T12:05:00-04:00']\nFollow-up fired.")
+    assert text == ("[follow_up id='w_abcdefgh' scheduled='2025-10-12T16:04:30Z' "
+                    "current='2025-10-12T16:05:00Z']\nFollow-up fired.")
     assert 'pulse' not in text and 'Check whether the build finished' not in text
