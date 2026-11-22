@@ -261,7 +261,7 @@ def test_governor_warm_ladder_and_cold_regime(engine, hermes_helpers):
     assert engine.store.get_wake(cold.id).eff_interval_s==14400
 
 
-def test_cache_line_bounded_appended_and_pricing_failure_omits(engine, hermes_helpers, monkeypatch):
+def test_cache_line_bounded_on_detail_and_pricing_failure_omits(engine, hermes_helpers, monkeypatch):
     from cadence import cache
     cache.touch(engine.store,engine.store.get_session(KEY),started_at=engine.clock.now()-3120,route='anthropic|claude-opus-5.5|api.anthropic.com',prompt=120000,read=120000,api_mode='anthropic_messages')
     monkeypatch.setattr(cache,'cost',lambda *a,**k: .05 if k.get('read') else .99)
@@ -269,7 +269,9 @@ def test_cache_line_bounded_appended_and_pricing_failure_omits(engine, hermes_he
     text=engine.cache_line(w)
     assert len(text)<=220 and len(text.split())<=40 and 'warm' in text and '$0.99' in text
     engine.tick()
-    assert engine.ctx.calls[-1][0].splitlines()[-1] == text
+    assert 'Cache:' not in engine.ctx.calls[-1][0]
+    row, = engine.tool.handle({'action':'list', 'detailed':True})['wakes']
+    assert row['cache'].startswith('Cache:')
     monkeypatch.setattr(cache,'cost',lambda *a,**k: (_ for _ in ()).throw(ValueError('pricing')))
     assert engine.cache_line(w)==''
 

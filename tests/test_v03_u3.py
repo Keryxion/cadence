@@ -156,7 +156,7 @@ def test_desk_prompt_placement_and_settled_line(engine, kind):
     ordinary = arm(e)
     e.dispatch(pending(e, ordinary))
     text = e.ctx.calls[-1][0]
-    assert 'Your desk:' not in text and 'subject was settled' in text
+    assert 'Your desk:' not in text and text.splitlines()[1] == ordinary.note
 
 
 def test_desk_records_counts_local_times_and_bound(engine, monkeypatch):
