@@ -32,7 +32,10 @@ def arm_kind(e, kind):
     if kind in PROBE_KINDS:
         e.probe_runner = lambda _: {'fire': True, 'identity': 'changed', 'message': 'changed'}
     if kind in EVENT_KINDS:
-        e.store.add_event(kind, 'event', {}, session_key=KEY)
+        if kind == 'startup':
+            e.clock.advance(1)
+        payload = {'started_at': e.clock.now()} if kind == 'startup' else {}
+        e.store.add_event(kind, 'event', payload, session_key=KEY)
     return w
 
 

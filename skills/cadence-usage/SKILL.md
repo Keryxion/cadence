@@ -142,6 +142,14 @@ How command results are read:
 - A configured JSON observer may print exactly `{"fire":bool,"message":str,"state":JSON}`. State of up to 16 KB is committed only when fire=true.
 - The argv guard is not a sandbox: allowlisted programs and local configuration must be trusted and read-only. Do not add write/execute flags, shell operators, or browser flags.
 
+For a check after the next gateway restart or host reboot, use a startup watcher. It waits until the gateway serves this profile. It uses normal watcher limits and acknowledgments.
+
+```json
+{"action":"create","title":"Retest after restart","note":"Retest the time tools and report results.","trigger":{"kind":"startup"},"until":{"max_fires":1}}
+```
+
+Omit `max_fires` to check on each subsequent startup within the wake's lifetime.
+
 Wake on a Telegram reaction in this conversation:
 
 ```json

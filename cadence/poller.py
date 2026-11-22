@@ -29,6 +29,14 @@ LOCAL_EPOCHS = set()
 CREATED_EPOCHS = set()  # Every poller epoch this process made; never discarded.
 
 
+def gateway_process_start():
+    # The poller runs inside the gateway. A thread or plugin reload shares
+    # this identity; a new process (even with a recycled PID) does not.
+    import psutil
+    started_at = psutil.Process().create_time()
+    return f'startup:{os.getpid()}:{started_at}', started_at
+
+
 def check_paused():
     try:
         from agent.estop import check_paused as paused
@@ -157,6 +165,11 @@ class Poller:
             for w in s.list_wakes(status='active') if self.process_start and s.get_meta('epoch') else []:
                 if w.next_due_at is not None and w.next_due_at < self.clock.now():
                     s.set_meta('restart_due:'+w.id,str(w.next_due_at))
+            if any(w.kind == 'startup' for w in s.list_wakes(status='active')):
+                startup_id, started_at = gateway_process_start()
+                if s.get_meta('gateway_startup') != startup_id:
+                    s.add_event('startup', startup_id, {'started_at': started_at})
+                    s.set_meta('gateway_startup', startup_id)
             s.set_meta('epoch',self.epoch)
             s.set_meta('poller_pid',str(os.getpid()))
             s.set_meta('poller_started_at',str(self.clock.now()))
@@ -335,6 +348,18 @@ class Poller:
         if event['chat_id'] and event['chat_id']!=w.chat_id: return
         payload=event['payload_json']
         filters=w.trigger_json
+        if w.kind == 'startup':
+            arm = w.probe_state_json or {}
+            armed_at = arm.get('armed_at', w.created_at)
+            if event['created_at'] < armed_at:
+                return  # An older startup was still in the event inbox.
+            if arm.get('gateway') is not None:
+                if arm['gateway'] == event['dedupe_key']:
+                    return
+            elif armed_at >= payload['started_at']:
+                return  # A separate tool worker can only attest its arming time.
+            from .clock import format_timestamp
+            payload = {'message': 'Gateway started at ' + format_timestamp(payload['started_at'])}
         if w.kind=='reaction' and filters.get('emojis') and not set(filters['emojis']) & set(payload.get('emojis',[])): return
         if any(filters.get(k) is not None and payload.get(k)!=filters[k] for k in ('task_id','board')): return
         if w.kind=='api_error':

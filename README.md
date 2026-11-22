@@ -169,6 +169,8 @@ Watchers available to the agent:
 | `command` | A read-only allowlisted command's output changes, it succeeds or fails, or it prints `{"fire": true, …}` |
 | Hermes events | A kanban task completes or blocks, a worker exits, a subagent finishes, the API errors, or someone reacts to or edits a message |
 
+Use `{"kind":"startup"}` to wake on the next gateway startup, including after a host reboot. Set `until.max_fires` to 1 for a one-time post-update check. Otherwise it can fire on subsequent startups until its normal limits apply. A plugin reload or poller restart in the same gateway process does not count.
+
 Hermes events are selected by `trigger.kind`: `kanban_completed`, `kanban_blocked`, `kanban_worker_exited`, `subagent_done`, `api_error`, `reaction` (with an optional `emojis` filter) and `message_edited`.
 
 Only probe and event watchers can carry a `deadline`: it is a one-time "nothing happened" fallback, and the watcher keeps going until it expires.

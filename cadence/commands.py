@@ -61,7 +61,7 @@ def resume_timed(engine):
             continue
         if engine.store.cas_wake(wake.id, 'paused', expected_version=wake.version,
             status='active', status_reason='', **{name:getattr(candidate,name) for name in
-                ('next_due_at','deadline_at','base_interval_s','eff_interval_s','pacing_min_s','pacing_max_s','expires_at','max_fires','trigger_json')}):
+                ('next_due_at','deadline_at','base_interval_s','eff_interval_s','pacing_min_s','pacing_max_s','expires_at','max_fires','trigger_json','probe_state_json')}):
             engine.store.set_meta('resume_after:'+wake.id, '')
 
 
@@ -338,7 +338,7 @@ def _transition(engine,session,wake,action,seconds):
         _activation(engine,session,wake)
         result=_reschedule(engine,wake)
         candidate,clamps=result.wake,result.clamped
-        changes={name:getattr(candidate,name) for name in ('next_due_at','base_interval_s','eff_interval_s','pacing_min_s','pacing_max_s','expires_at','max_fires','trigger_json')}
+        changes={name:getattr(candidate,name) for name in ('next_due_at','base_interval_s','eff_interval_s','pacing_min_s','pacing_max_s','expires_at','max_fires','trigger_json','probe_state_json')}
         changes.update(status='active',status_reason='')
     elif action in {'cancel','stop'}: changes={'status':'cancelled','status_reason':'command'}
     else: changes={'status':'paused','status_reason':'watch_requested' if action=='watch' else 'command'}

@@ -34,6 +34,7 @@ PARAMETERS = obj({
 PARAMETERS['required'] = ['action']
 DESCRIPTION = ('Your own time in this chat. Use create to arm a wake/watcher (note and trigger.kind required), or a role '
                '(role=true on every/cron/self) for a standing responsibility you own: no expiry, a turns-per-day budget, a desk view; list returns compact current responsibilities; list with detailed=true includes full records and finished history; '
+               'Use trigger={"kind":"startup"} to wake after the next gateway start; until.max_fires=1 makes it one-time. '
                'update to change instructions or trigger; pause to suspend; resume to restart a paused wake; '
                'cancel to end it. During a wake turn, use respond to set '
                'outcome and notify, optionally scratch/next_check; outcome=progress with notify=false and a summary is real work, never counted as idle. Bounds and clamps are reported. Never type silence markers. '
@@ -297,6 +298,8 @@ class Tool:
                     updates = {k:v for k,v in asdict(candidate).items() if k not in {'id','session_key','created_at','updated_at','version'} and v != getattr(w,k)}
                     if updates and not e.store.cas_wake(w.id,w.status,expected_version=w.version,**updates):
                         return {'error':'concurrent_change'}
+                    if action == 'update' and 'trigger' in args and 'startup' in {w.kind, candidate.kind}:
+                        e.cancel_occurrences(w.id, 'trigger_replaced', preserve_started=True)
                     if action in {'pause','cancel'}:
                         e.cancel_occurrences(w.id,'paused' if action=='pause' else 'cancelled',preserve_started=True)
                     if action == 'resume': e.store.set_meta('card:'+w.id,'')
@@ -378,6 +381,7 @@ class Tool:
         else:
             first=('Checks now' if w.next_due_at is None or w.next_due_at<=e.clock.now() else f'First check {format_timestamp(w.next_due_at)}')
             lead=(f'{first}, then every {duration(w.trigger_json["check_every"])}' if w.kind in PROBE_KINDS else
+                  'Waits for the next gateway startup' if w.kind=='startup' else
                   f'Waits for {w.kind} events' if watcher else
                   f'Waits for {duration(parse_duration(w.trigger_json.get("after",p.checkin_after_hours*3600)))} of owner silence')
             parts=[lead+(f'; if nothing happens by {format_timestamp(w.deadline_at)}, it tells you once' if watcher and w.deadline_at is not None else '')+'.']
@@ -434,6 +438,10 @@ class Tool:
         if w.trigger_json.get('builtin'):
             trigger['builtin'] = True
         kind=trigger.get('kind',w.kind)
+        if kind == 'startup':
+            if 'trigger' in args and set(args['trigger']) != {'kind'}:
+                raise ValueError('startup accepts only trigger.kind')
+            updates['deadline_at'] = None
         if 'deadline' in args.get('trigger',{}) and kind not in PROBE_KINDS | EVENT_KINDS:
             raise ValueError('deadline works only for watchers (file, process, url, command and event kinds)')
         if kind in {'file','url'} and 'pattern' in trigger:
@@ -444,6 +452,12 @@ class Tool:
         updates.update(kind=kind,trigger_json=trigger)
         if kind!=w.kind or any(trigger.get(k)!=w.trigger_json.get(k) for k in ('path','url','command','pattern','pid','cwd','fire_on')):
             updates['probe_state_json']=None
+        if kind == 'startup' and reschedule:
+            arm = {'armed_at': e.clock.now()}
+            if e.eligible():
+                from .poller import gateway_process_start
+                arm['gateway'], _ = gateway_process_start()
+            updates['probe_state_json'] = arm
         if 'after' in trigger: parse_duration(trigger['after'])
         if kind in {'every','self'}:
             every=trigger.get('every')
