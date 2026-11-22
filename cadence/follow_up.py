@@ -1,5 +1,5 @@
 """One continuation bound to a verified owner turn in this chat."""
-from datetime import datetime, timezone
+from .clock import format_timestamp
 
 from .model import Wake
 from .schedule import parse_duration
@@ -82,7 +82,7 @@ def handle(tool, args, *, session_id='', **kwargs):
             trigger_json={'kind': 'at', 'continuation': origin}))
     e.signal()
     return {'id': w.id, 'armed': True,
-            'due_at': datetime.fromtimestamp(w.next_due_at, timezone.utc).isoformat()}
+            'due_at': format_timestamp(w.next_due_at)}
 
 
 def verified_owner(engine, session_id, key):

@@ -54,7 +54,7 @@ def render_desk(engine_or_store, session, *, clock, timezone, policy, measure=le
         today, budget = store.dispatches_today(w.id, zone(timezone)), policy.role_budget(w)
         due = ('paused · ' + _plain(_oneline(w.status_reason or 'paused')) if w.status == 'paused'
                else 'resting until tomorrow' if today >= budget
-               else 'next ' + _time(view, w.next_due_at, compact=True))
+               else 'next ' + _time(view, w.next_due_at))
         title = _plain(_clip(_oneline(w.title or w.note), 80))
         rows.append(f'- role {w.id} {title} · {_rhythm(w)} · last: {summary} · '
                     f'{due} · today {today}/{budget}')
@@ -63,7 +63,7 @@ def render_desk(engine_or_store, session, *, clock, timezone, policy, measure=le
     next_due = min(due, key=lambda pair: pair[0]) if due else None
     tail = [f'- Other: {sum(not is_watcher(w) for w in other)} wakes, '
             f'{sum(is_watcher(w) for w in other)} watchers · next due ' +
-            (f'{_time(view,next_due[0],compact=True)} ({_clip(_oneline(next_due[1].title or next_due[1].note),40)})'
+            (f'{_time(view,next_due[0])} ({_clip(_oneline(next_due[1].title or next_due[1].note),40)})'
              if next_due else 'none')]
     counts = store.daily_counts(key, zone(timezone))
     age = _age(now-session.last_human_at) + ' ago' if session.last_human_at is not None else 'unknown'

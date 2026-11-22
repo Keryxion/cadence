@@ -170,9 +170,9 @@ def test_desk_records_counts_local_times_and_bound(engine, monkeypatch):
     e.ledger(role, delivered=2, model_turns=5)
     session(e, last_human_at=e.clock.now() - 11400, unanswered_count=1)
     out = desk(e)
-    assert f'- role {role.id} Release notes · self-paced · last: Wrote release notes · next 12:01 · today 1/6' in out
+    assert f'- role {role.id} Release notes · self-paced · last: Wrote release notes · next 2025-10-12T12:01:00+00:00 · today 1/6' in out
     assert f'- role {paused.id}' in out and 'paused · command' in out
-    assert '- Other: 1 wakes, 1 watchers · next due 12:02 (Next item)' in out
+    assert '- Other: 1 wakes, 1 watchers · next due 2025-10-12T12:02:00+00:00 (Next item)' in out
     assert 'Owner last wrote 3h 10m ago · unanswered 1 · messages today 2 · turns today 5' in out
     assert 'cost today $0.42 of $2.00 · 2 unpriced' in out
     assert 'Messages held now:' not in out

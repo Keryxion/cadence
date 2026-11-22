@@ -1,10 +1,9 @@
 """Pure prompt rendering: supplied records and clock, no Hermes imports."""
-from datetime import datetime
 import html
 import json
 import re
 
-from .clock import Clock
+from .clock import Clock, format_timestamp
 from .model import Wake, Occurrence, Session, TIME_KINDS
 from .policy import owner_requested
 from .schedule import zone
@@ -42,7 +41,8 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
                 held_by: str = "", message_held: str = "", cache_line: str = "", marker_tag: str | None = None,
                 desk: str = "") -> str:
     now = clock.now()
-    local = datetime.fromtimestamp(now, zone(timezone))
+    tz = zone(timezone)
+    local = format_timestamp(now, tz)
     label = "role" if wake.role else "wake" if wake.kind in TIME_KINDS else "watcher"
     owner = "you at the owner's request" if owner_requested(wake) else "you" if wake.creator == "agent" else "the owner"
     owner_age = _age(now - session.last_human_at) if session.last_human_at is not None else "unknown"
@@ -53,15 +53,14 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
         why += f" (late by {_age(late_by_s)}" + (" after restart" if after_restart else "") + ")"
     owner_clause = f" · owner last wrote {owner_age} ago" if session.last_human_at is not None else ""
     fire_limit = 1 if wake.kind == "at" else wake.max_fires if wake.max_fires is not None else "∞"
-    tz_name = getattr(local.tzinfo, "key", None) or local.tzname()
     tag = f" n:{marker_tag}" if marker_tag is not None else ""
     if 'continuation' in wake.trigger_json:
-        scheduled = datetime.fromtimestamp(float(occurrence.dedupe_key[2:]), zone(timezone))
-        return (f"[follow_up id='{wake.id}' scheduled='{scheduled.isoformat(timespec='seconds')}' "
-                f"current='{local.isoformat(timespec='seconds')}']\nFollow-up fired.")
+        scheduled = format_timestamp(float(occurrence.dedupe_key[2:]), tz)
+        return (f"[follow_up id='{wake.id}' scheduled='{scheduled}' "
+                f"current='{local}']\nFollow-up fired.")
     lines = [
         f"⟦pulse o:{occurrence.id} a:{occurrence.attempt}{tag}⟧ [Cadence · {label} {wake.id} · {escape_text(wake.title)} · armed by {owner} {_age(now - wake.created_at)} ago]",
-        f"Local time: {local:%a %d %b %H:%M} ({tz_name}){owner_clause} · fire {wake.fires + 1} of {fire_limit}",
+        f"Local time: {local}{owner_clause} · fire {wake.fires + 1} of {fire_limit}",
         f"Why: {escape_text(why)}", f"Your note: {escape_text(wake.note)}",
     ]
     if wake.scratch:
@@ -69,9 +68,9 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
     if desk and (wake.role or wake.trigger_json.get('own_time')):
         lines.append(escape_text(desk))
     if occurrence.held_since is not None:
-        since=datetime.fromtimestamp(occurrence.held_since,zone(timezone))
+        since=format_timestamp(occurrence.held_since, tz)
         reason={'held_unanswered':"you hadn't replied",'held_interruptions':'waiting for an interruption token','held_daily_cap':'daily cap','held_paused':'wake was paused'}.get(occurrence.held_reason,'held')
-        lines.append(f'Held since {since:%H:%M} ({reason}); {occurrence.held_matches} matches merged.')
+        lines.append(f'Held since {since} ({reason}); {occurrence.held_matches} matches merged.')
     recent = ", ".join(list(recent_outcomes)[-3:]) or "none"
     lines.append(f"Recent outcomes: {recent} · wake messages today: {messages_today}")
     if interruption_tokens is not None:

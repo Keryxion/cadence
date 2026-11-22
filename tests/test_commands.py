@@ -59,7 +59,7 @@ def test_status_injection_yaml_ledger_why(runtime):
     w = arm(e,title='build',reason='CI is pending')
     e.ctx.allowed=False
     out = commands.handle('',runtime)
-    assert INJECTION_CONFIG in out and 'not running' in out and 'UTC' in out
+    assert INJECTION_CONFIG in out and 'not running' in out and '2025-10-12T12:00:00+00:00' in out
     assert 'CI is pending' in commands.handle(f'why {w.id}',runtime)
     e.ctx.allowed=True
     for field in ('fires','checks','model wakes','messages','engaged','cache/cost','verdict'):

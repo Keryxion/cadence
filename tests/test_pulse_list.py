@@ -40,3 +40,28 @@ def test_list_reports_held_watcher_and_excludes_other_chat(engine):
 @pytest.mark.parametrize('value', ['true', 1, None])
 def test_list_rejects_nonboolean_detail_flag(engine, value):
     assert engine.tool.handle({'action':'list','detailed':value}, session_id='sid')['error'] == 'invalid_request'
+
+
+def test_registered_pulse_serializes_absolute_times(engine, monkeypatch):
+    import json
+    from cadence.registration import Runtime, register
+
+    monkeypatch.setattr(Runtime, 'start', lambda self: None)
+    runtime = register(engine.ctx, clock=engine.clock)
+    runtime._engine = engine
+    try:
+        handler = engine.ctx.tools['pulse']['handler']
+        def pulse(**args):
+            return json.loads(handler(args, session_id='sid'))
+
+        args = dict(action='create', note='Check the build', trigger={'kind':'at', 'after':'10m'})
+        created = pulse(**args)
+        due = '2025-10-12T12:10:00+00:00'
+        assert created['wake']['next_due_at'] == due
+        assert due in created['receipt']
+        assert pulse(action='list')['wakes'][0]['next_check_at'] == due
+        assert pulse(action='list', detailed=True)['wakes'][0]['next_due_at'] == due
+        assert pulse(action='pause', id='all')['results'][0]['wake']['next_due_at'] == due
+    finally:
+        runtime._engine = None
+        runtime.close()

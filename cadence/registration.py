@@ -10,6 +10,7 @@ from pathlib import Path
 import logging
 import json
 import threading
+from .clock import format_timestamp
 from . import serving
 
 LOG=logging.getLogger('cadence')
@@ -186,7 +187,17 @@ class Runtime:
                     from .follow_up import handle
                     self.get_engine().refresh()
                     return json.dumps(handle(tool,args,**kwargs),ensure_ascii=False)
-                return json.dumps(tool.handle(args,**kwargs),ensure_ascii=False)
+                result = tool.handle(args, **kwargs)
+                # Convert stored wake records only at the model-facing JSON boundary.
+                records = list(result.get('wakes', ()))
+                records.extend(item['wake'] for item in result.get('results', [result]) if 'wake' in item)
+                if records:
+                    tz = tool.engine.policy.resolved_timezone()
+                    for record in records:
+                        for name, value in record.items():
+                            if name.endswith('_at') and isinstance(value, (float, int)):
+                                record[name] = format_timestamp(value, tz)
+                return json.dumps(result, ensure_ascii=False)
         except Exception:
             LOG.warning('cadence tool adapter failed',exc_info=True)
             return json.dumps({'error':'engine_unavailable'})

@@ -7,7 +7,7 @@ import shlex
 from typing import Mapping, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .clock import Clock, SystemClock
+from .clock import Clock, SystemClock, format_timestamp
 from .model import Wake, RECURRING_KINDS, PROBE_KINDS, EVENT_KINDS, KINDS, agent_authored
 from .schedule import parse_duration
 
@@ -358,7 +358,10 @@ class Policy:
             old = getattr(wake, attr)
             if old != value:
                 updates[attr] = value
-                clamped[label] = f"{old} → {value} ({rule})"
+                if attr == "expires_at":
+                    clamped[label] = f"{format_timestamp(value, self.resolved_timezone())} ({rule})"
+                else:
+                    clamped[label] = f"{old} → {value} ({rule})"
         for attr, limit in (("title", 80), ("note", 2000), ("reason", 280), ("scratch", 4000)):
             change(attr, getattr(wake, attr)[:limit], attr, "length")
         if wake.budget_turns_per_day is not None:

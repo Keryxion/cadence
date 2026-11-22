@@ -1,6 +1,6 @@
 """Session-bound pulse tool. No setting writes or destination arguments."""
 from dataclasses import asdict, replace
-from datetime import datetime
+from .clock import format_timestamp
 from pathlib import Path
 import json
 import re
@@ -326,7 +326,7 @@ class Tool:
         # Catch-up is for wakes missed while the gateway was down, not for arming one in the past:
         # that fires at once, which is never what "remind me at T" meant.
         if w.kind=='at' and point is not None and point<e.clock.now()-PAST_TOLERANCE_S:
-            now_local=datetime.fromtimestamp(e.clock.now(),p.resolved_timezone()).strftime('%a %d %b %H:%M')
+            now_local=format_timestamp(e.clock.now(), p.resolved_timezone())
             raise Infeasible(f'that time has already passed (it is now {now_local}); for a delay use a relative time such as "in 10m"')
         watcher=w.kind in PROBE_KINDS | EVENT_KINDS
         if watcher:
@@ -355,7 +355,7 @@ class Tool:
             raise Infeasible(f'{label} held past the maximum lifetime of {max_life/86400:g} days by wake spacing')
         if point<w.expires_at: return w
         if explicit_expiry or e.store.get_wake(w.id) is not None:
-            local=lambda t: datetime.fromtimestamp(t,p.resolved_timezone()).strftime('%a %d %b %H:%M')
+            local=lambda t: format_timestamp(t, p.resolved_timezone())
             raise Infeasible(f'{label} after expiry: {local(point)} >= {local(w.expires_at)}; set until.expires to extend it')
         # A long owner reminder keeps the grace a short one has, so downtime at its due time doesn't drop it.
         grace=p.max_lifetime_days*86400 if p.lifetime_setting(w)=='max_reminder_days' and not w.babysit else 3600
@@ -365,7 +365,7 @@ class Tool:
     def receipt(self,w,s):
         """One truthful line from the stored wake and current chat limits."""
         e,p=self.engine,self.engine.policy
-        local=lambda t: datetime.fromtimestamp(t,p.resolved_timezone()).strftime('%a %d %b %H:%M')
+        local=lambda t: format_timestamp(t, p.resolved_timezone())
         def duration(seconds):
             for unit,size in (('d',86400),('h',3600),('m',60)):
                 if seconds>=size and seconds%size==0: return f'{seconds/size:g}{unit}'
@@ -533,7 +533,7 @@ class Tool:
             w=replace(w,next_due_at=due)
         feasible=self.feasible(w,explicit_expiry='expires' in until)
         if feasible.expires_at!=w.expires_at:
-            result.clamped['expires']=f'{feasible.expires_at} (covers the first due time)'
+            result.clamped['expires']=f'{format_timestamp(feasible.expires_at, e.policy.resolved_timezone())} (covers the first due time)'
         return replace(result,wake=feasible)
 
     def list_item(self, wake):
@@ -545,10 +545,10 @@ class Tool:
         times = [t for t in (wake.next_due_at, wake.deadline_at) if t is not None]
         item = {'id':wake.id, 'title':' '.join((wake.title or wake.note).split())[:160],
                 'status':wake.status, 'kind':wake.kind, 'role':wake.role,
-                'next_check_at':min(times) if times else None}
+                'next_check_at':format_timestamp(min(times), self.engine.policy.resolved_timezone()) if times else None}
         if last:
             item['last_result'] = {'outcome':last.outcome or last.state, 'summary':last.summary,
-                                   'at':last.ended_at}
+                                   'at':format_timestamp(last.ended_at, self.engine.policy.resolved_timezone())}
         reason = (latest.held_reason or latest.error) if latest else wake.status_reason
         if reason:
             item['reason'] = reason

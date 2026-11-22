@@ -36,7 +36,7 @@ def receipt(result):
 
 
 def local(e, epoch):
-    return datetime.fromtimestamp(epoch, e.policy.resolved_timezone()).strftime('%a %d %b %H:%M')
+    return datetime.fromtimestamp(epoch, e.policy.resolved_timezone()).isoformat(timespec='seconds')
 
 
 def test_beyond_maximum_tool_and_command_do_not_store(engine, command):
@@ -429,7 +429,7 @@ def test_stretched_expiry_clamp_describes_stored_expiry(engine):
     w = engine.store.get_wake(result['wake']['id'])
     stale = str(engine.clock.now()+7*DAY)
     assert all(stale not in str(value) for value in result['clamped'].values())
-    assert str(w.expires_at) in result['clamped']['expires']
+    assert local(engine, w.expires_at) in result['clamped']['expires']
     assert 'covers the first due time' in result['clamped']['expires']
 
 

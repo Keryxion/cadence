@@ -7,6 +7,7 @@ from .model import Wake, Session, FINISHED_WAKE_STATUSES
 from . import governor
 from . import cache
 from .policy import INJECTION_CONFIG, gateway_platform, owner_requested
+from .clock import format_timestamp
 from .schedule import parse_duration, local_day, _DURATION
 from .tool import session_env, Infeasible
 
@@ -78,11 +79,9 @@ def _clip(text, limit):
     return cut.rstrip(' \t\r\n.,;:·') + '…'
 
 
-def _time(engine, epoch, *, compact=False):
+def _time(engine, epoch):
     if epoch is None: return 'none'
-    tz = engine.policy.resolved_timezone()
-    fmt = ('%H:%M' if local_day(epoch,tz)==local_day(engine.clock.now(),tz) else '%a %H:%M') if compact else '%Y-%m-%d %H:%M %Z'
-    return datetime.fromtimestamp(epoch,tz).strftime(fmt)
+    return format_timestamp(epoch, engine.policy.resolved_timezone())
 
 
 def _paused(engine, wake):
