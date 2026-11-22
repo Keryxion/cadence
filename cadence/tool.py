@@ -5,7 +5,7 @@ from pathlib import Path
 import json
 import re
 
-from .model import Wake, Session, TIME_KINDS, RECURRING_KINDS, PROBE_KINDS, EVENT_KINDS, FINISHED_WAKE_STATUSES
+from .model import Wake, Session, TIME_KINDS, RECURRING_KINDS, PROBE_KINDS, EVENT_KINDS, FINISHED_WAKE_STATUSES, PULSE_SUMMARY_LIMIT
 from .policy import gateway_platform, owner_class, holds_messages
 from .schedule import parse_at, parse_duration, next_every, next_cron
 
@@ -29,7 +29,7 @@ PARAMETERS = obj({
     'role': {'type':'boolean', 'description':'Standing responsibility; recurring creates only, fixed after creation.'},
     'budget': obj({'turns_per_day': {'type':'integer', 'description':'Daily role turns, capped by settings.'}}),
     'outcome': {'type':'string','enum':['no_change','progress','done','blocked','needs_attention']},
-    'notify':BOOL, 'summary':{'type':'string', 'maxLength':280, 'description':'Result text, up to 280 characters.'}, 'next_check':STR, 'scratch':STR,
+    'notify':BOOL, 'summary':{'type':'string', 'maxLength':PULSE_SUMMARY_LIMIT, 'description':f'Result text, up to {PULSE_SUMMARY_LIMIT} characters.'}, 'next_check':STR, 'scratch':STR,
 })
 PARAMETERS['required'] = ['action']
 DESCRIPTION = ('Your own time in this chat. Use create to arm a wake/watcher (note and trigger.kind required), or a role '
@@ -579,7 +579,8 @@ class Tool:
         if outcome not in {'no_change','progress','done','blocked','needs_attention'} or not isinstance(args.get('notify'),bool):
             raise ValueError('respond needs outcome and boolean notify')
         summary=args.get('summary','')
-        if not isinstance(summary,str) or len(summary)>280: raise ValueError('summary exceeds 280 characters')
+        if not isinstance(summary, str): raise ValueError('summary must be text')
+        if len(summary) > PULSE_SUMMARY_LIMIT: raise ValueError(f'summary exceeds {PULSE_SUMMARY_LIMIT} characters')
         changes={'outcome':outcome,'notify':args['notify'],'summary':summary}
         w=e.store.get_wake(o.wake_id)
         if o.outcome is None and w.status in {'paused','cancelled'} and w.status_reason!='agent':

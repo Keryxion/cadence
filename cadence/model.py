@@ -4,6 +4,8 @@ from typing import Any
 import base64
 import secrets
 
+PULSE_SUMMARY_LIMIT = 1024
+
 TIME_KINDS = frozenset({"at", "every", "cron", "self"})
 RECURRING_KINDS = frozenset({"every", "cron", "self"})
 PROBE_KINDS = frozenset({"file", "process", "url", "command"})

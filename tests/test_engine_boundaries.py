@@ -51,10 +51,24 @@ def test_invalid_respond_does_not_stage_scratch(engine):
     e=engine
     w=arm(e)
     e.tick();start(e)
-    result=e.tool.handle({'action':'respond','notify':False,'outcome':'no_change','summary':'x'*281,'scratch':'must not persist','next_check':'1m'},session_id='sid')
+    result=e.tool.handle({'action':'respond','notify':False,'outcome':'no_change','summary':'x'*1025,'scratch':'must not persist','next_check':'1m'},session_id='sid')
     assert result['error']=='invalid_request'
     end(e)
     assert e.store.get_wake(w.id).scratch==''
+
+
+def test_maximum_pulse_summary_round_trips(engine):
+    from cadence.tool import PARAMETERS
+
+    assert PARAMETERS['properties']['summary']['maxLength'] == 1024
+    summary = 'é' * 1024
+    w = arm(engine, 'every')
+    engine.tick()
+    start(engine)
+    end(engine, 'progress', False, summary=summary)
+    assert engine.store.list_occurrences(w.id)[0].summary == summary
+    row, = engine.tool.handle({'action':'list'})['wakes']
+    assert row['last_result']['summary'] == summary
 
 
 def test_successful_silent_progress_counts_even_without_transform(engine):
