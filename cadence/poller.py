@@ -21,7 +21,7 @@ from . import governor
 
 LOG = logging.getLogger('cadence')
 RETRY_DELAYS = (30,60,300,900,3600)
-FINAL_SKIP_REASONS = frozenset({'unanswered','continuation_context_missing','interruption_limit','daily_model_cap','daily_cost_cap','daily_message_cap','dm_only',
+FINAL_SKIP_REASONS = frozenset({'unanswered','continuation_context_missing','continuation_busy','interruption_limit','daily_model_cap','daily_cost_cap','daily_message_cap','dm_only',
     'non_gateway','session_off','source_disabled','cancel_on_reply','expired','max_fires'})
 # Every claim records its poller's epoch; an epoch outside this set was minted
 # by another (for a startup replay: the crashed) process.
@@ -560,6 +560,8 @@ class Poller:
         if held_paused: return 'held_paused',True,None
         if w.cancel_on_reply and s and s.last_human_at is not None and s.last_human_at>w.created_at: return 'cancel_on_reply',False,None
         if s is None: return 'missing_session',False,None
+        if 'continuation' in w.trigger_json and s.busy_since is not None:
+            return 'continuation_busy',False,None
         if not s.enabled: return 'session_off',False,None
         if s.paused_until is not None and s.paused_until>now: return 'session_paused',True,None
         if self.policy.dm_only and (s.chat_type!='dm' or w.chat_type!='dm'): return 'dm_only',False,None
@@ -711,6 +713,10 @@ class Poller:
         occurrences=[o for o in self.store.list_occurrences(w.id) if o.state!='superseded']
         if not occurrences or any(o.state in {'pending','claimed','started'} for o in occurrences): return
         o=occurrences[-1]
+        if o.state == 'skipped' and o.error == 'continuation_busy':
+            self.store.cas_wake(w.id,'active',expected_version=w.version,
+                                status='done',status_reason='skipped:continuation_busy')
+            return
         if o.state in {'interrupted','dead','missed'} or o.state=='skipped' and o.error in FINAL_SKIP_REASONS:
             # The owner ended these on purpose (a reply, or /pulse off), so they read as cancelled, not failed.
             if o.error in {'cancel_on_reply','session_off'}:

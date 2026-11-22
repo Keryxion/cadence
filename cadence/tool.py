@@ -19,6 +19,7 @@ BOOL = {'type': 'boolean'}
 PARAMETERS = obj({
     'action': {'type': 'string', 'enum': ['create', 'list', 'update', 'pause', 'resume', 'cancel', 'respond']},
     'id': STR, 'title': STR, 'note': STR, 'reason': STR,
+    'detailed': {'type':'boolean', 'description':'For list, include full records and finished history. Default false returns compact current responsibilities.'},
     'trigger': obj({**{k: STR for k in ('kind','at','every','cron','after','path','pattern','url','check_every','deadline','cwd')},
                     'fire_on': {'type':'string','enum':['change','success','failure','json']},
                     'pid': {'type':'integer'}, 'command': {'type':'array','items':STR},
@@ -32,7 +33,7 @@ PARAMETERS = obj({
 })
 PARAMETERS['required'] = ['action']
 DESCRIPTION = ('Your own time in this chat. Use create to arm a wake/watcher (note and trigger.kind required), or a role '
-               '(role=true on every/cron/self) for a standing responsibility you own: no expiry, a turns-per-day budget, a desk view; list to inspect; '
+               '(role=true on every/cron/self) for a standing responsibility you own: no expiry, a turns-per-day budget, a desk view; list returns compact current responsibilities; list with detailed=true includes full records and finished history; '
                'update to change instructions or trigger; pause to suspend; resume to restart a paused wake; '
                'cancel to end it. During a wake turn, use respond to set '
                'outcome and notify, optionally scratch/next_check; outcome=progress with notify=false and a summary is real work, never counted as idle. Bounds and clamps are reported. Never type silence markers. '
@@ -112,6 +113,8 @@ class Tool:
                 raise ValueError('owner_asked must be a boolean')
             if 'role' in args and not isinstance(args['role'], bool):
                 raise ValueError('role must be a boolean')
+            if 'detailed' in args and not isinstance(args['detailed'], bool):
+                raise ValueError('detailed must be a boolean')
             for field in ('trigger','until','pacing','budget'):
                 if field in args and not isinstance(args[field],dict):
                     raise ValueError(f'invalid request: {field} must be an object')
@@ -135,7 +138,13 @@ class Tool:
                 if action == 'respond':
                     return self.respond(args, flight)
                 if action == 'list':
-                    return {'ok':True,'wakes':[{**asdict(w),'cache':self.cache_result(w)} for w in e.store.list_wakes(s.session_key) if 'continuation' not in w.trigger_json]}
+                    wakes = [w for w in e.store.list_wakes(s.session_key) if 'continuation' not in w.trigger_json]
+                    if args.get('detailed', False):
+                        return {'ok':True,'wakes':[{**asdict(w),'cache':self.cache_result(w)} for w in wakes]}
+                    current = [w for w in wakes if w.status not in FINISHED_WAKE_STATUSES]
+                    current.sort(key=lambda w: (w.status != 'active', w.next_due_at is None,
+                                                w.next_due_at or 0, w.created_at))
+                    return {'ok':True,'wakes':[self.list_item(w) for w in current]}
                 if action == 'create':
                     if not s.enabled:
                         return {'error':'session_off'}
@@ -526,6 +535,24 @@ class Tool:
         if feasible.expires_at!=w.expires_at:
             result.clamped['expires']=f'{feasible.expires_at} (covers the first due time)'
         return replace(result,wake=feasible)
+
+    def list_item(self, wake):
+        occurrences = self.engine.store.list_occurrences(wake.id)
+        completed = [o for o in occurrences if o.ended_at is not None]
+        last = max(completed, key=lambda o: o.ended_at) if completed else None
+        pending = [o for o in occurrences if o.state in {'pending','claimed','started'}]
+        latest = max(pending, key=lambda o: o.created_at) if pending else None
+        times = [t for t in (wake.next_due_at, wake.deadline_at) if t is not None]
+        item = {'id':wake.id, 'title':' '.join((wake.title or wake.note).split())[:160],
+                'status':wake.status, 'kind':wake.kind, 'role':wake.role,
+                'next_check_at':min(times) if times else None}
+        if last:
+            item['last_result'] = {'outcome':last.outcome or last.state, 'summary':last.summary,
+                                   'at':last.ended_at}
+        reason = (latest.held_reason or latest.error) if latest else wake.status_reason
+        if reason:
+            item['reason'] = reason
+        return item
 
     def respond(self,args,flight):
         e=self.engine

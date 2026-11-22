@@ -326,3 +326,7 @@ plugins:
 ```
 
 Capacity controls the burst and refill controls the sustained rate. A full 15-token bucket can release 15 messages immediately and restore 12 more tokens over the next hour.
+
+The model-callable `pulse(action="list")` returns compact current responsibilities, with active entries first, next-check timestamps, latest recorded results and hold reasons. Use `pulse(action="list", detailed=true)` for full records and finished history.
+
+Each `follow_up` call creates an independent timer. Relative formats include `30s`, `2 minutes`, and `1m30s`. Timers survive gateway restarts and are orphaned by `/new`. If a turn is already underway when a timer becomes due, Cadence consumes it without queuing a continuation.

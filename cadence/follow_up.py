@@ -3,9 +3,17 @@ from .model import Wake
 from .schedule import parse_duration
 
 DESCRIPTION = ("Resume work already underway in this conversation once, in 15 seconds to 15 minutes. "
-               "Pass at to arm a timer or cancel with its returned ID.")
+               "Pass exactly one field: at to arm, or cancel with a returned ID. "
+               "at accepts relative durations such as 30s, 2 minutes, or 1m30s (15s–15m inclusive). "
+               "Each call creates an independent timer; cancel an earlier ID explicitly to replace it. "
+               "When due, it gives you one chance to resume the originating owner turn. "
+               "If this conversation already has a turn underway, the timer is consumed without queuing a continuation. "
+               "Armed timers survive gateway restarts. /new orphans them so they cannot resume in the new conversation. "
+               "Only an owner turn or its continuation may arm one. Requested continuations leave interruption tokens unchanged.")
 SCHEMA = {'name': 'follow_up', 'description': DESCRIPTION, 'parameters': {
-    'type': 'object', 'properties': {'at': {'type': 'string'}, 'cancel': {'type': 'string'}},
+    'type': 'object', 'properties': {
+        'at': {'type': 'string', 'description':'Relative duration, for example 30s, 2 minutes, or 1m30s. Bounds 15s–15m inclusive.'},
+        'cancel': {'type': 'string', 'description':'Timer ID returned in this conversation. Repeated cancellation is safe and reports if it already started.'}},
     'minProperties': 1, 'maxProperties': 1, 'additionalProperties': False}}
 
 

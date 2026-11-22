@@ -378,6 +378,7 @@ def test_I16_dispatch_gate_matrix(engine):
               ('wake_spacing', {}, {'last_wake_turn_at':e.clock.now()}, {}) ]
     original = e.store.get_session(KEY)
     for reason, wc, sc, pc in cases:
+        e.interruption_buckets.clear()
         session(e, **{f.name:getattr(original,f.name) for f in fields(Session) if f.name != 'session_key'})
         e.policy = replace(e.policy, interruption_capacity=15, **pc) if not any(k in pc for k in ('quiet_hours','interruption_capacity')) else replace(Policy(clock=e.clock, timezone='UTC'), **pc)
         session(e, **sc) if sc else None

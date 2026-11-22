@@ -149,3 +149,43 @@ def test_pulse_cannot_list_or_manage_follow_up(engine, monkeypatch):
         commands.handle(action+' all', SimpleNamespace(get_engine=lambda: e))
     assert e.store.get_wake(timer).status == 'active'
     assert call(e, {'cancel':timer})['status'] == 'cancelled'
+
+def test_busy_timer_is_consumed_and_new_orphans_other_timers(engine):
+    e = engine
+    owner(e, 'original', 'Check the build')
+    first = call(e, {'at':'30s'})['id']
+    second = call(e, {'at':'1m30s'})['id']
+    assert first != second and e.store.get_wake(first).status == 'active'
+    e.clock.advance(30)
+    e.tick()
+    assert not e.ctx.calls
+    assert e.store.list_occurrences(first)[0].error == 'continuation_busy'
+    assert e.store.list_occurrences(first)[0].state == 'skipped'
+    assert e.store.get_wake(first).status == 'done'
+    e.intake.on_session_end(session_id='sid', turn_id='original')
+    e.tick()
+    assert not e.ctx.calls
+    e.intake.on_session_reset(old_session_id='sid', new_session_id='new')
+    assert e.store.get_wake(second).status == 'orphaned'
+    e.clock.advance(90)
+    e.tick()
+    assert not e.ctx.calls
+
+def test_armed_timer_survives_runtime_restart(engine):
+    from cadence.poller import Poller
+    e = engine
+    owner(e, 'original', 'Check my running build')
+    timer = call(e, {'at':'30s'})['id']
+    e.intake.on_session_end(session_id='sid', turn_id='original')
+    e.close()
+    restarted = Poller(e.ctx, e.store, e.policy, e.clock, session_key_fn=lambda: KEY,
+                       paused=lambda: False, jitter=lambda: 0, compression_tip=lambda sid: sid)
+    try:
+        e.clock.advance(30)
+        restarted.tick()
+        assert len(e.ctx.calls) == 1
+        context = start(restarted)
+        assert 'Check my running build' in context['context']
+        assert restarted.store.get_wake(timer).fires == 1
+    finally:
+        restarted.close()
