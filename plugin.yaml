@@ -51,18 +51,14 @@ config_schema:
     default: ""
     label: "Time zone"
     description: "IANA name such as Europe/Paris. Blank uses the profile's time zone."
-  interruption_capacity:
-    type: int
-    default: 15
-    min: 0
-    label: "Interruption capacity"
-    description: "Initial and maximum interruption tokens per chat."
-  interruption_refill_seconds:
-    type: int
-    default: 300
-    min: 1
-    label: "Interruption refill interval (seconds)"
-    description: "Elapsed time to regain one interruption token."
+  interruptions:
+    type: dict
+    default:
+      capacity: 15
+      initial: 15
+      refill_per_hour: 12
+    label: "Interruptions"
+    description: "Per-chat token bucket. capacity caps saved tokens, initial sets the restart balance (capped at capacity), and refill_per_hour restores whole tokens evenly over elapsed time."
   own_time_hours:
     type: int
     default: 0

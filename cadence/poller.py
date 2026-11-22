@@ -203,7 +203,7 @@ class Poller:
         now = self.clock.monotonic()
         capacity = self.policy.interruption_capacity
         interval = self.policy.interruption_refill_seconds
-        tokens, anchor = self.interruption_buckets.get(key, (capacity, now))
+        tokens, anchor = self.interruption_buckets.get(key, (min(capacity, self.policy.interruption_initial), now))
         refill = int((now - anchor) // interval)
         tokens = min(capacity, tokens + refill)
         if spend:

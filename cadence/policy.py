@@ -87,7 +87,8 @@ class Policy:
     dm_only: bool = True
     timezone: str = ""
     interruption_capacity: int = 15
-    interruption_refill_seconds: int = 300
+    interruption_initial: int = 15
+    interruption_refill_seconds: float = 300.0
     daily_cost_limit_usd: float = 0.0
     own_time_hours: int = 0
     role_turns_per_day_default: int = 6
@@ -177,9 +178,11 @@ class Policy:
                          max_children_per_wake_turn=max(1, min(result.max_children_per_wake_turn, 50)))
         for name in ("min_interval_minutes", "agent_ungated_floor_minutes", "probe_floor_seconds",
                      "max_lifetime_days", "max_reminder_days", "checkin_after_hours", "noop_backoff_factor",
-                     "noop_max_backoff_hours", "ledger_days", "interruption_refill_seconds"):
+                     "noop_max_backoff_hours", "ledger_days"):
             if getattr(result, name) < 1:
                 raise ValueError(f"{name} must be positive")
+        if result.interruption_refill_seconds <= 0:
+            raise ValueError('interruption refill rate must be positive')
         # Readable upper bounds, each far inside the value where date, float
         # or SQLite arithmetic downstream would overflow (with 10% jitter).
         for name, maximum in {
