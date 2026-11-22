@@ -9,7 +9,7 @@ DESCRIPTION = ("Resume work already underway in this conversation once, in 15 se
                "Arming returns id, armed=true, and due_at as an absolute ISO 8601 UTC timestamp. "
                "at accepts relative durations such as 30s, 2 minutes, or 1m30s (15s–15m inclusive). "
                "Each call creates an independent timer; cancel an earlier ID explicitly to replace it. "
-               "When due, it gives you another turn in the current conversation with a minimal Follow-up fired signal. "
+               "When due, it gives you another turn in the current conversation with a Follow-up fired signal showing the scheduled and current times. "
                "If this conversation already has a turn underway, the timer is consumed without queuing a continuation. "
                "Armed timers survive gateway restarts. /new orphans them so they cannot resume in the new conversation. "
                "Only an owner turn or its continuation may arm one. Requested continuations leave interruption tokens unchanged.")

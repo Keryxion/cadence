@@ -4,7 +4,7 @@ from test_engine import KEY, admit, arm, end, engine, pending, start as start_wa
 
 def start(e, history=None):
     text = e.ctx.calls[-1][0]
-    if text == 'Follow-up fired':
+    if text.startswith('Follow-up fired\n'):
         return e.intake.pre_llm_call(session_id='sid', turn_id='turn', user_message=text, platform='telegram',
             conversation_history=history or [{'role':'user','content':text,'display_kind':'internal_notification'}])
     return start_wake(e)
@@ -38,12 +38,12 @@ def test_follow_up_cancel_and_context_chain(engine):
     history = [
         {'role':'user','content':'Check my running build'},
         {'role':'user','content':'Discuss dinner'},
-        {'role':'user','content':'Follow-up fired','display_kind':'internal_notification'}]
+        {'role':'user','content':e.ctx.calls[-1][0],'display_kind':'internal_notification'}]
     expected_history = [dict(row) for row in history]
     context = start(e, history)
     assert context is None
     assert history == expected_history
-    assert e.ctx.calls[-1][0] == 'Follow-up fired'
+    assert e.ctx.calls[-1][0].startswith('Follow-up fired\nScheduled for ')
     assert 'text' not in e.store.get_wake(timer).trigger_json['continuation']
     assert call(e,{'cancel':timer})['status']=='already_started'
     next_id=call(e,{'at':'15s'})['id']
@@ -110,7 +110,7 @@ def test_owner_context_and_zero_bucket(engine, wrapped):
     e.tick()
     context = start(e)
     assert context is None
-    assert e.ctx.calls[-1][0] == 'Follow-up fired'
+    assert e.ctx.calls[-1][0].startswith('Follow-up fired\nScheduled for ')
     next_timer = call(e, {'at':'15s'})['id']
     assert e.store.get_wake(next_timer).trigger_json['continuation']['turn'] == 'original'
     assert e.intake.transform_llm_output(response_text='Build complete', session_id='sid') is None
@@ -209,7 +209,7 @@ def test_armed_timer_survives_runtime_restart(engine):
         assert len(e.ctx.calls) == 1
         context = start(restarted)
         assert context is None
-        assert e.ctx.calls[-1][0] == 'Follow-up fired'
+        assert e.ctx.calls[-1][0].startswith('Follow-up fired\nScheduled for ')
         assert restarted.store.get_wake(timer).fires == 1
     finally:
         restarted.close()
@@ -238,4 +238,4 @@ def test_existing_timer_request_snapshot_is_ignored(engine):
     e.clock.advance(15)
     e.tick()
     assert start(e) is None
-    assert e.ctx.calls[-1][0] == 'Follow-up fired'
+    assert e.ctx.calls[-1][0].startswith('Follow-up fired\nScheduled for ')

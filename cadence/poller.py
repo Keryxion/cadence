@@ -691,7 +691,7 @@ class Poller:
             return
         continuation = 'continuation' in w.trigger_json
         if continuation:
-            self.intake.continuation_dispatches[session.current_session_id] = (w.id, o.dedupe_key, o.attempt)
+            self.intake.continuation_dispatches[session.current_session_id] = ((w.id, o.dedupe_key, o.attempt), text)
         try: accepted=self.ctx.inject_message(text,session_key=w.session_key)
         except Exception: accepted=False
         if accepted:

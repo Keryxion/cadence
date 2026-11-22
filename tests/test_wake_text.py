@@ -93,7 +93,11 @@ assert not any(n.startswith("hermes_cli") for n in sys.modules)
 '''
     subprocess.run([sys.executable, "-I", "-c", script], check=True, timeout=10)
 
-def test_follow_up_contains_only_a_short_signal(clock):
+def test_follow_up_contains_timing_without_task_instructions(clock):
     wake, occurrence, session = records(clock)
     wake = replace(wake, kind='at', trigger_json={'continuation': {'turn':'owner'}})
-    assert render_wake(wake, occurrence, session, clock=clock) == 'Follow-up fired'
+    occurrence = replace(occurrence, dedupe_key=f't:{clock.now()-30}')
+    text = render_wake(wake, occurrence, session, clock=clock, timezone='America/New_York')
+    assert text == ('Follow-up fired\nScheduled for 2025-10-12T12:04:30-04:00\n'
+                    'Current time 2025-10-12T12:05:00-04:00')
+    assert 'pulse' not in text and 'Check whether the build finished' not in text

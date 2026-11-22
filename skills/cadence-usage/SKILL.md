@@ -180,4 +180,4 @@ Use `pulse(action="list")` for compact current responsibilities. Pass `detailed=
 
 A successful `follow_up` arm returns `id`, `armed: true`, and `due_at` as an absolute ISO 8601 UTC timestamp. Use that receipt to confirm the scheduled time.
 
-When a timer fires, you receive `Follow-up fired` with the current conversation history. Decide what needs doing from that conversation, including messages since arming.
+When a timer fires, you receive `Follow-up fired` with scheduled and current timestamps and the current conversation history. Decide what needs doing from that conversation, including messages since arming.

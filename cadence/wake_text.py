@@ -56,7 +56,9 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
     tz_name = getattr(local.tzinfo, "key", None) or local.tzname()
     tag = f" n:{marker_tag}" if marker_tag is not None else ""
     if 'continuation' in wake.trigger_json:
-        return 'Follow-up fired'
+        scheduled = datetime.fromtimestamp(float(occurrence.dedupe_key[2:]), zone(timezone))
+        return (f'Follow-up fired\nScheduled for {scheduled.isoformat(timespec="seconds")}\n'
+                f'Current time {local.isoformat(timespec="seconds")}')
     lines = [
         f"⟦pulse o:{occurrence.id} a:{occurrence.attempt}{tag}⟧ [Cadence · {label} {wake.id} · {escape_text(wake.title)} · armed by {owner} {_age(now - wake.created_at)} ago]",
         f"Local time: {local:%a %d %b %H:%M} ({tz_name}){owner_clause} · fire {wake.fires + 1} of {fire_limit}",

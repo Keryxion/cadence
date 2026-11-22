@@ -495,9 +495,9 @@ class Intake:
         row = conversation_history[-1] if conversation_history else None
         if (dispatched and not owner_seen and isinstance(row, dict)
                 and row.get('role') == 'user' and row.get('display_kind') == 'internal_notification'
-                and isinstance(user_message, str) and (user_message.strip() == 'Follow-up fired'
-                    or re.fullmatch(r'\[[^\n]*\] Follow-up fired', user_message.strip()))):
-            parsed = dispatched
+                and isinstance(user_message, str) and (user_message.strip() == dispatched[1]
+                    or user_message.startswith('[') and user_message.endswith('] ' + dispatched[1]))):
+            parsed = dispatched[0]
         if not parsed:
             row=conversation_history[-1] if conversation_history else None
             if isinstance(row,dict) and row.get('role')=='user' and not row.get('display_kind'):
