@@ -691,7 +691,8 @@ class Poller:
             return
         continuation = 'continuation' in w.trigger_json
         if continuation:
-            self.intake.continuation_dispatches[session.current_session_id] = ((w.id, o.dedupe_key, o.attempt), text)
+            # The gateway may execute the admitted turn in a different process.
+            s.set_meta('continuation_dispatch:' + w.session_key, json.dumps([w.id, o.dedupe_key, o.attempt, text]))
         try: accepted=self.ctx.inject_message(text,session_key=w.session_key)
         except Exception: accepted=False
         if accepted:
@@ -701,7 +702,7 @@ class Poller:
             s.cas_session(session.session_key,{'last_wake_turn_at':session.last_wake_turn_at},last_wake_turn_at=self.clock.now())
         else:
             if continuation:
-                self.intake.continuation_dispatches.pop(session.current_session_id, None)
+                s.set_meta('continuation_dispatch:' + w.session_key, '')
             if health:
                 health.pop('trial',None); s.set_meta('provider_health',json.dumps(health))
             count=int(s.get_meta('inject_failures:'+o.id) or 0)+1

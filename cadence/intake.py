@@ -284,7 +284,6 @@ class Intake:
         self.anchors={}
         self.inbounds=set()
         self.owner_turns={}
-        self.continuation_dispatches={}
         self.owner_turn_refs={}
 
     def flight_for(self,sid,key):
@@ -305,8 +304,6 @@ class Intake:
             key=self.bindings.pop(old)
             self.bindings[sid]=key
             self.turns[sid]=self.turns.pop(old,'')
-            if old in self.continuation_dispatches:
-                self.continuation_dispatches[sid] = self.continuation_dispatches.pop(old)
             if old in self.owner_turn_refs: self.owner_turn_refs[sid]=self.owner_turn_refs.pop(old)
             if old in self.owner_turns: self.owner_turns[sid]=self.owner_turns.pop(old)
             if old in self.anchors: self.anchors[sid]=self.anchors.pop(old)
@@ -484,13 +481,22 @@ class Intake:
         if previous_ref and previous_ref['turn'] != turn_id:
             self.owner_turn_refs.pop(session_id, None)
         parsed=marker(user_message,secret=s.get_meta('marker_secret'),require_tag=(identity.chat_type != 'dm'))
-        dispatched = self.continuation_dispatches.pop(session_id, None)
         row = conversation_history[-1] if conversation_history else None
-        if (dispatched and not owner_seen and isinstance(row, dict)
+        if (not owner_seen and isinstance(row, dict)
                 and row.get('role') == 'user' and row.get('display_kind') == 'internal_notification'
-                and isinstance(user_message, str) and (user_message.strip() == dispatched[1]
-                    or user_message.startswith('[') and user_message.endswith('] ' + dispatched[1]))):
-            parsed = dispatched[0]
+                and isinstance(user_message, str)):
+            stamp = 'continuation_dispatch:' + key
+            with s.atomic():
+                saved = s.get_meta(stamp)
+                if saved:
+                    wid, dedupe, attempt, signal = json.loads(saved)
+                    wake = s.get_wake(wid)
+                    if (wake and (wake.armed_session_id == session_id
+                                  or e.compression_tip(wake.armed_session_id) == session_id)
+                            and (user_message.strip() == signal
+                                 or user_message.startswith('[') and user_message.endswith('] ' + signal))):
+                        parsed = (wid, dedupe, attempt)
+                        s.set_meta(stamp, '')
         if not parsed:
             row=conversation_history[-1] if conversation_history else None
             if isinstance(row,dict) and row.get('role')=='user' and not row.get('display_kind'):

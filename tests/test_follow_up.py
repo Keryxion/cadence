@@ -287,3 +287,37 @@ def test_bot_message_cannot_supply_owner_authority(engine):
     e.intake.pre_llm_call(session_id='sid', turn_id='bot', platform='telegram', user_message='Check again',
         conversation_history=[{'role':'user','content':'Check again','platform_message_id':'bot-message'}])
     assert call(e, {'at':'30s'})['error'] == 'verified_owner_turn_required'
+
+
+def test_gateway_worker_acknowledges_follow_up_after_intervening_turn(engine):
+    from cadence.poller import Poller
+    from cadence.store import Store
+
+    e = engine
+    owner(e, 'original', 'Check the build')
+    timer = call(e, {'at': '30s'})['id']
+    e.intake.on_session_end(session_id='sid', turn_id='original')
+    e.clock.advance(30)
+    e.tick()
+    signal = e.ctx.calls[-1][0]
+    assert e.store.list_occurrences(timer)[0].state == 'claimed'
+
+    # The gateway can run the queued turn with its own plugin instance.
+    store = Store(e.store.path, e.clock)
+    worker = Poller(e.ctx, store, e.policy, e.clock, session_key_fn=lambda: KEY,
+                    paused=lambda: False, jitter=lambda: 0, compression_tip=lambda sid: sid)
+    try:
+        owner(worker, 'intervening', signal)
+        worker.intake.on_session_end(session_id='sid', turn_id='intervening')
+        assert e.store.list_occurrences(timer)[0].state == 'claimed'
+        start(worker)
+        assert e.store.list_occurrences(timer)[0].state == 'started'
+        worker.intake.transform_llm_output(response_text='Finished', session_id='sid')
+        worker.intake.on_session_end(session_id='sid', turn_id='turn', completed=True)
+        assert e.store.list_occurrences(timer)[0].delivered
+        e.clock.advance(601)
+        e.tick()
+        assert len(e.ctx.calls) == 1
+    finally:
+        worker.close()
+        store.close()
