@@ -128,6 +128,7 @@ def _ledger(engine, key, days):
     today = datetime.fromisoformat(local_day(engine.clock.now(), engine.policy.resolved_timezone())).date()
     lines = [f'Ledger {days}d: fires · checks · model wakes · messages · engaged · cache/cost · provider deferrals · no_verdict · verdict']
     for wake in engine.store.list_wakes(key):
+        if 'continuation' in wake.trigger_json: continue
         counts = {}
         for n in range(days):
             row = engine.store.get_ledger((today-timedelta(days=n)).isoformat(), wake.id) or {}
@@ -223,7 +224,7 @@ def handle(raw_args, runtime):
                     row=engine.store.get_ledger(local_day(engine.clock.now(),engine.policy.resolved_timezone()),wake.id) or {}
                     for name,value in row.items():
                         if isinstance(value,int): counts[name]=counts.get(name,0)+value
-                active = [w for w in engine.store.list_wakes(key) if w.status in {'active','proposed','paused'}]
+                active = [w for w in engine.store.list_wakes(key) if w.status in {'active','proposed','paused'} and 'continuation' not in w.trigger_json]
                 role_today = {w.id: _role_today(engine,w) for w in active if w.role}  # read once: header and rows agree
                 next_due = min((x for w in active if w.status=='active' and not _resting(engine,w,role_today.get(w.id))
                                 for x in (w.next_due_at,w.deadline_at) if x is not None),default=None)
@@ -250,7 +251,7 @@ def handle(raw_args, runtime):
                 lines.extend(f'{w.id}: keep / slow / stop / watch' for w in active if w.status_reason.startswith('governor:'))
                 return '\n'.join(lines)
             if action == 'list' and rest in {'','all'}:
-                wakes = engine.store.list_wakes(key)
+                wakes = [w for w in engine.store.list_wakes(key) if 'continuation' not in w.trigger_json]
                 # list_wakes is ordered by created_at, so the default keeps the newest finished items; creation time never changes.
                 recent = {w.id for w in [w for w in wakes if w.status in FINISHED_STATUSES][-LIST_RECENT_FINISHED:]}
                 visible = wakes if rest=='all' else [w for w in wakes if w.status not in FINISHED_STATUSES or w.id in recent]
@@ -269,7 +270,7 @@ def handle(raw_args, runtime):
                 match = re.fullmatch(r'(\S+)\s+(\d+)/day',rest)
                 if not match: raise ValueError('budget expects <id> <n>/day')
                 wake = engine.store.get_wake(match[1])
-                if wake is None or wake.session_key != key: raise ValueError('unknown item in this chat')
+                if wake is None or wake.session_key != key or 'continuation' in wake.trigger_json: raise ValueError('unknown item in this chat')
                 if not wake.role: raise ValueError('budget applies to roles')
                 budget = max(1,min(int(match[2]),engine.policy.role_turns_per_day_max))
                 if not engine.store.cas_wake(wake.id,wake.status,expected_version=wake.version,budget_turns_per_day=budget):
@@ -291,10 +292,10 @@ def handle(raw_args, runtime):
             if duration and action != 'pause': raise ValueError('for is supported only with pause')
             seconds = parse_duration(duration) if duration else None
             if wid == 'all' and action in {'pause','resume','cancel'}:
-                wakes = [w for w in engine.store.list_wakes(key) if w.status not in FINISHED_STATUSES]
+                wakes = [w for w in engine.store.list_wakes(key) if w.status not in FINISHED_STATUSES and 'continuation' not in w.trigger_json]
             else:
                 wake = engine.store.get_wake(wid)
-                if wake is None or wake.session_key != key: return 'Error: unknown item in this chat.'
+                if wake is None or wake.session_key != key or 'continuation' in wake.trigger_json: return 'Error: unknown item in this chat.'
                 wakes = [wake]
             lines = []
             for wake in wakes:

@@ -135,7 +135,7 @@ class Tool:
                 if action == 'respond':
                     return self.respond(args, flight)
                 if action == 'list':
-                    return {'ok':True,'wakes':[{**asdict(w),'cache':self.cache_result(w)} for w in e.store.list_wakes(s.session_key)]}
+                    return {'ok':True,'wakes':[{**asdict(w),'cache':self.cache_result(w)} for w in e.store.list_wakes(s.session_key) if 'continuation' not in w.trigger_json]}
                 if action == 'create':
                     if not s.enabled:
                         return {'error':'session_off'}
@@ -186,10 +186,10 @@ class Tool:
                 if args.get('id') == 'all':
                     if action == 'update':
                         return {'error':'update_requires_id'}
-                    wakes = [w for w in e.store.list_wakes(s.session_key) if w.status not in FINISHED_WAKE_STATUSES]
+                    wakes = [w for w in e.store.list_wakes(s.session_key) if w.status not in FINISHED_WAKE_STATUSES and 'continuation' not in w.trigger_json]
                 else:
                     w = e.store.get_wake(args.get('id',''))
-                    if w is None:
+                    if w is None or 'continuation' in w.trigger_json:
                         return {'error':'unknown_wake'}
                     wakes = [w]
                 results = []

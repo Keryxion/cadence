@@ -131,3 +131,21 @@ def test_existing_pulse_entry_points(engine):
     assert create(trigger={'kind':'at','at':'in 10m'})['armed']
     assert create(role=True, trigger={'kind':'every','every':'30m'})['armed']
     assert create(owner_asked=True, trigger={'kind':'at','at':'in 20m'})['armed']
+
+def test_pulse_cannot_list_or_manage_follow_up(engine, monkeypatch):
+    from types import SimpleNamespace
+    from cadence import commands
+    monkeypatch.setattr(commands, "session_env", lambda name: KEY if name == "HERMES_SESSION_KEY" else "")
+    e = engine
+    owner(e, 'original', 'Check my build')
+    timer = call(e, {'at':'30s'})['id']
+    assert e.tool.handle({'action':'list'}, session_id='sid')['wakes'] == []
+    for action in ('update', 'pause', 'resume', 'cancel'):
+        assert e.tool.handle({'action':action, 'id':timer}, session_id='sid')['error'] == 'unknown_wake'
+    for command in ('list all', 'status', 'ledger', 'why '+timer):
+        assert timer not in commands.handle(command, SimpleNamespace(get_engine=lambda: e))
+    for action in ('pause', 'resume', 'cancel'):
+        e.tool.handle({'action':action, 'id':'all'}, session_id='sid')
+        commands.handle(action+' all', SimpleNamespace(get_engine=lambda: e))
+    assert e.store.get_wake(timer).status == 'active'
+    assert call(e, {'cancel':timer})['status'] == 'cancelled'

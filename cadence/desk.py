@@ -42,7 +42,7 @@ def render_desk(engine_or_store, session, *, clock, timezone, policy, measure=le
     now, key = clock.now(), session.session_key
     view = SimpleNamespace(store=store, clock=clock, policy=SimpleNamespace(
         resolved_timezone=lambda: zone(timezone)))
-    wakes = [w for w in store.list_wakes(key) if w.status in {'active', 'paused'}]
+    wakes = [w for w in store.list_wakes(key) if w.status in {'active', 'paused'} and 'continuation' not in w.trigger_json]
     roles = sorted((w for w in wakes if w.role), key=lambda w: (w.updated_at, w.created_at), reverse=True)
     rows = []
     for w in roles:
