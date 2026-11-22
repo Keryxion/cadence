@@ -197,8 +197,8 @@ class Poller:
     def interruption_tokens(self, key, *, spend=False):
         """Use elapsed time so wall-clock corrections never refill a chat.
 
-        Final output hooks serialize admission and token spending under the store
-        lock. A new engine starts with a full bucket for every chat.
+        A single in-flight wake per chat lets finalization charge only a delivered
+        message. The runner and gateway hooks share this in-memory mapping.
         """
         now = self.clock.monotonic()
         capacity = self.policy.interruption_capacity
@@ -533,7 +533,7 @@ class Poller:
             return ''
         if self.policy.unanswered_gate(w,s.unanswered_count):
             return 'unanswered'
-        if not w.role and not self.interruption_tokens(s.session_key):
+        if not self.interruption_tokens(s.session_key):
             return 'interruption_limit'
         return ''
 
@@ -580,8 +580,6 @@ class Poller:
                 return 'continuation_context_missing',False,None
         if w.role and self.store.dispatches_today(w.id,self.policy.resolved_timezone())>=self.policy.role_budget(w):
             return 'role_budget',False,None
-        if w.role and w.last_fired_at is not None and now < w.last_fired_at + 3600:
-            return ('held_role_spacing' if is_watcher(w) else 'role_spacing'),True,None
         if (not owner_class(w) and self.policy.daily_cost_limit_usd>0
                 and self.store.agent_cost_today(w.session_key,self.policy.resolved_timezone())['cost_microusd']/1e6
                     >=self.policy.daily_cost_limit_usd):
@@ -591,7 +589,7 @@ class Poller:
         message_held=self.message_hold_reason(w,s)
         mute=self.policy.unanswered_gate(w,s.unanswered_count)
         if mute and not message_held: return mute,mute=='held_unanswered',None
-        if not w.role and not message_held and not self.interruption_tokens(s.session_key) and not (owner_class(w) and one_shot(w)):
+        if not message_held and not self.interruption_tokens(s.session_key) and not (owner_class(w) and one_shot(w)):
             return ('held_interruptions', True, None) if is_watcher(w) else ('interruption_limit', False, None)
         flood=json.loads(self.store.get_meta('injections') or '[]')
         if sum(now-t<60 for t in flood)>=5: return 'global_flood',True,None
@@ -657,9 +655,6 @@ class Poller:
         elif not message_held and o.force_silent and o.held_reason.startswith('message_held:'):
             if not s.update_occurrence(w.id,o.dedupe_key,'pending',force_silent=False,held_reason=''): return
         with s.atomic():
-            # A second due occurrence can race the first eligibility check.
-            if w.role and self.gate(s.get_wake(w.id), o, s.get_session(w.session_key))[0]:
-                return
             if not s.claim(w.id,o.dedupe_key,epoch=self.epoch,pid=os.getpid()): return
             s.set_meta('spend:'+o.id, 'owner' if owner_class(w) else 'agent')
         o=s.get_occurrence(w.id,o.dedupe_key)

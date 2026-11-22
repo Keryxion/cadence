@@ -19,14 +19,12 @@ arms:
     owner_asked: true
   owner_turn: true
 - ref: timer
-  existing: true
   args:
     note: Report useful news for timer
     trigger:
       kind: at
       at: in 23m
 - ref: watcher
-  existing: true
   args:
     note: Report useful news for watcher
     trigger:

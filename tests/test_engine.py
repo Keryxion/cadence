@@ -274,7 +274,7 @@ def test_I11_depth_and_one_child_per_turn(engine):
     e = engine
     w = arm(e, depth=2)
     e.tick(); start(e)
-    args = dict(action='create', note='stand watch', role=True, trigger={'kind':'self'})
+    args = dict(action='create', note='follow up', trigger={'kind': 'at', 'at': '+1h'})
     result = e.tool.handle(args, session_id='sid')
     assert result['error'] == 'rearm_depth'
     e.store.cas_wake(w.id, 'active', depth=0)
@@ -326,7 +326,7 @@ def test_plugin_gateway_platform_arms_only_while_registered(engine, monkeypatch)
     import types
     e = engine
     session(e, platform='converse')
-    create = dict(action='create', note='n', role=True, trigger={'kind':'self'})
+    create = dict(action='create', note='n', trigger={'kind': 'at', 'at': '+1h'})
     assert e.tool.handle(create)['error'] == 'non_gateway'
     registry = types.SimpleNamespace(is_registered=lambda name: name == 'converse')
     monkeypatch.setitem(sys.modules, 'gateway', types.ModuleType('gateway'))
@@ -413,8 +413,8 @@ def test_I17_six_silent_runs_pause_one_card(engine):
 def test_I18_tool_clamps_never_writes_settings(engine):
     e = engine
     before = dict(e.ctx.settings)
-    result = e.tool.handle(dict(action='create', note='n',role=True, trigger={'kind':'every','every':'2m'}))
-    assert result['error']=='invalid_request' and 'one hour' in result['detail']
+    result = e.tool.handle(dict(action='create', note='n', trigger={'kind':'every','every':'2m'}))
+    assert result['ok'] and 'agent_ungated_floor' in result['clamped']['every']
     assert e.ctx.settings == before
     e.ctx.allowed = False
     assert 'allow_gateway_injection: true' in e.tool.handle(dict(action='create', note='n', trigger={'kind':'at','at':'+1h'}))['detail']

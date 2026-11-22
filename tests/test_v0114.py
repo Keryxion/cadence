@@ -24,13 +24,8 @@ def command(engine, monkeypatch):
 
 
 def create(e, trigger=None, **args):
-    # These historical feasibility/receipt cases also cover saved agent schedules.
-    payload = {'action':'create', 'note':'Check the report.',
-               'trigger':trigger or {'kind':'at','at':'in 1h'}, **args}
-    if args.get('role') or args.get('owner_asked'):
-        return e.tool.handle(payload,session_id='sid')
-    from bench.sim.legacy import seed_existing
-    return seed_existing(e,e.store.get_session(KEY),payload)
+    return e.tool.handle({'action':'create', 'note':'Check the report.',
+                         'trigger':trigger or {'kind':'at','at':'in 1h'}, **args}, session_id='sid')
 
 
 def receipt(result):

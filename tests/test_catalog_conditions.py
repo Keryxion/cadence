@@ -117,21 +117,21 @@ def test_command_env_allowlisted_and_sanitized(tmp_path, monkeypatch, helper):
     'http://169.254.169.254/latest/meta-data', 'http://localhost/', 'http://metadata.google.internal/'])
 def test_url_arm_refuses_internal_without_dns(engine, monkeypatch, url):
     monkeypatch.setattr(socket, 'getaddrinfo', lambda *a, **k: pytest.fail('arm performed DNS'))
-    result = engine.tool.handle({'action': 'create', 'role': True, 'note': 'observe', 'trigger': {'kind': 'url', 'url': url}})
+    result = engine.tool.handle({'action': 'create', 'note': 'observe', 'trigger': {'kind': 'url', 'url': url}})
     assert result.get('error') and not engine.store.list_wakes()
 
 
 def test_url_setting_allows_private_but_never_metadata(engine):
     engine.policy = Policy.from_settings({'url_allow_private': 'true'})
     for url, allowed in [('http://127.0.0.1/', True), ('http://169.254.169.254/', False)]:
-        result = engine.tool.handle({'action': 'create', 'role': True, 'note': 'observe', 'trigger': {'kind': 'url', 'url': url}})
+        result = engine.tool.handle({'action': 'create', 'note': 'observe', 'trigger': {'kind': 'url', 'url': url}})
         assert bool(result.get('ok')) is allowed
     assert Policy().url_allow_private is False
     assert Policy.from_settings({'url_allow_private': 'false'}).url_allow_private is False
 
 
 def test_url_update_refuses_private_without_dns(engine, monkeypatch):
-    result = engine.tool.handle({'action': 'create', 'role': True, 'note': 'observe', 'trigger': {'kind': 'url', 'url': 'https://public.example/'}})
+    result = engine.tool.handle({'action': 'create', 'note': 'observe', 'trigger': {'kind': 'url', 'url': 'https://public.example/'}})
     assert result.get('ok')
     monkeypatch.setattr(socket, 'getaddrinfo', lambda *a, **k: pytest.fail('update performed DNS'))
     update = engine.tool.handle({'action': 'update', 'id': result['wake']['id'], 'trigger': {'kind': 'url', 'url': 'http://127.0.0.1/'}})
@@ -140,7 +140,7 @@ def test_url_update_refuses_private_without_dns(engine, monkeypatch):
 
 def test_missing_url_safety_refused(engine, monkeypatch):
     monkeypatch.setitem(sys.modules, 'tools.url_safety', None)
-    result = engine.tool.handle({'action': 'create', 'role': True, 'note': 'observe', 'trigger': {'kind': 'url', 'url': 'https://public.example/'}})
+    result = engine.tool.handle({'action': 'create', 'note': 'observe', 'trigger': {'kind': 'url', 'url': 'https://public.example/'}})
     assert result.get('error') and 'URL watchers need Hermes url_safety' in result['detail']
 
 
@@ -226,10 +226,10 @@ def test_file_arm_and_update_use_absolute_profile_path(engine, hermes_probe_help
         seen.append(path)
         return 'Hermes fixture read block' if path.endswith('blocked') else None
     files.get_read_block_error = block
-    result = engine.tool.handle({'action': 'create', 'role': True, 'note': 'observe', 'trigger': {'kind': 'file', 'path': 'blocked'}})
+    result = engine.tool.handle({'action': 'create', 'note': 'observe', 'trigger': {'kind': 'file', 'path': 'blocked'}})
     assert result.get('error') and result['detail'] == 'Hermes fixture read block'
     assert seen == [str(engine.ctx._manager.home_path / 'blocked')]
-    result = engine.tool.handle({'action': 'create', 'role': True, 'note': 'observe', 'trigger': {'kind': 'file', 'path': 'allowed'}})
+    result = engine.tool.handle({'action': 'create', 'note': 'observe', 'trigger': {'kind': 'file', 'path': 'allowed'}})
     assert result.get('ok')
     update = engine.tool.handle({'action': 'update', 'id': result['wake']['id'], 'trigger': {'kind': 'file', 'path': 'blocked'}})
     assert update.get('error') and update['detail'] == 'Hermes fixture read block'
@@ -238,7 +238,7 @@ def test_file_arm_and_update_use_absolute_profile_path(engine, hermes_probe_help
 def test_file_becomes_blocked_after_arming(engine, tmp_path, monkeypatch, hermes_probe_helpers):
     _, files = hermes_probe_helpers
     path = tmp_path / 'build.log'; path.write_text('ok\n')
-    result = engine.tool.handle({'action': 'create', 'role': True, 'note': 'observe', 'trigger': {'kind': 'file', 'path': str(path)}})
+    result = engine.tool.handle({'action': 'create', 'note': 'observe', 'trigger': {'kind': 'file', 'path': str(path)}})
     assert result.get('ok')
     files.get_read_block_error = lambda path: 'Hermes fixture read block'
     monkeypatch.setattr(os, 'open', lambda *a, **k: pytest.fail('blocked path was opened'))
@@ -289,6 +289,6 @@ def test_file_helper_failures_refuse_arm_and_probe(engine, tmp_path, monkeypatch
         def raised(path): raise RuntimeError('fixture')
         hermes_probe_helpers[1].get_read_block_error = raised
     path = tmp_path / 'build.log'; path.write_text('ok')
-    result = engine.tool.handle({'action': 'create', 'role': True, 'note': 'observe', 'trigger': {'kind': 'file', 'path': str(path)}})
+    result = engine.tool.handle({'action': 'create', 'note': 'observe', 'trigger': {'kind': 'file', 'path': str(path)}})
     assert result.get('error') and not engine.store.list_wakes()
     assert probes.check(Wake('fixture', 'observe', 'file', trigger_json={'path': str(path)})).get('error')

@@ -6,7 +6,6 @@ cites:
 settings: {}
 arms:
 - ref: error
-  existing: true
   args:
     note: Report useful news for error
     trigger:

@@ -34,9 +34,9 @@ def test_R2_G1_registered_contract_and_results(engine, monkeypatch):
         assert set(schema)=={'name','description','parameters'}
         assert schema['name']=='pulse'
         assert all(action in schema['description'] for action in schema['parameters']['properties']['action']['enum'])
-        result=spec['handler']({'action':'create','note':'test','role':True,'trigger':{'kind':'every','every':'1h'}},session_id='sid')
+        result=spec['handler']({'action':'create','note':'test','trigger':{'kind':'every','every':'2m'}},session_id='sid')
         assert isinstance(result,str)
-        assert json.loads(result)['armed']
+        assert json.loads(result)['clamped']['every']
         assert json.loads(spec['handler']({'action':'create'},session_id='sid'))['error']
         r._engine=None
         monkeypatch.setattr(r,'get_engine',lambda: (_ for _ in ()).throw(ValueError('fixture')))
@@ -59,9 +59,9 @@ def test_R2_G1_real_Hermes_registry(engine, tmp_path, monkeypatch):
         definition=reg.get_definitions({'pulse'},quiet=True)[0]['function']
         assert definition['parameters']['required']==['action']
         assert definition['description']
-        result=json.loads(reg.dispatch('pulse',{'action':'create','note':'real registry','role':True,
-                          'trigger':{'kind':'every','every':'1h'}},session_id='sid'))
-        assert result['armed']
+        result=json.loads(reg.dispatch('pulse',{'action':'create','note':'real registry',
+                          'trigger':{'kind':'every','every':'2m'}},session_id='sid'))
+        assert result['ok'] and result['clamped']['every']
         assert json.loads(reg.dispatch('pulse',{'action':'wat'},session_id='sid'))['error']=='unknown_action'
     finally:
         r._engine=None
@@ -107,16 +107,16 @@ def test_R2_G2_child_inherits_wake_limits(engine, guard):
     else: e.tick()
     start(e)
     if guard=='child':
-        assert e.tool.handle({'action':'create','note':'child','role':True,'trigger':{'kind':'self'}},session_id='sid')['ok']
+        assert e.tool.handle({'action':'create','note':'child','trigger':{'kind':'at','at':'+1h'}},session_id='sid')['ok']
     if guard=='owner':
         owner=arm(e,'every',creator='user',next_due_at=e.clock.now()+3600)
         args={'action':'pause','id':owner.id}
         expected='owner_item'
     else:
-        trigger={'kind':'every','every':'1h'}
-        args={'action':'create','note':'child','role':True,'trigger':trigger}
+        trigger={'kind':'at','at':'+1h'} if guard in {'depth','child'} else {'kind':'every','every':'1h'}
+        args={'action':'create','note':'child','trigger':trigger}
         if guard=='babysit': args['babysit']=True
-        expected={'untrusted':'untrusted_rearm','depth':'rearm_depth','child':'rearm_child','babysit':'role_not_babysit'}[guard]
+        expected={'untrusted':'untrusted_rearm','depth':'rearm_depth','child':'rearm_child','babysit':'invalid_request'}[guard]
     assert e.tool.handle(args,session_id='delegate-child')['error']==expected
 
 
@@ -263,7 +263,7 @@ def test_R2_G7_invalid_duration_refused(engine, action):
     before=arm(e) if action=='update' else None
     if before: args['id']=before.id
     result=e.tool.handle(args,session_id='sid')
-    assert result['error']==('role_required' if action=='create' else 'invalid_request')
+    assert result['error']=='invalid_request'
     assert not any(w.trigger_json.get('after')=='1 month' for w in e.store.list_wakes())
     if before: assert e.store.get_wake(before.id).trigger_json==before.trigger_json
 

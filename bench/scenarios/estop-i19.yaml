@@ -5,7 +5,6 @@ cites:
 settings: {}
 arms:
 - ref: task
-  existing: true
   args:
     note: Report the task.
     trigger:

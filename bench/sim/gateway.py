@@ -155,12 +155,7 @@ class FakeGateway:
         else:
             args={'action':'create',**action['args']}
             args=json.loads(self.expand(json.dumps(args)).replace('$HOME',str(e.ctx._manager.home_path)))
-            with self.bound(session):
-                if action.get('existing'):
-                    from .legacy import seed_existing
-                    result=seed_existing(e,e.store.get_session(session['key']),args)
-                else:
-                    result=e.tool.handle(args,session_id=session['sid'])
+            with self.bound(session):result=e.tool.handle(args,session_id=session['sid'])
             self.trace.append({'t':self.t,'event':'arm_result','ref':ref,'error':result.get('error',''),'detail':result.get('detail','')})
             if action.get('owner_turn'):e.intake.on_session_end(session_id=session['sid'],turn_id=turn,completed=True)
             if 'expect_error' in action and not result.get('ok'):return

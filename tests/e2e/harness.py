@@ -306,25 +306,9 @@ class PulseRig:
         rows = self.rows("occurrences", "WHERE wake_id=?", (wid,))
         return rows[-1] if rows else None
 
-    def existing_agent_wake(self,note,trigger):
-        """Load a pre-upgrade record in the disposable profile before its first match."""
-        from cadence.clock import SystemClock
-        from cadence.model import Wake
-        from cadence.schedule import parse_at
-        from cadence.store import Store
-
-        clock = SystemClock()
-        session = self.session()
-        due = parse_at(trigger['at'],now=clock.now(),timezone='UTC') if trigger['kind']=='at' else clock.now()
-        with Store(self.pulse_db,clock) as store:
-            return store.create_wake(Wake(session['session_key'],note,trigger['kind'],
-                platform=session['platform'],chat_id=session['chat_id'],chat_type=session['chat_type'],
-                armed_session_id=session['current_session_id'],trigger_json=trigger,next_due_at=due)).id
-
     def agent_arm(self, token, trigger, *, note=None, until=None):
         before = {w["id"] for w in self.rows("wakes")}
         args = {"action": "create", "note": note or token, "trigger": trigger}
-        args["owner_asked" if trigger["kind"] == "at" else "role"] = True
         if until:
             args["until"] = until
         self.director.script(token, ToolCall("pulse", args), Text(f"ARMED-{token}"))

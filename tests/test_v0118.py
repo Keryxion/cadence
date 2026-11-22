@@ -132,10 +132,12 @@ def test_granted_receipt_after_mutation(engine, action):
 
 def test_receipt_excludes_ignored_refused_user_proposed_and_paused(engine, command):
     ignored = create(engine, owner_asked=True)
-    assert ignored['error'] == 'verified_owner_reminder_required'
+    assert ignored.get('ok') and ignored['owner_asked_ignored'] == 'not_owner_turn'
+    assert not ignored['wake']['owner_requested'] and EXEMPTION not in receipt(ignored)
     owner_turn(engine)
     recurring = create(engine, {'kind':'every', 'every':'1h'}, owner_asked=True)
-    assert recurring['error'] == 'verified_owner_reminder_required'
+    assert recurring.get('ok') and recurring['owner_asked_ignored'] == 'not_one_shot'
+    assert not recurring['wake']['owner_requested'] and EXEMPTION not in receipt(recurring)
     refused = create(engine, {'kind':'at', 'at':'in 366d'}, owner_asked=True)
     assert refused.get('error') == 'invalid_request' and 'receipt' not in refused
     assert EXEMPTION not in command('add in 1h check the domain')

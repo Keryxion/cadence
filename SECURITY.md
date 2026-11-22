@@ -129,14 +129,6 @@ Hermes may auto-resume a wake turn interrupted by a crash; cadence keeps the
 replay silent, never counts it as a fire or delivery, and counts it as a model
 turn.
 
-### Final reply accounting
-
-Cadence serializes discretionary final-reply admission in the originating profile and chat. A released reply spends one token. `/pulse why` records that admission with an unknown adapter outcome. A model completion, accepted injection, or generic post-delivery callback cannot confirm receipt. Suppressed replies and failures before release spend nothing. After release, an uncertain send keeps its charge.
-
-This covers final text on supported messaging gateways. Platform previews, streamed deltas, interim commentary, and tool progress can appear earlier. The pinned Hermes adapters consume their own transport results, and the generic callback also runs during cleanup after failure. [Hermes final-send path](https://github.com/NousResearch/hermes-agent/blob/04eb00cef7d9ac2730ed5fd9039a6f3287eb49ca/gateway/platforms/base.py#L4378) · [Hermes streaming path](https://github.com/NousResearch/hermes-agent/blob/818c13be1dc4fd28987e1e881a9408224afd4535/gateway/run_turn_runner.py#L931)
-
-A follow-up stores the verified owner message and its chat, session and turn identifiers with the one-shot wake. Cadence supplies that snapshot to the model only after the continuation marker is admitted in the originating conversation.
-
 ## Reporting
 
 Report a suspected vulnerability privately to the repository maintainers through

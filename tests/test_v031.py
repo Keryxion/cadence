@@ -3,11 +3,7 @@ from dataclasses import replace
 
 from test_engine import KEY, arm, end, engine, pending, start
 from test_v03_u3 import desk
-from test_v0114 import create as schedule
-
-
-def create(e,trigger):
-    return schedule(e,trigger,role=True)
+from test_v0114 import create
 
 
 def test_desk_shows_each_roles_rhythm(engine):

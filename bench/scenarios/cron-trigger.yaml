@@ -15,7 +15,6 @@ timeline:
   event: arm
   arm:
     ref: cron
-    existing: true
     args:
       note: Report useful news for cron
       trigger:

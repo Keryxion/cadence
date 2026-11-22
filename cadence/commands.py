@@ -119,16 +119,9 @@ def _occurrences(engine, wake):
     reasons={'held_interruptions':'held: waiting for an interruption token', 'interruption_limit':'dropped: no interruption tokens', 'held_unanswered':'held: waiting for your reply', 'held_daily_cap':'held: waiting for daily capacity', 'held_paused':'held: wake paused',
         'unanswered':'dropped: unanswered mute', 'daily_model_cap':'dropped: daily model cap',
         'daily_message_cap':'dropped: daily message cap', 'expired_held':'expired while held'}
-    rows = []
-    for o in engine.store.list_occurrences(wake.id)[-10:]:
-        status = reasons.get(o.error,o.error.replace('_',' ') or o.outcome or 'none')
-        delivery = ('final admitted · adapter outcome unknown' if engine.store.get_meta('admitted:'+o.id)
-                    else 'delivered yes' if o.delivered else 'delivered no')
-        matched = o.matched_at if o.matched_at is not None else o.created_at
-        rows.append(f'{o.dedupe_key} · {o.state} · {status} · matched/created '
-                    f'{_time(engine,matched) if matched else "before v0.1.2"} · '
-                    f'held-since {_time(engine,o.held_since)} · {delivery}')
-    return '\n'.join(rows)
+    return '\n'.join(f'{o.dedupe_key} · {o.state} · {reasons.get(o.error,o.error.replace("_"," ") or o.outcome or "none")} · '
+        f'matched/created {_time(engine,o.matched_at) if o.matched_at is not None else _time(engine,o.created_at) if o.created_at else "before v0.1.2"} · held-since {_time(engine,o.held_since)} · delivered {"yes" if o.delivered else "no"}'
+        for o in engine.store.list_occurrences(wake.id)[-10:])
 
 
 def _ledger(engine, key, days):

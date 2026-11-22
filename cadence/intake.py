@@ -9,7 +9,6 @@ import re
 import uuid
 
 from .model import Session
-from .policy import owner_class
 from . import governor
 
 MARKER = re.compile(r'^⟦pulse o:([^\s]+) a:(\d+)(?: n:([0-9a-f]{16}))?⟧(?:\s|$)')
@@ -74,8 +73,6 @@ def fail_open(fn):
         except Exception:
             # No hook payload or raw exception text in log messages.
             self.engine.log.warning('cadence hook %s failed',fn.__name__,exc_info=True)
-            if fn.__name__ == 'transform_llm_output' and kwargs.get('session_id') in self.flights:
-                return '[SILENT]'
             return None
     return call
 
@@ -486,7 +483,9 @@ class Intake:
         previous_context = self.owner_contexts.get(session_id)
         if not previous_context or previous_context['turn'] != turn_id:
             self.owner_contexts.pop(session_id, None)
-        if inbound and turn_id and isinstance(user_message,str) and inbound.strip() == user_message.strip():
+        if (inbound and turn_id and isinstance(user_message,str)
+                and (inbound.strip() == user_message.strip()
+                     or ORIGIN in user_message and user_message.rstrip().endswith(inbound.strip()))):
             self.owner_contexts[session_id] = dict(chat=key, session=session_id, turn=turn_id, text=inbound)
         parsed=marker(user_message,secret=s.get_meta('marker_secret'),require_tag=(identity.chat_type != 'dm'))
         if not parsed:
@@ -875,33 +874,18 @@ class Intake:
             if f.invalid or not o or o.state!='started' or o.attempt!=f.attempt: return '[SILENT]'
             w=s.get_wake(o.wake_id)
             session=s.get_session(f.session_key)
-            continuation = 'continuation' in w.trigger_json and o.outcome is None
-            notify = o.notify or continuation
-            silent = (not notify or not e.policy.enabled or not session.enabled or e.paused()
-                      or o.force_silent or not response_text.strip()
-                      or response_text.strip().lower() == '[silent]')
-            if notify and o.summary.strip() and o.summary_hash:
-                silent = silent or any(x.delivered and x.summary_hash == o.summary_hash and x.ended_at is not None
-                    and 0 <= e.clock.now()-x.ended_at <= 86400 for x in s.list_occurrences(w.id,state='done'))
-
-            # Serial with all role and watcher releases on this profile's store.
-            # The adapter consumes its own SendResult. An admitted final keeps its charge.
-            admission = 'admitted:'+o.id
-            if s.get_meta(admission):
+            if 'continuation' in w.trigger_json and o.outcome is None:
+                s.update_occurrence(o.wake_id,o.dedupe_key,'started',attempt=f.attempt,notify=True)
+                o=s.get_occurrence(o.wake_id,o.dedupe_key)
+            silence=(not e.policy.enabled or not session.enabled or e.paused() or
+                     o.force_silent or not o.notify) or (
+                o.outcome is None and response_text.strip().casefold() in BARE_SILENCE)
+            if o.notify and o.summary.strip() and o.summary_hash:
+                silence=silence or any(x.delivered and x.summary.strip() and x.summary_hash==o.summary_hash and x.ended_at is not None and
+                    0<=e.clock.now()-x.ended_at<=86400 for x in s.list_occurrences(o.wake_id,state='done'))
+            if silence:
+                s.update_occurrence(o.wake_id,o.dedupe_key,'started',attempt=f.attempt,force_silent=True)
                 return '[SILENT]'
-            discretionary = not (owner_class(w) and w.kind == 'at')
-            if not silent and discretionary and not e.interruption_tokens(f.session_key):
-                silent = True
-                if w.role and f.scratch is None:
-                    f.scratch = (o.summary or response_text.strip())[:4000]
-            if silent:
-                s.update_occurrence(w.id,o.dedupe_key,'started',attempt=f.attempt,force_silent=True)
-                return '[SILENT]'
-            if continuation:
-                s.update_occurrence(w.id,o.dedupe_key,'started',attempt=f.attempt,notify=True)
-            s.set_meta(admission,'adapter outcome unknown')
-            if discretionary:
-                e.interruption_tokens(f.session_key,spend=True)
         return None
 
     @fail_open
@@ -940,12 +924,13 @@ class Intake:
             # between claim/start/transform and successful finalization.
             w=s.get_wake(o.wake_id)
             silenced=o.force_silent or not o.notify or not e.policy.enabled or not session.enabled or e.paused()
-            admitted = bool(s.get_meta('admitted:'+o.id))
-            delivered=bool(admitted and o.notify and not silenced and not f.owner_replied)
+            delivered=bool(o.notify and not silenced and not f.owner_replied)
             if not s.finish(o.wake_id,o.dedupe_key,attempt=o.attempt,outcome=o.outcome or 'unreported',delivered=delivered,force_silent=silenced): return None
             if f.scratch is not None:
                 s.cas_wake(w.id,w.status,expected_version=w.version,scratch=f.scratch)
             if delivered and session:
+                if 'continuation' not in w.trigger_json:
+                    e.interruption_tokens(key, spend=True)
                 session=s.get_session(key)
                 s.cas_session(key,{'unanswered_count':session.unanswered_count},
                               unanswered_count=session.unanswered_count+1,first_notice_sent=True)

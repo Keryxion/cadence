@@ -11,9 +11,8 @@ arms:
     trigger:
       kind: at
       at: in 30d
-  expect_error: role_required
+  expect_error: invalid_request
 - ref: long
-  existing: true
   args:
     note: Report useful news for long
     trigger:
@@ -43,7 +42,8 @@ expectations:
   observations:
   - event: arm_result
     ref: far
-    error: role_required
+    error: invalid_request
+    detail: due after the maximum lifetime of 14 days (max_lifetime_days setting)
 heartbeat_checklist:
 - ref: long
   session: owner

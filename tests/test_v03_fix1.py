@@ -141,7 +141,7 @@ def test_f2_role_expiry_create_and_old_role_update(engine):
     assert result['wake']['expires_at'] == e.clock.now()+365*86400
     assert result['clamped']['expires'].endswith('(max_reminder)')
     result = create(e, role=False, trigger={'kind': 'every', 'every': '1h'}, until={'expires': 'in 30d'})
-    assert result['error'] == 'role_required'
+    assert result['wake']['expires_at'] == e.clock.now()+14*86400
 
 
 @pytest.mark.parametrize('mode', ['floor', 'cache'])
@@ -223,7 +223,7 @@ def test_f5_recurring_receipt_matches_message_holds(engine):
     e = engine
     e.policy = replace(e.policy)
     session(e, unanswered_count=5)
-    result = create(e, trigger={'kind': 'every', 'every': '1h'})
+    result = create(e, role=False, trigger={'kind': 'every', 'every': '1h'})
     assert result.get('ok'), result
     receipt = result['receipt']
     assert 'messages are held; work still runs' in receipt
@@ -277,7 +277,7 @@ def test_f8_self_role_spreads_budget_by_default(engine, monkeypatch):
     result = create(e, budget={'turns_per_day': 12})
     assert result['wake']['base_interval_s'] == result['wake']['eff_interval_s'] == 7200
     result = create(e, role=False)
-    assert result['error'] == 'role_required'
+    assert result['wake']['eff_interval_s'] == e.policy.agent_ungated_floor_minutes*60
 
 
 def test_f9_embedded_desk_is_bounded_after_escaping(engine):
@@ -298,7 +298,9 @@ def test_f10_role_cannot_be_babysit(engine):
     result = create(e)
     assert e.tool.handle({'action': 'update', 'id': result['wake']['id'], 'babysit': True}, session_id='sid') == {'error': 'role_not_babysit'}
     result = create(e, role=False, babysit=True, trigger={'kind': 'self'})
-    assert result['error'] == 'role_required'
+    assert result.get('ok'), result
+    assert result['wake']['expires_at'] <= e.clock.now()+4*3600
+    assert result['wake']['max_fires'] == 24
 
 
 def test_f1_gc_keeps_live_spend_markers(engine):

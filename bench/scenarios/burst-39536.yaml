@@ -7,7 +7,6 @@ settings:
   interruption_capacity: 10
 arms:
 - ref: task0
-  existing: true
   session: owner
   args:
     note: Close the named open loop and report only useful news.
@@ -15,7 +14,6 @@ arms:
       kind: at
       at: in 5m
 - ref: task1
-  existing: true
   session: owner
   args:
     note: Close the named open loop and report only useful news.
@@ -23,7 +21,6 @@ arms:
       kind: at
       at: in 5m
 - ref: task2
-  existing: true
   session: owner
   args:
     note: Close the named open loop and report only useful news.
@@ -31,7 +28,6 @@ arms:
       kind: at
       at: in 5m
 - ref: task3
-  existing: true
   session: owner
   args:
     note: Close the named open loop and report only useful news.

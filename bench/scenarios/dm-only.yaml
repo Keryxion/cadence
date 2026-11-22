@@ -13,7 +13,6 @@ arms:
   session: group
   expect_error: dm_only
 - ref: dm
-  existing: true
   args:
     note: Report useful news for dm
     trigger:

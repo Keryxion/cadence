@@ -143,7 +143,7 @@ def kinds_detail(kind):
 @pytest.mark.parametrize('action', ['create', 'update', 'all'])
 def test_unknown_kind_detail_on_all_tool_paths(engine, action, monkeypatch):
     if action == 'create':
-        result = engine.tool.handle(dict(action='create',note='task',trigger={'kind':'after','after':'10m','every':'5m'}))  # the plain after/at alias is valid
+        result = create(engine, {'kind':'after','after':'10m','every':'5m'})  # the plain after/at alias is valid
     else:
         w = arm(engine)
         if action == 'all':  # Exercise the aggregate gate path (update/all is refused earlier).
@@ -197,7 +197,7 @@ def test_ten_malformed_values_through_handle(engine, kind, field, values):
     {'trigger':{'kind':'url','url':'https://[bad'}},
 ])
 def test_other_malformed_inputs_do_not_leak_python_errors(engine, args):
-    result = engine.tool.handle({'action':'create','role':True,'note':'task','trigger':{'kind':'self'},**args})
+    result = create(engine, **args)
     assert result.get('error') == 'invalid_request', result
     assert result['detail'].startswith(('invalid request', 'invalid URL')), result
 

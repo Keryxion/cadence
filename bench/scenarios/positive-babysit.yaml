@@ -5,7 +5,6 @@ cites:
 settings: {}
 arms:
 - ref: task
-  existing: true
   args:
     note: Watch this active job and report success.
     trigger:

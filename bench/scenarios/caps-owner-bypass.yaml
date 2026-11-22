@@ -9,11 +9,8 @@ settings:
   interruption_refill_seconds: 3600
   max_unanswered: 10
 arms:
-- ref: first
-  existing: true
-  args:
-    note: Report the first finding
-    trigger: {kind: at, at: in 1m}
+- ref: owner
+  command: add in 1m Owner reminder
 - ref: requested
   args: &id001
     note: Report useful news for requested
@@ -23,14 +20,12 @@ arms:
     owner_asked: true
   owner_turn: true
 - ref: timer
-  existing: true
   args:
     note: Report useful news for timer
     trigger:
       kind: at
       at: in 23m
 - ref: watcher
-  existing: true
   args:
     note: Report useful news for watcher
     trigger:
@@ -68,7 +63,7 @@ model_policy:
 duration: 3800
 expectations:
   required_fires:
-  - wake: first
+  - wake: owner
     window:
     - 60
     - 75
@@ -90,7 +85,7 @@ expectations:
     - 735
   forbidden_deliveries: []
   bars:
-    first:
+    owner:
       deliveries: 1
       model_wakes: 1
       status: done
@@ -137,9 +132,9 @@ expectations:
     - 1800
     - 1800
 heartbeat_checklist:
-- ref: first
+- ref: owner
   session: owner
-  note: Report the first finding
+  note: add in 1m Owner reminder
 - ref: requested
   session: owner
   note: Report useful news for requested
