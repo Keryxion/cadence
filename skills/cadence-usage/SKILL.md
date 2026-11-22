@@ -162,6 +162,8 @@ Wake on a Telegram reaction in this conversation:
 
 ## Respond on every wake turn
 
+Use the UTC time, note, trigger or delay reason, and any scratch or role desk to decide what work remains. A message hold affects whether the owner can hear from you. Counts, token balance and cache information explain scheduling and delivery policy. The occurrence ID and attempt identify the dispatch internally. The runtime supplies them to `respond` automatically.
+
 Do the work, then call:
 
 ```json
@@ -186,6 +188,6 @@ Use `pulse(action="list")` for compact current responsibilities. Pass `detailed=
 
 `follow_up` accepts relative durations such as `30s`, `2 minutes`, or `1m30s`, within 15 seconds through 15 minutes. Each call creates an independent timer. Cancel an earlier ID explicitly to replace it. Timers survive gateway restarts, and `/new` orphans them. If a turn is underway in the conversation when a timer becomes due, it is consumed without queuing a continuation.
 
-A successful `follow_up` arm returns `id`, `armed: true`, and `due_at` as an absolute ISO 8601 UTC timestamp. Cadence scheduling timestamps use UTC and end in `Z`. Use `get_time({})` to read the host clock in UTC and the Hermes profile timezone, or pass an IANA name such as `{"timezone":"America/New_York"}`. Relative timers can be armed directly.
+A successful `follow_up` arm returns `id`, `armed: true`, and `due_at` as an absolute ISO 8601 UTC timestamp. Cadence scheduling timestamps use UTC and end in `Z`. Use `get_time({})` to read the host clock in UTC and the Hermes profile timezone, or pass an IANA name such as `{"timezone":"America/New_York"}`. If Hermes has no timezone configured, the default is UTC. Pass a timezone explicitly for household time. Relative timers can be armed directly.
 
 When a timer fires, you receive `Follow-up fired` with scheduled and current timestamps and the current conversation history. Decide what needs doing from that conversation, including messages since arming.

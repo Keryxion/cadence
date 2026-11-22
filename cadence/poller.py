@@ -168,6 +168,8 @@ class Poller:
                             noticed.add(w.session_key)
             for o in s.list_occurrences() if self.process_start else []:
                 if o.state=='claimed':
+                    if self.retire_unacknowledged_continuation(o):
+                        continue
                     s.refund(o.wake_id,o.dedupe_key,attempt=o.attempt,error='restart_refund')
                     s.set_meta('recovered:'+o.id,'1')
                 elif o.state=='started': self.interrupt(o,'restart')
@@ -338,12 +340,26 @@ class Poller:
                 s.cas_session(session.session_key,{'busy_since':session.busy_since,'last_activity_at':session.last_activity_at},busy_since=None,busy_epoch=None)
         for o in s.list_occurrences(state='claimed'):
             if o.claimed_at is None or self.clock.now()-o.claimed_at<600: continue
+            if self.retire_unacknowledged_continuation(o):
+                continue
             if int(s.get_meta('accepted:'+o.id) or o.attempt)>=3:
                 s.cas_occurrence(o.wake_id,o.dedupe_key,'claimed','dead',attempt=o.attempt,error='ack_timeout')
                 self.notice(s.get_wake(o.wake_id).session_key,'A wake was not acknowledged after three attempts.')
                 self.terminal_one_shot(s.get_wake(o.wake_id))
                 governor.error(self,s.get_wake(o.wake_id))
             else: s.refund(o.wake_id,o.dedupe_key,attempt=o.attempt,error='ack_timeout')
+
+    def retire_unacknowledged_continuation(self, occurrence):
+        # The worker may already have run this admitted turn.
+        s = self.store
+        wake = s.get_wake(occurrence.wake_id)
+        if 'continuation' not in wake.trigger_json or not s.get_meta('accepted:' + occurrence.id):
+            return False
+        if s.cas_occurrence(wake.id, occurrence.dedupe_key, 'claimed', 'dead',
+                            attempt=occurrence.attempt, error='continuation_ack_unknown'):
+            s.set_meta('continuation_dispatch:' + wake.session_key, '')
+            self.terminal_one_shot(wake)
+        return True
 
     def family_enabled(self,w):
         family='silence' if w.kind=='owner_silent' else 'events' if w.kind in EVENT_KINDS else w.kind if w.kind in PROBE_KINDS else None

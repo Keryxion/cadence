@@ -322,3 +322,29 @@ def test_gateway_worker_acknowledges_follow_up_after_intervening_turn(engine):
     finally:
         worker.close()
         store.close()
+
+
+@pytest.mark.parametrize('restart', [True, False])
+def test_admitted_continuation_with_missing_ack_is_never_reinjected(engine, restart):
+    from test_startup import reopen
+
+    e = engine
+    owner(e, 'original', 'Check the build')
+    timer = call(e, {'at':'15s'})['id']
+    e.intake.on_session_end(session_id='sid', turn_id='original')
+    e.clock.advance(15)
+    e.tick()
+    assert e.store.list_occurrences(timer)[0].state == 'claimed'
+    if restart:
+        e = reopen(e)
+    try:
+        e.clock.advance(601)
+        e.tick()
+        e.tick()
+        assert len(e.ctx.calls) == 1
+        assert e.store.list_occurrences(timer)[0].error == 'continuation_ack_unknown'
+        assert e.store.get_wake(timer).status == 'failed'
+    finally:
+        if restart:
+            e.close()
+            e.store.close()

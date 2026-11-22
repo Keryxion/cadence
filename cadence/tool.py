@@ -29,7 +29,7 @@ PARAMETERS = obj({
     'role': {'type':'boolean', 'description':'Standing responsibility; recurring creates only, fixed after creation.'},
     'budget': obj({'turns_per_day': {'type':'integer', 'description':'Daily role turns, capped by settings.'}}),
     'outcome': {'type':'string','enum':['no_change','progress','done','blocked','needs_attention']},
-    'notify':BOOL, 'summary':STR, 'next_check':STR, 'scratch':STR,
+    'notify':BOOL, 'summary':{'type':'string', 'maxLength':280, 'description':'Result text, up to 280 characters.'}, 'next_check':STR, 'scratch':STR,
 })
 PARAMETERS['required'] = ['action']
 DESCRIPTION = ('Your own time in this chat. Use create to arm a wake/watcher (note and trigger.kind required), or a role '
@@ -562,6 +562,8 @@ class Tool:
             item['last_result'] = {'outcome':last.outcome or last.state, 'summary':last.summary,
                                    'at':format_timestamp(last.ended_at)}
         reason = (latest.held_reason or latest.error) if latest else wake.status_reason
+        if not reason and wake.kind == 'startup' and wake.status == 'active' and not pending:
+            reason = 'Waiting for the next gateway startup.'
         if reason:
             item['reason'] = reason
         return item

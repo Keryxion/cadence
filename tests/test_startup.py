@@ -32,6 +32,9 @@ def test_startup_survives_restart_and_obeys_cap(engine, monkeypatch, max_fires):
     monkeypatch.setattr('cadence.poller.gateway_process_start', lambda: (f'startup:42:{birth}', birth))
     result = create(e, until={'max_fires':max_fires})
     assert result['armed'] and 'next gateway startup' in result['receipt']
+    row, = e.tool.handle({'action':'list'}, session_id='sid')['wakes']
+    assert row['next_check_at'] is None
+    assert row['reason'] == 'Waiting for the next gateway startup.'
     wid = result['wake']['id']
     e.tick()
     assert not e.ctx.calls and not e.store.list_occurrences(wid)
