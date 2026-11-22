@@ -98,6 +98,6 @@ def test_follow_up_contains_timing_without_task_instructions(clock):
     wake = replace(wake, kind='at', trigger_json={'continuation': {'turn':'owner'}})
     occurrence = replace(occurrence, dedupe_key=f't:{clock.now()-30}')
     text = render_wake(wake, occurrence, session, clock=clock, timezone='America/New_York')
-    assert text == ('Follow-up fired\nScheduled for 2025-10-12T12:04:30-04:00\n'
-                    'Current time 2025-10-12T12:05:00-04:00')
+    assert text == ("[follow_up id='w_abcdefgh' scheduled='2025-10-12T12:04:30-04:00' "
+                    "current='2025-10-12T12:05:00-04:00']\nFollow-up fired.")
     assert 'pulse' not in text and 'Check whether the build finished' not in text
