@@ -54,7 +54,13 @@ def test_startup_survives_restart_and_obeys_cap(engine, monkeypatch, max_fires):
             if index <= max_fires:
                 assert len(e.ctx.calls) == index
                 start(e)
-                end(e, 'progress', False)
+                outcome = 'done' if index == max_fires else 'progress'
+                receipt = e.tool.handle({'action':'respond', 'notify':False, 'outcome':outcome},
+                                        session_id='sid')
+                assert receipt['status'] == 'awaiting_turn_end'
+                row, = e.tool.handle({'action':'list'})['wakes']
+                assert row['pending_outcome'] == outcome
+                end(e, outcome, False)
             e.tick()
             e.release()
             e.tick()  # Reacquiring the profile, same process.

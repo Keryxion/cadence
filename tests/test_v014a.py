@@ -20,6 +20,13 @@ BAD_SETTINGS = [('interruption_capacity', 1.5),
                 ('min_interval_minutes', 0), ('timezone', 'Europe/Pari'), ('max_active', -1)]
 
 
+def set_profile_setting(settings, key, value):
+    if key == 'interruption_capacity':
+        settings['interruptions'] = {'capacity': value}
+    else:
+        settings[key] = value
+
+
 @pytest.fixture
 def runtime(tmp_path, clock, monkeypatch):
     monkeypatch.setattr(Runtime, 'start', lambda self: None)
@@ -45,7 +52,8 @@ def test_bad_live_setting_keeps_policy_and_fires(runtime, key, value):
     e = bind(runtime)
     old = e.policy
     arm(e, next_due_at=e.clock.now() + 60)
-    runtime.ctx.settings.update({key: value, 'max_unanswered': 9})
+    set_profile_setting(runtime.ctx.settings, key, value)
+    runtime.ctx.settings['max_unanswered'] = 9
     e.clock.advance(120)
     e.tick()
     assert len(e.ctx.calls) == 1
@@ -56,7 +64,7 @@ def test_bad_live_setting_keeps_policy_and_fires(runtime, key, value):
     assert 'Setting ignored: ' + key in status
     assert '; using ' in status
     assert e.tool.handle({'action': 'list'})['settings_error'] in status
-    runtime.ctx.settings[key] = getattr(old, key)
+    set_profile_setting(runtime.ctx.settings, key, getattr(old, key))
     e.refresh()
     assert not e.store.get_meta('settings_error')
     assert e.policy.max_unanswered == 9
@@ -66,8 +74,8 @@ def test_bad_live_setting_keeps_policy_and_fires(runtime, key, value):
 
 @pytest.mark.parametrize('key,value', BAD_SETTINGS)
 def test_bad_startup_setting_builds_engine_and_hooks(runtime, key, value):
-    runtime.ctx.settings[key] = value
-    runtime.ctx.settings['interruption_capacity'] = value if key == 'interruption_capacity' else 3
+    runtime.ctx.settings['interruptions'] = {'capacity': 3}
+    set_profile_setting(runtime.ctx.settings, key, value)
     e = bind(runtime)
     assert getattr(e.policy, key) == getattr(Policy(), key)
     if key != 'interruption_capacity':
@@ -80,7 +88,8 @@ def test_bad_startup_setting_builds_engine_and_hooks(runtime, key, value):
 
 
 def test_multiple_bad_settings_report_each_default(runtime):
-    runtime.ctx.settings.update(dict(BAD_SETTINGS))
+    for key, value in BAD_SETTINGS:
+        set_profile_setting(runtime.ctx.settings, key, value)
     e = bind(runtime)
     status = commands.handle('status', runtime)
     for key, _ in BAD_SETTINGS:
@@ -108,7 +117,7 @@ def test_runtime_bootstrap_shares_last_good_policy(runtime, monkeypatch):
     monkeypatch.setattr(Poller, 'acquire', lambda self: True)
     def refresh_sequence(runner):
         runtime.ctx.settings.update({'timezone': 'Asia/Tokyo',
-                                     'interruption_capacity': 5})
+                                     'interruptions': {'capacity': 5}})
         runner.refresh()
         observed['before'] = (e.policy.timezone, runner.policy.timezone)
         runtime.ctx.settings['timezone'] = 'Europe/Pari'

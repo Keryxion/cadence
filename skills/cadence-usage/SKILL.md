@@ -173,7 +173,7 @@ Do the work, then call:
 Outcomes: `progress` (you did something useful, even silently), `no_change` (nothing to do), `done` (finished for good), `blocked`, `needs_attention`.
 - notify=false → your final reply is not posted; the work still counts. Write no text alongside tool calls on a wake turn; some platforms show tool progress.
 - Never type silence markers. `notify=true` delivers one short, specific message. Do not guilt an absent owner or mention machinery, IDs or ledgers in that message.
-- Scratch is your notebook for this wake: it replaces the prior scratch. Scratch and next_check commit only when the turn completes successfully. `next_check` applies to recurring/paced wakes, not probes. The last respond wins.
+- Scratch is your notebook for this wake: it replaces the prior scratch. Scratch and next_check commit only when the turn completes successfully. `next_check` applies to recurring/paced wakes, not probes. The last respond wins. Its receipt says `awaiting_turn_end`. During the turn, compact list shows the staged result as `pending_outcome`; the scheduler settles it when the turn ends.
 
 For a recurring, self or role wake, you may request the next check:
 
@@ -186,7 +186,7 @@ For a recurring, self or role wake, you may request the next check:
 
 Use `pulse(action="list")` for compact current responsibilities. Pass `detailed=true` to include full records and finished history. Follow-up timers remain separate.
 
-`follow_up` accepts relative durations such as `30s`, `2 minutes`, or `1m30s`, within 15 seconds through 15 minutes. Each call creates an independent timer. Cancel an earlier ID explicitly to replace it. Timers survive gateway restarts, and `/new` orphans them. If a turn is underway in the conversation when a timer becomes due, it is consumed without queuing a continuation.
+`follow_up` accepts relative durations such as `30s`, `2 minutes`, or `1m30s`, within 15 seconds through 15 minutes. Only an owner turn or its follow-up can arm one. A startup watcher can use its pulse turn to run checks and report the result. To keep monitoring, arm an appropriate pulse watcher within normal scheduling limits. Each follow-up call creates an independent timer. Cancel an earlier ID explicitly to replace it. Timers survive gateway restarts, and `/new` orphans them. If a turn is underway in the conversation when a timer becomes due, it is consumed without queuing a continuation.
 
 A successful `follow_up` arm returns `id`, `armed: true`, and `due_at` as an absolute ISO 8601 UTC timestamp. Cadence scheduling timestamps use UTC and end in `Z`. Use `get_time({})` to read the host clock in UTC and the Hermes profile timezone, or pass an IANA name such as `{"timezone":"America/New_York"}`. If Hermes has no timezone configured, the default is UTC. Pass a timezone explicitly for household time. Relative timers can be armed directly.
 

@@ -280,7 +280,7 @@ def test_N7_tool_cache_fields_match_due_or_unknown_watcher(engine, hermes_helper
     trigger = {'kind':kind, **({'at':'in 3h'} if kind == 'at' else {'every':'1h'} if kind == 'every' else {})}
     created = engine.tool.handle({'action':'create', 'note':'Task', 'trigger':trigger})
     updated = engine.tool.handle({'action':'update', 'id':created['wake']['id'], 'note':'Task update'})
-    listed = engine.tool.handle({'action':'list'})['wakes'][0]
+    listed = engine.tool.handle({'action':'list', 'detailed':True})['wakes'][0]
     for text in (created['cache'], updated['cache'], listed['cache']):
         if kind == 'at': assert '180m cold' in text
         elif kind == 'every': assert '57m warm' in text
@@ -303,6 +303,6 @@ def test_N7_unknown_watcher_cache_is_only_ttl_and_last_touch(engine):
     session(engine, last_route='openai-codex|gpt-6.1-sol|chatgpt.com', last_cache_touch_at=engine.clock.now())
     w = arm(engine, 'subagent_done')
     engine.store.set_meta('cache_routes', '{"openai-codex|gpt-6.1-sol|chatgpt.com":{"max_warm_gap":100}}')
-    text = engine.tool.handle({'action':'list'})['wakes'][0]['cache']
+    text = engine.tool.handle({'action':'list', 'detailed':True})['wakes'][0]['cache']
     assert 'TTL unknown' in text and 'last touch' in text
     assert 'warm' not in text and 'cold' not in text

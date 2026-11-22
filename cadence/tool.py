@@ -558,6 +558,8 @@ class Tool:
         item = {'id':wake.id, 'title':' '.join((wake.title or wake.note).split())[:160],
                 'status':wake.status, 'kind':wake.kind, 'role':wake.role,
                 'next_check_at':format_timestamp(min(times)) if times else None}
+        if latest and latest.state == 'started' and latest.outcome:
+            item['pending_outcome'] = latest.outcome
         if last:
             item['last_result'] = {'outcome':last.outcome or last.state, 'summary':last.summary,
                                    'at':format_timestamp(last.ended_at)}
@@ -606,4 +608,4 @@ class Tool:
         if not e.store.update_occurrence(o.wake_id,o.dedupe_key,'started',attempt=o.attempt,**changes):
             return dict(NOT_IN_FLIGHT)
         if scratch is not None: flight.scratch=scratch
-        return {'ok':True,'clamped':clamps}
+        return {'ok':True,'clamped':clamps,'status':'awaiting_turn_end'}

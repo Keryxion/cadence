@@ -351,7 +351,7 @@ def test_cache_tool_consumers_and_owner_result(engine, hermes_helpers, monkeypat
     assert 'warm' in created['cache']
     updated=engine.tool.handle({'action':'update','id':created['wake']['id'],'trigger':{'kind':'self','every':'75m'}})
     assert updated['wake']['eff_interval_s']==3420 and 'warm' in updated['cache']
-    assert 'cache' in engine.tool.handle({'action':'list'})['wakes'][0]
+    assert 'cache' in engine.tool.handle({'action':'list', 'detailed':True})['wakes'][0]
     engine.clock.advance(3420);engine.tick();start(engine)
     verdict=engine.tool.handle({'action':'respond','outcome':'no_change','notify':False,'next_check':'1h'},session_id='sid')
     assert verdict['ok']
