@@ -689,6 +689,9 @@ class Poller:
                 health.pop('trial',None); s.set_meta('provider_health',json.dumps(health))
             s.refund(w.id,o.dedupe_key,attempt=o.attempt,error=held_by)
             return
+        continuation = 'continuation' in w.trigger_json
+        if continuation:
+            self.intake.continuation_dispatches[session.current_session_id] = (w.id, o.dedupe_key, o.attempt)
         try: accepted=self.ctx.inject_message(text,session_key=w.session_key)
         except Exception: accepted=False
         if accepted:
@@ -697,6 +700,8 @@ class Poller:
             s.set_meta('injections',json.dumps(flood+[self.clock.now()]))
             s.cas_session(session.session_key,{'last_wake_turn_at':session.last_wake_turn_at},last_wake_turn_at=self.clock.now())
         else:
+            if continuation:
+                self.intake.continuation_dispatches.pop(session.current_session_id, None)
             if health:
                 health.pop('trial',None); s.set_meta('provider_health',json.dumps(health))
             count=int(s.get_meta('inject_failures:'+o.id) or 0)+1

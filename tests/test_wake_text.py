@@ -92,3 +92,8 @@ assert "sqlite3" not in sys.modules and "croniter" not in sys.modules
 assert not any(n.startswith("hermes_cli") for n in sys.modules)
 '''
     subprocess.run([sys.executable, "-I", "-c", script], check=True, timeout=10)
+
+def test_follow_up_contains_only_a_short_signal(clock):
+    wake, occurrence, session = records(clock)
+    wake = replace(wake, kind='at', trigger_json={'continuation': {'turn':'owner'}})
+    assert render_wake(wake, occurrence, session, clock=clock) == 'Follow-up.'

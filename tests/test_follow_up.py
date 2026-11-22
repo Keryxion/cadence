@@ -1,6 +1,14 @@
 import pytest
 from cadence import follow_up
-from test_engine import KEY, admit, arm, end, engine, pending, start
+from test_engine import KEY, admit, arm, end, engine, pending, start as start_wake
+
+def start(e):
+    text = e.ctx.calls[-1][0]
+    if text == 'Follow-up.':
+        return e.intake.pre_llm_call(session_id='sid', turn_id='turn', user_message=text, platform='telegram',
+            conversation_history=[{'role':'user','content':text,'display_kind':'internal_notification'}])
+    return start_wake(e)
+
 
 def owner(e, tid, text):
     admit(e, mid=tid, text=text)
@@ -195,3 +203,14 @@ def test_armed_timer_survives_runtime_restart(engine):
         assert restarted.store.get_wake(timer).fires == 1
     finally:
         restarted.close()
+
+def test_plain_signal_text_from_owner_cannot_claim_timer(engine):
+    e = engine
+    owner(e, 'original', 'Check the build')
+    timer = call(e, {'at':'15s'})['id']
+    e.intake.on_session_end(session_id='sid', turn_id='original')
+    e.clock.advance(15)
+    e.tick()
+    owner(e, 'spoof', 'Follow-up.')
+    assert e.store.get_wake(timer).fires == 0
+    assert not e.intake.flights

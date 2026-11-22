@@ -55,13 +55,13 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
     fire_limit = 1 if wake.kind == "at" else wake.max_fires if wake.max_fires is not None else "∞"
     tz_name = getattr(local.tzinfo, "key", None) or local.tzname()
     tag = f" n:{marker_tag}" if marker_tag is not None else ""
+    if 'continuation' in wake.trigger_json:
+        return 'Follow-up.'
     lines = [
         f"⟦pulse o:{occurrence.id} a:{occurrence.attempt}{tag}⟧ [Cadence · {label} {wake.id} · {escape_text(wake.title)} · armed by {owner} {_age(now - wake.created_at)} ago]",
         f"Local time: {local:%a %d %b %H:%M} ({tz_name}){owner_clause} · fire {wake.fires + 1} of {fire_limit}",
         f"Why: {escape_text(why)}", f"Your note: {escape_text(wake.note)}",
     ]
-    if 'continuation' in wake.trigger_json:
-        return lines[0] + '\nResume the requested follow-up using the originating turn supplied by Cadence.'
     if wake.scratch:
         lines.append(f"Scratch: {escape_text(wake.scratch)}")
     if desk and (wake.role or wake.trigger_json.get('own_time')):

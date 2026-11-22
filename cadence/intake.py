@@ -284,6 +284,7 @@ class Intake:
         self.anchors={}
         self.inbounds=set()
         self.owner_turns={}
+        self.continuation_dispatches={}
         self.owner_contexts={}
         self.owner_inbounds={}
 
@@ -305,6 +306,8 @@ class Intake:
             key=self.bindings.pop(old)
             self.bindings[sid]=key
             self.turns[sid]=self.turns.pop(old,'')
+            if old in self.continuation_dispatches:
+                self.continuation_dispatches[sid] = self.continuation_dispatches.pop(old)
             if old in self.owner_contexts: self.owner_contexts[sid]=self.owner_contexts.pop(old)
             if old in self.owner_turns: self.owner_turns[sid]=self.owner_turns.pop(old)
             if old in self.anchors: self.anchors[sid]=self.anchors.pop(old)
@@ -488,6 +491,13 @@ class Intake:
                      or ORIGIN in user_message and user_message.rstrip().endswith(inbound.strip()))):
             self.owner_contexts[session_id] = dict(chat=key, session=session_id, turn=turn_id, text=inbound)
         parsed=marker(user_message,secret=s.get_meta('marker_secret'),require_tag=(identity.chat_type != 'dm'))
+        dispatched = self.continuation_dispatches.pop(session_id, None)
+        row = conversation_history[-1] if conversation_history else None
+        if (dispatched and not owner_seen and isinstance(row, dict)
+                and row.get('role') == 'user' and row.get('display_kind') == 'internal_notification'
+                and isinstance(user_message, str) and (user_message.strip() == 'Follow-up.'
+                    or re.fullmatch(r'\[[^\n]*\] Follow-up\.', user_message.strip()))):
+            parsed = dispatched
         if not parsed:
             row=conversation_history[-1] if conversation_history else None
             if isinstance(row,dict) and row.get('role')=='user' and not row.get('display_kind'):
@@ -587,9 +597,7 @@ class Intake:
                     s.cas_wake(w.id,w.status,expected_version=w.version,fires=w.fires+1,model_turns=w.model_turns+1,last_fired_at=now)
                     e.ledger(w,fires=1,model_turns=1)
                     if origin:
-                        return {'context': 'Resume work from the following originating owner turn. '
-                                'Reply naturally or use follow_up again while the work is pending.\n'
-                                + json.dumps({'turn':origin['turn'],'owner_message':origin['text']},ensure_ascii=False)}
+                        return {'context': 'Original owner message\n' + origin['text']}
                 return None
             # Compression is a lineage continuation, including when only a
             # human turn has visited the new tip before /new arrives.
