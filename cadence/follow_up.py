@@ -41,10 +41,10 @@ def handle(tool, args, *, session_id='', **kwargs):
         requests = getattr(e,'requests',None)
         if requests and session_id in requests.turns:
             return {'error':'verified_owner_turn_required'}
+        flight = e.intake.flight_for(session_id, key)
         session = e.store.get_session(key)
         if session.current_session_id != session_id:
             return {'error':'wrong_session'}
-        flight = e.intake.flight_for(session_id, key)
         origin = None
         if flight and flight.session_id == session_id and not flight.invalid:
             parent = e.store.get_wake(flight.wake_id)

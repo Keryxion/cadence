@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from threading import Barrier
+from threading import Barrier, local
 
 import pytest
 
@@ -29,6 +29,8 @@ def test_follow_up_cancel_and_context_chain(engine):
     wid=call(e,{'at':'15m'})['id']
     assert call(e,{'cancel':wid}) == call(e,{'cancel':wid}) == {'id':wid,'status':'cancelled'}
     timer=call(e,{'at':'15s'})['id']
+    listed = e.tool.handle({'action':'list'}, session_id='sid')['wakes']
+    assert all('continuation' not in w['trigger_json'] for w in listed)
     e.intake.on_session_end(session_id='sid',turn_id='original')
     owner(e,'intervening','Discuss dinner')
     e.intake.on_session_end(session_id='sid',turn_id='intervening')
@@ -194,3 +196,39 @@ def test_registered_follow_up_returns_only_the_timer_id(engine,monkeypatch):
     finally:
         runtime._engine = None
         runtime.close()
+
+
+def test_concurrent_role_triggers_start_only_one_occurrence(engine, monkeypatch):
+    role = arm(engine, 'every', role=True, last_fired_at=engine.clock.now()-3600)
+    triggers = [pending(engine, role, key) for key in ('first', 'second')]
+    eligible = Barrier(2)
+    original = engine.gate
+    worker = local()
+
+    def simultaneous_check(wake, occurrence, session):
+        result = original(wake, occurrence, session)
+        if not getattr(worker, "checked", False):
+            worker.checked = True
+            eligible.wait(timeout=5)
+        return result
+
+    monkeypatch.setattr(engine, 'gate', simultaneous_check)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(engine.dispatch, triggers))
+    assert len(engine.ctx.calls) == 1
+    start(engine)
+    assert engine.store.get_wake(role.id).fires == 1
+
+
+def test_failed_finalization_after_release_retains_charge(engine):
+    role = arm(engine, 'every', role=True)
+    occurrence = pending(engine, role)
+    engine.dispatch(occurrence)
+    start(engine)
+    engine.tool.handle(dict(action='respond', outcome='progress', notify=True, summary='Finding'), session_id='sid')
+    balance = engine.interruption_tokens(KEY)
+    assert engine.intake.transform_llm_output(response_text='Finding', session_id='sid') is None
+    engine.intake.on_session_end(session_id='sid', turn_id='turn', failed=True)
+    assert engine.store.get_meta('admitted:'+occurrence.id) == 'adapter outcome unknown'
+    assert engine.interruption_tokens(KEY) == balance-1
+    assert engine.store.get_occurrence(role.id, occurrence.dedupe_key).state == 'interrupted'

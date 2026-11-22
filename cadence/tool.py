@@ -10,6 +10,13 @@ from .policy import gateway_platform, owner_class, holds_messages
 from .schedule import parse_at, parse_duration, next_every, next_cron
 
 
+def public_wake(wake):
+    """Keep the private owner-turn snapshot out of tool receipts and listings."""
+    fields = asdict(wake)
+    fields['trigger_json'].pop('continuation', None)
+    return fields
+
+
 def obj(properties):
     return {'type': 'object', 'properties': properties, 'additionalProperties': False}
 
@@ -25,7 +32,7 @@ PARAMETERS = obj({
                     'emojis': {'type':'array','items':STR}}),
     'until': obj({'expires':STR, 'max_fires':{'type':'integer'}, 'owner_replies':BOOL}),
     'pacing': obj({'min':STR,'max':STR}), 'babysit':BOOL, 'urgent':BOOL, 'owner_asked':BOOL,
-    'role': {'type':'boolean', 'description':'Standing responsibility; recurring creates only, fixed after creation.'},
+    'role': {'type':'boolean', 'description':'Standing responsibility with a recurring timer or watcher. Fixed after creation.'},
     'budget': obj({'turns_per_day': {'type':'integer', 'description':'Daily role turns, capped by settings.'}}),
     'outcome': {'type':'string','enum':['no_change','progress','done','blocked','needs_attention']},
     'notify':BOOL, 'summary':STR, 'next_check':STR, 'scratch':STR,
@@ -137,7 +144,7 @@ class Tool:
                 if action == 'respond':
                     return self.respond(args, flight)
                 if action == 'list':
-                    return {'ok':True,'wakes':[{**asdict(w),'cache':self.cache_result(w)} for w in e.store.list_wakes(s.session_key)]}
+                    return {'ok':True,'wakes':[{**public_wake(w),'cache':self.cache_result(w)} for w in e.store.list_wakes(s.session_key)]}
                 if action == 'create':
                     if not s.enabled:
                         return {'error':'session_off'}
@@ -183,7 +190,7 @@ class Tool:
                     if request_context: e.store.set_meta('request_wake:'+w.id,request_context['id'])
                     if child_key:
                         e.store.set_meta(child_key,str(children+1))
-                    item = {'ok':True,'armed':w.status=='active','wake':asdict(w),'clamped':result.clamped,'cache':self.cache_result(w),'receipt':self.receipt(w,s)}
+                    item = {'ok':True,'armed':w.status=='active','wake':public_wake(w),'clamped':result.clamped,'cache':self.cache_result(w),'receipt':self.receipt(w,s)}
                     return item
                 if action not in {'update','pause','resume','cancel'}:
                     return {'error':'unknown_action'}
@@ -299,7 +306,7 @@ class Tool:
                         e.cancel_occurrences(w.id,'paused' if action=='pause' else 'cancelled',preserve_started=True)
                     if action == 'resume': e.store.set_meta('card:'+w.id,'')
                     w=e.store.get_wake(w.id)
-                    item={'ok':True,'armed':w.status=='active','wake':asdict(w),'clamped':clamps,'cache':self.cache_result(w)}
+                    item={'ok':True,'armed':w.status=='active','wake':public_wake(w),'clamped':clamps,'cache':self.cache_result(w)}
                     if action in {'update','resume'}: item['receipt']=self.receipt(w,s)
                     results.append(item)
                 return results[0] if args.get('id') != 'all' and results else {'ok':True,'results':results}
