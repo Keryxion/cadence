@@ -939,7 +939,11 @@ class Intake:
                 s.cas_wake(w.id,w.status,expected_version=w.version,scratch=f.scratch)
             if delivered and session:
                 if 'continuation' not in w.trigger_json:
-                    e.interruption_tokens(key, spend=True)
+                    # The scheduler may live in another process. Return evidence
+                    # for its claim; never spend from a worker-local bucket.
+                    s.set_meta('interruption_delivery:' + key, json.dumps([
+                        [o.id, o.attempt, o.epoch], e.clock.monotonic(),
+                        e.policy.interruption_capacity, e.policy.interruption_refill_seconds]))
                 session=s.get_session(key)
                 s.cas_session(key,{'unanswered_count':session.unanswered_count},
                               unanswered_count=session.unanswered_count+1,first_notice_sent=True)

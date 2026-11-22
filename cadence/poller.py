@@ -4,7 +4,7 @@ Coalescing/claim/refund follows Hermes heartbeat.py; fingerprint gating follows
 cron/monitor.py; estop and busy ordering follows gateway/run_goals.py.
 """
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 import fcntl
 import hashlib
 import json
@@ -46,6 +46,21 @@ def check_paused():
     except Exception:
         # An unreadable stop state must never authorize a claim.
         return True
+
+
+@dataclass
+class InterruptionBucket:
+    tokens: int
+    anchor: float
+    pending: list | None = None
+
+    def balance(self, now, capacity, interval, *, spend=False):
+        refill = int((now - self.anchor) // interval)
+        available = min(capacity, self.tokens + refill)
+        if spend:
+            self.anchor = now if available == capacity else self.anchor + refill * interval
+            self.tokens = max(0, available - 1)
+        return available
 
 
 class Poller:
@@ -210,20 +225,22 @@ class Poller:
     def interruption_tokens(self, key, *, spend=False):
         """Use elapsed time so wall-clock corrections never refill a chat.
 
-        A single in-flight wake per chat lets finalization charge only a delivered
-        message. The runner and gateway hooks share this in-memory mapping.
+        Only the gateway owns balances. A worker finishing a turn leaves a
+        timestamped delivery receipt in the same transaction as finish().
         """
-        now = self.clock.monotonic()
-        capacity = self.policy.interruption_capacity
-        interval = self.policy.interruption_refill_seconds
-        tokens, anchor = self.interruption_buckets.setdefault(
-            key, (min(capacity, self.policy.interruption_initial), now))
-        refill = int((now - anchor) // interval)
-        tokens = min(capacity, tokens + refill)
-        if spend:
-            anchor = now if tokens == capacity else anchor + refill * interval
-            self.interruption_buckets[key] = (max(0, tokens - 1), anchor)
-        return tokens
+        with self.store.atomic():
+            now = self.clock.monotonic()
+            capacity = self.policy.interruption_capacity
+            bucket = self.interruption_buckets.setdefault(
+                key, InterruptionBucket(min(capacity, self.policy.interruption_initial), now))
+            if bucket.pending:
+                receipt = self.store.get_meta('interruption_delivery:' + key)
+                if receipt:
+                    delivery, at, limit, interval = json.loads(receipt)
+                    if delivery == bucket.pending:
+                        bucket.balance(at, limit, interval, spend=True)
+                        bucket.pending = None
+            return bucket.balance(now, capacity, self.policy.interruption_refill_seconds, spend=spend)
 
     def daily(self,key):
         return self.store.daily_counts(key,self.policy.resolved_timezone())
@@ -714,6 +731,9 @@ class Poller:
                 health.pop('trial',None); s.set_meta('provider_health',json.dumps(health))
             s.refund(w.id,o.dedupe_key,attempt=o.attempt,error=held_by)
             return
+        # Rendering has settled the previous delivery. Only one claim can be
+        # in flight per chat; fence its receipt by occurrence, attempt and epoch.
+        self.interruption_buckets[w.session_key].pending = [o.id, o.attempt, o.epoch]
         continuation = 'continuation' in w.trigger_json
         if continuation:
             # The gateway may execute the admitted turn in a different process.
