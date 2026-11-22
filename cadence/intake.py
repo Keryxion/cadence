@@ -495,8 +495,8 @@ class Intake:
         row = conversation_history[-1] if conversation_history else None
         if (dispatched and not owner_seen and isinstance(row, dict)
                 and row.get('role') == 'user' and row.get('display_kind') == 'internal_notification'
-                and isinstance(user_message, str) and (user_message.strip() == 'Follow-up.'
-                    or re.fullmatch(r'\[[^\n]*\] Follow-up\.', user_message.strip()))):
+                and isinstance(user_message, str) and (user_message.strip() == 'Follow-up fired'
+                    or re.fullmatch(r'\[[^\n]*\] Follow-up fired', user_message.strip()))):
             parsed = dispatched
         if not parsed:
             row=conversation_history[-1] if conversation_history else None
@@ -596,8 +596,6 @@ class Intake:
                 if o.state=='claimed' and s.start(wid,dedupe,attempt=attempt):
                     s.cas_wake(w.id,w.status,expected_version=w.version,fires=w.fires+1,model_turns=w.model_turns+1,last_fired_at=now)
                     e.ledger(w,fires=1,model_turns=1)
-                    if origin:
-                        return {'context': 'Original owner message\n' + origin['text']}
                 return None
             # Compression is a lineage continuation, including when only a
             # human turn has visited the new tip before /new arrives.

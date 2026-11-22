@@ -96,4 +96,4 @@ assert not any(n.startswith("hermes_cli") for n in sys.modules)
 def test_follow_up_contains_only_a_short_signal(clock):
     wake, occurrence, session = records(clock)
     wake = replace(wake, kind='at', trigger_json={'continuation': {'turn':'owner'}})
-    assert render_wake(wake, occurrence, session, clock=clock) == 'Follow-up.'
+    assert render_wake(wake, occurrence, session, clock=clock) == 'Follow-up fired'

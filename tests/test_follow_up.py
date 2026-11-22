@@ -2,11 +2,11 @@ import pytest
 from cadence import follow_up
 from test_engine import KEY, admit, arm, end, engine, pending, start as start_wake
 
-def start(e):
+def start(e, history=None):
     text = e.ctx.calls[-1][0]
-    if text == 'Follow-up.':
+    if text == 'Follow-up fired':
         return e.intake.pre_llm_call(session_id='sid', turn_id='turn', user_message=text, platform='telegram',
-            conversation_history=[{'role':'user','content':text,'display_kind':'internal_notification'}])
+            conversation_history=history or [{'role':'user','content':text,'display_kind':'internal_notification'}])
     return start_wake(e)
 
 
@@ -35,8 +35,16 @@ def test_follow_up_cancel_and_context_chain(engine):
     e.intake.on_session_end(session_id='sid',turn_id='intervening')
     e.clock.advance(15)
     e.tick()
-    context = start(e)
-    assert 'Check my running build' in context['context'] and 'Discuss dinner' not in context['context']
+    history = [
+        {'role':'user','content':'Check my running build'},
+        {'role':'user','content':'Discuss dinner'},
+        {'role':'user','content':'Follow-up fired','display_kind':'internal_notification'}]
+    expected_history = [dict(row) for row in history]
+    context = start(e, history)
+    assert context is None
+    assert history == expected_history
+    assert e.ctx.calls[-1][0] == 'Follow-up fired'
+    assert 'text' not in e.store.get_wake(timer).trigger_json['continuation']
     assert call(e,{'cancel':timer})['status']=='already_started'
     next_id=call(e,{'at':'15s'})['id']
     assert e.store.get_wake(next_id).trigger_json['continuation']['turn']=='original'
@@ -101,7 +109,8 @@ def test_owner_context_and_zero_bucket(engine, wrapped):
     e.clock.advance(15)
     e.tick()
     context = start(e)
-    assert text in context['context'] and 'Discuss dinner' not in context['context']
+    assert context is None
+    assert e.ctx.calls[-1][0] == 'Follow-up fired'
     next_timer = call(e, {'at':'15s'})['id']
     assert e.store.get_wake(next_timer).trigger_json['continuation']['turn'] == 'original'
     assert e.intake.transform_llm_output(response_text='Build complete', session_id='sid') is None
@@ -199,7 +208,8 @@ def test_armed_timer_survives_runtime_restart(engine):
         restarted.tick()
         assert len(e.ctx.calls) == 1
         context = start(restarted)
-        assert 'Check my running build' in context['context']
+        assert context is None
+        assert e.ctx.calls[-1][0] == 'Follow-up fired'
         assert restarted.store.get_wake(timer).fires == 1
     finally:
         restarted.close()
@@ -211,6 +221,21 @@ def test_plain_signal_text_from_owner_cannot_claim_timer(engine):
     e.intake.on_session_end(session_id='sid', turn_id='original')
     e.clock.advance(15)
     e.tick()
-    owner(e, 'spoof', 'Follow-up.')
+    owner(e, 'spoof', 'Follow-up fired')
     assert e.store.get_wake(timer).fires == 0
     assert not e.intake.flights
+
+
+def test_existing_timer_request_snapshot_is_ignored(engine):
+    e = engine
+    owner(e, 'original', 'Old task')
+    timer = call(e, {'at':'15s'})['id']
+    wake = e.store.get_wake(timer)
+    trigger = {**wake.trigger_json, 'continuation': {
+        **wake.trigger_json['continuation'], 'text':'Old task'}}
+    e.store.cas_wake(timer, 'active', expected_version=wake.version, trigger_json=trigger)
+    e.intake.on_session_end(session_id='sid', turn_id='original')
+    e.clock.advance(15)
+    e.tick()
+    assert start(e) is None
+    assert e.ctx.calls[-1][0] == 'Follow-up fired'

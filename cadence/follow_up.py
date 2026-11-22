@@ -9,7 +9,7 @@ DESCRIPTION = ("Resume work already underway in this conversation once, in 15 se
                "Arming returns id, armed=true, and due_at as an absolute ISO 8601 UTC timestamp. "
                "at accepts relative durations such as 30s, 2 minutes, or 1m30s (15s–15m inclusive). "
                "Each call creates an independent timer; cancel an earlier ID explicitly to replace it. "
-               "When due, it gives you one chance to resume the originating owner turn. "
+               "When due, it gives you another turn in the current conversation with a minimal Follow-up fired signal. "
                "If this conversation already has a turn underway, the timer is consumed without queuing a continuation. "
                "Armed timers survive gateway restarts. /new orphans them so they cannot resume in the new conversation. "
                "Only an owner turn or its continuation may arm one. Requested continuations leave interruption tokens unchanged.")
@@ -72,7 +72,8 @@ def handle(tool, args, *, session_id='', **kwargs):
                                       active_count=sum(w.session_key == key for w in active), global_active_count=len(active))
         if not gate.allowed or gate.status != 'active':
             return {'error': gate.reason or 'needs_owner_ok'}
-        w = e.store.create_wake(Wake(key, 'Continue the work from the originating owner turn.', 'at',
+        origin = {field: origin[field] for field in ('chat', 'session', 'turn')}
+        w = e.store.create_wake(Wake(key, 'Follow-up fired', 'at',
             platform=session.platform, chat_type=session.chat_type, chat_id=session.chat_id,
             armed_session_id=session_id, next_due_at=e.clock.now()+seconds, owner_requested=True,
             trigger_json={'kind': 'at', 'continuation': origin}))

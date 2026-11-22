@@ -577,7 +577,7 @@ class Poller:
         if 'continuation' in w.trigger_json:
             origin = w.trigger_json['continuation']
             if (not isinstance(origin,dict) or origin.get('chat') != s.session_key or not origin.get('turn')
-                    or not origin.get('text') or not s.current_session_id
+                    or not s.current_session_id
                     or (origin.get('session') != s.current_session_id
                         and self.compression_tip(origin.get('session')) != s.current_session_id)):
                 return 'continuation_context_missing',False,None
