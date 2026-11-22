@@ -24,9 +24,9 @@ def test_defaults_are_frozen_and_settings_untouched(clock):
     with pytest.raises(FrozenInstanceError):
         p.enabled = True
     defaults = Policy.from_settings({}, clock=clock)
-    assert (defaults.max_model_wakes_per_day, defaults.max_messages_per_day,
+    assert (defaults.interruption_capacity, defaults.interruption_refill_seconds,
             defaults.min_interval_minutes, defaults.agent_ungated_floor_minutes,
-            defaults.noop_pause_after, defaults.ledger_days) == (24, 6, 15, 55, 6, 30)
+            defaults.noop_pause_after, defaults.ledger_days) == (15, 300, 15, 55, 6, 30)
 
 
 @pytest.mark.parametrize("key", ["agent_can_create", "timezone", "probe_commands"])

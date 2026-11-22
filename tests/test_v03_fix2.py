@@ -10,12 +10,6 @@ from test_engine import KEY, arm, end, engine, pending, session, start
 from test_v03_fix1 import command, own
 
 
-CONTRACT = ('- outcome: progress when you did something useful, even silently '
-            '(always include a summary of what you did, written as a plain sentence, since the owner sees role summaries on the desk; silent progress without one counts as idle); '
-            'no_change when there was nothing to do; done when the work is finished for good; '
-            'blocked or needs_attention when you need the owner.')
-
-
 def test_g1_desk_uses_last_dispatched_turn(engine):
     e = engine
     w = arm(e, 'self', role=True, budget_turns_per_day=1)
@@ -34,7 +28,7 @@ def test_g1_desk_uses_last_dispatched_turn(engine):
 def test_g2_rendered_contract_requires_progress_summary(engine):
     e = engine
     e.dispatch(pending(e, arm(e)))
-    assert CONTRACT in e.ctx.calls[-1][0].splitlines()
+    assert 'a brief summary' in e.ctx.calls[-1][0]
 
 
 def test_g2_tool_description_requires_progress_summary():
@@ -58,7 +52,7 @@ def test_g3_watch_refuses_recurring_responsibilities(engine, monkeypatch, kind):
 @pytest.mark.parametrize('state', ['claimed', 'started'])
 def test_g4_force_silent_does_not_reserve_message_slot(engine, state):
     e = engine
-    e.policy = replace(e.policy, max_messages_per_day=1)
+    e.policy = replace(e.policy, interruption_capacity=1)
     w = arm(e, 'every')
     o = pending(e, w)
     e.store.update_occurrence(w.id, o.dedupe_key, 'pending', force_silent=True)
@@ -67,7 +61,7 @@ def test_g4_force_silent_does_not_reserve_message_slot(engine, state):
     due = arm(e, creator='agent')
     e.dispatch(pending(e, due))
     o = e.store.get_occurrence(due.id, 't:test')
-    assert o.state == 'pending' and o.error != 'daily_message_cap'
+    assert o.state == 'pending' and o.error != 'interruption_limit'
     assert e.store.get_wake(due.id).status == 'active'
     assert e.daily(KEY) == {'model_turns': 1, 'delivered': 0}
 

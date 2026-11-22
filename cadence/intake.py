@@ -284,6 +284,7 @@ class Intake:
         self.anchors={}
         self.inbounds=set()
         self.owner_turns={}
+        self.owner_turn_refs={}
 
     def flight_for(self,sid,key):
         # Tools in delegate children inherit the key, but have a different id.
@@ -303,6 +304,7 @@ class Intake:
             key=self.bindings.pop(old)
             self.bindings[sid]=key
             self.turns[sid]=self.turns.pop(old,'')
+            if old in self.owner_turn_refs: self.owner_turn_refs[sid]=self.owner_turn_refs.pop(old)
             if old in self.owner_turns: self.owner_turns[sid]=self.owner_turns.pop(old)
             if old in self.anchors: self.anchors[sid]=self.anchors.pop(old)
             f=self.flights.pop(old,None)
@@ -418,7 +420,8 @@ class Intake:
         authorized=getattr(gateway,'_is_user_authorized_for_source',None)
         if authorized and not authorized(source): return None
         # Only an admitted owner inbound vetoes crash-replay recognition.
-        if key: self.inbounds.add(key)
+        if key:
+            self.inbounds.add(key)
         if not mid and getattr(source,'message_id',None): return None
         # A leftover ORIGIN steer always becomes a turn; B owns its count.
         if text.startswith(ORIGIN): return None
@@ -474,7 +477,26 @@ class Intake:
                 if 0<=e.clock.now()-pending['at']<=3600:
                     self.count(key,pending.get('mid'),identity.platform)
                 s.set_meta(stamp,'')
+        previous_ref = self.owner_turn_refs.get(session_id)
+        if previous_ref and previous_ref['turn'] != turn_id:
+            self.owner_turn_refs.pop(session_id, None)
         parsed=marker(user_message,secret=s.get_meta('marker_secret'),require_tag=(identity.chat_type != 'dm'))
+        row = conversation_history[-1] if conversation_history else None
+        if (not owner_seen and isinstance(row, dict)
+                and row.get('role') == 'user' and row.get('display_kind') == 'internal_notification'
+                and isinstance(user_message, str)):
+            stamp = 'continuation_dispatch:' + key
+            with s.atomic():
+                saved = s.get_meta(stamp)
+                if saved:
+                    wid, dedupe, attempt, signal = json.loads(saved)
+                    wake = s.get_wake(wid)
+                    if (wake and (wake.armed_session_id == session_id
+                                  or e.compression_tip(wake.armed_session_id) == session_id)
+                            and (user_message.strip() == signal
+                                 or user_message.startswith('[') and user_message.endswith('] ' + signal))):
+                        parsed = (wid, dedupe, attempt)
+                        s.set_meta(stamp, '')
         if not parsed:
             row=conversation_history[-1] if conversation_history else None
             if isinstance(row,dict) and row.get('role')=='user' and not row.get('display_kind'):
@@ -484,9 +506,14 @@ class Intake:
                         owner_seen=True
                         self._count_origins(key,text,turn_id,hashlib.sha256(text.encode()).hexdigest()[:16],platform=platform)
                     elif row.get('platform_message_id'):
-                        owner_seen=True
+                        owner_seen=owner_seen or not s.get_meta(f'nonhuman:{key}:{row["platform_message_id"]}')
                         self.count(key,row['platform_message_id'],platform)
-        if owner_seen: self.owner_turns[session_id]=turn_id
+        if owner_seen:
+            self.owner_turns[session_id]=turn_id
+            row = conversation_history[-1] if conversation_history else None
+            internal = isinstance(row, dict) and bool(row.get('display_kind'))
+            if turn_id and not parsed and not internal:
+                self.owner_turn_refs[session_id] = dict(chat=key,session=session_id,turn=turn_id)
         previous=self.flights.get(session_id)
         if previous and turn_id and previous.turn_id and previous.turn_id!=turn_id:
             # Apply the new owner row before terminal cleanup of a prior flight.
@@ -551,6 +578,10 @@ class Intake:
                         if tip is not None:
                             self._session_switch(w,session_id)
                             w=s.get_wake(wid)
+                origin=w.trigger_json.get('continuation')
+                if origin and (origin.get('chat') != key or (origin.get('session') != session_id
+                            and e.compression_tip(origin.get('session')) != session_id)):
+                    invalid=True
                 if w.status!='active': invalid=True
                 if w.cancel_on_reply and session.last_human_at is not None and o.claimed_at is not None and session.last_human_at>o.claimed_at:
                     invalid=True
@@ -731,7 +762,9 @@ class Intake:
             state.occupancy[fp]=current[fp]
             new_count+=1
         f=self.flights.get(session_id)
-        if new_count and f and f.turn_id==turn_id: mark_fold(f)
+        if new_count and turn_id:
+            self.owner_turn_refs[session_id] = dict(chat=key, session=session_id, turn=turn_id)
+            if f and f.turn_id==turn_id: mark_fold(f)
         return None
 
     @fail_open
@@ -850,6 +883,9 @@ class Intake:
             if f.invalid or not o or o.state!='started' or o.attempt!=f.attempt: return '[SILENT]'
             w=s.get_wake(o.wake_id)
             session=s.get_session(f.session_key)
+            if 'continuation' in w.trigger_json and o.outcome is None:
+                s.update_occurrence(o.wake_id,o.dedupe_key,'started',attempt=f.attempt,notify=True)
+                o=s.get_occurrence(o.wake_id,o.dedupe_key)
             silence=(not e.policy.enabled or not session.enabled or e.paused() or
                      o.force_silent or not o.notify) or (
                 o.outcome is None and response_text.strip().casefold() in BARE_SILENCE)
@@ -866,12 +902,15 @@ class Intake:
         if delegated_child(kwargs.get('platform','')): return None
         e,s=self.engine,self.engine.store
         self._follow(session_id)
+        if turn_id and self.turns.get(session_id) and turn_id!=self.turns[session_id]: return None
         anchor=self.anchors.get(session_id)
         # Held rows end with the turn the finalizer names. A stop without a turn id can arrive while the
         # worker still sends its last prepared request, so it must not drop the anchor.
+        context = self.owner_turn_refs.get(session_id)
+        if context and (not turn_id or context['turn'] == turn_id):
+            self.owner_turn_refs.pop(session_id, None)
         if anchor and turn_id and anchor[0]==turn_id: del self.anchors[session_id]
         f=self.flights.get(session_id)
-        if turn_id and self.turns.get(session_id) and turn_id!=self.turns[session_id]: return None
         key=f.session_key if f else self.bindings.get(session_id)
         if not key: return None
         with s.atomic():
@@ -899,6 +938,12 @@ class Intake:
             if f.scratch is not None:
                 s.cas_wake(w.id,w.status,expected_version=w.version,scratch=f.scratch)
             if delivered and session:
+                if 'continuation' not in w.trigger_json:
+                    # The scheduler may live in another process. Return evidence
+                    # for its claim; never spend from a worker-local bucket.
+                    s.set_meta('interruption_delivery:' + key, json.dumps([
+                        [o.id, o.attempt, o.epoch], e.clock.monotonic(),
+                        e.policy.interruption_capacity, e.policy.interruption_refill_seconds]))
                 session=s.get_session(key)
                 s.cas_session(key,{'unanswered_count':session.unanswered_count},
                               unanswered_count=session.unanswered_count+1,first_notice_sent=True)
@@ -920,6 +965,7 @@ class Intake:
         old=old_session_id or session_id
         if not old: return None
         self.anchors.pop(old,None)
+        self.owner_turn_refs.pop(old,None)
         with s.atomic():
             keys=set()
             for w in s.list_wakes():

@@ -218,19 +218,19 @@ def test_R8_F9_restart_scope_is_occurrence(engine,skip_first):
     e.tick(); e.clock.advance(3900); e.close()
     e2=Poller(e.ctx,e.store,e.policy,e.clock,session_key_fn=lambda:KEY,paused=lambda:False,jitter=lambda:0,compression_tip=lambda sid:sid)
     try:
-        # A spent daily cap drops the recovered tick, so the next occurrence is the first to run.
-        if skip_first: e2.policy=replace(e.policy,max_model_wakes_per_day=0)
+        # An empty interruption bucket drops the recovered tick, so the next occurrence is the first to run.
+        if skip_first: e2.policy=replace(e.policy,interruption_capacity=0)
         e2.tick()
         e2.policy=e.policy
         if not skip_first:
-            assert 'after restart' in e2.ctx.calls[-1][0]
+            assert 'after_restart=' in e2.ctx.calls[-1][0]
             return
         assert e2.store.list_occurrences(w.id)[0].state=='skipped'
         due=e2.store.get_wake(w.id).next_due_at; e2.clock.advance(due+1-e2.clock.now())
         session(e2,busy_since=e2.clock.now()); e2.tick()
         e2.clock.advance(120); session(e2,busy_since=None); e2.tick()
-        why=next(line for line in e2.ctx.calls[-1][0].splitlines() if line.startswith('Why'))
-        assert 'held by a busy chat' in why and 'after restart' not in why
+        why=e2.ctx.calls[-1][0].splitlines()[0]
+        assert "delayed_by='busy'" in why and 'after_restart=' not in why
     finally: e2.close()
 
 

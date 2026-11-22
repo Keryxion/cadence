@@ -19,7 +19,7 @@ from typing import Any
 
 from .clock import Clock
 from .model import (Wake, Occurrence, Session, KINDS, WAKE_STATUSES,
-                    TERMINAL_OCCURRENCE_STATES)
+                    TERMINAL_OCCURRENCE_STATES, PULSE_SUMMARY_LIMIT)
 from .schedule import local_day
 
 SCHEMA_VERSION = 1
@@ -415,7 +415,7 @@ class Store:
 
     def finish(self, wake_id: str, dedupe_key: str, *, attempt: int, **updates) -> bool:
         if "summary" in updates:
-            if len(updates["summary"]) > 280:
+            if len(updates["summary"]) > PULSE_SUMMARY_LIMIT:
                 raise ValueError("summary exceeds length limit")
             summary = " ".join(updates["summary"].split())
             updates["summary_hash"] = hashlib.sha256(summary.encode("utf-8")).hexdigest() if summary else ""
@@ -437,7 +437,7 @@ class Store:
         if "payload_json" in updates:
             self._payload(updates["payload_json"])
         if "summary" in updates:
-            if len(updates["summary"]) > 280:
+            if len(updates["summary"]) > PULSE_SUMMARY_LIMIT:
                 raise ValueError("summary exceeds length limit")
             summary = " ".join(updates["summary"].split())
             updates["summary_hash"] = hashlib.sha256(summary.encode("utf-8")).hexdigest() if summary else ""

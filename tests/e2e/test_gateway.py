@@ -63,6 +63,29 @@ def test_owner_at_wake_delivers_once(make_rig):
     rig.assert_tools_ok()
 
 
+def test_requested_follow_up_is_acknowledged_and_delivered_at_zero(make_rig):
+    from tests.e2e.core.history._helpers import Script
+    from tests.fakes.fake_llm_provider import Text, ToolCall
+
+    config = {"plugins": {"entries": {"cadence": {"settings": {
+        "interruptions": {"capacity": 0, "initial": 0}
+    }}}}}
+    rig = make_rig(config=config)
+    script = Script()
+    script.actions = [ToolCall("follow_up", {"at": "15s"}), Text("TIMER-ARMED"),
+                      Text("CONTINUATION-DELIVERED")]
+    rig.llm._responder = script
+    rig.owner("Check back in 15 seconds.", "TIMER-ARMED")
+    rig.assert_tools_ok()
+    timers = [w for w in rig.rows("wakes") if "continuation" in json.loads(w["trigger_json"])]
+    assert len(timers) == 1
+    wid = timers[0]["id"]
+    row = rig.settled(wid)
+    assert row["delivered"] == 1 and row["attempt"] == 1, row
+    assert sum("CONTINUATION-DELIVERED" in text for text in rig.texts()) == 1
+    script.raise_errors("requested follow-up")
+
+
 @pytest.mark.parametrize("loud", [False, True], ids=["default", "tool-progress-reasoning"])
 def test_silent_verdict_shows_nothing(make_rig, loud):
     rig = make_rig(loud=loud)
@@ -455,14 +478,14 @@ def test_mute_holds_watcher_until_reply(make_rig):
     released = rig.wake_openers()[openers:]
     assert len(released) == 1, released
     text = rig.director._text(released[0]["messages"][-1])
-    assert f"watcher {watcher}" in text and "you hadn't replied" in text, text
+    assert f"o:{watcher}/" in text and "you hadn't replied" in text, text
     assert "MATCH-LATEST" in text and "MATCH-FIRST" not in text, text
     assert sum("WAKE-DELIVERED" in t for t in rig.new_visible(before)) == 1
     record_latency(rig, first['matched_at'], wall_offset)
     rig.assert_tools_ok()
 
 
-def test_wake_text_carries_cache_line(make_rig):
+def test_cache_stays_in_receipt_and_wake_starts_with_metadata(make_rig):
     rig = make_rig()
     before = rig.session()["last_cache_touch_at"]
     wid = rig.agent_arm("cache-line", {"kind": "at", "at": "in 10s"})
@@ -488,6 +511,7 @@ def test_wake_text_carries_cache_line(make_rig):
     assert row["delivered"] == 1 and len(rig.wake_openers()) == 1, row
     text = rig.director._text(rig.wake_openers()[0]["messages"][-1])
     lines = [line for line in text.splitlines() if line.startswith("Cache:")]
-    assert len(lines) == 1 and len(lines[0]) <= 220, text
-    assert lines[0].startswith(f"Cache: {provider} TTL unknown"), lines
+    assert not lines, text
+    assert "[pulse trigger='at'" in text.splitlines()[0]
+    assert text.splitlines()[1] == "cache-line"
     rig.assert_tools_ok()

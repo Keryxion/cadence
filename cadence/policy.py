@@ -7,7 +7,7 @@ import shlex
 from typing import Mapping, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .clock import Clock, SystemClock
+from .clock import Clock, SystemClock, format_timestamp
 from .model import Wake, RECURRING_KINDS, PROBE_KINDS, EVENT_KINDS, KINDS, agent_authored
 from .schedule import parse_duration
 
@@ -86,13 +86,14 @@ class Policy:
     agent_can_create: str = "yes"
     dm_only: bool = True
     timezone: str = ""
-    max_model_wakes_per_day: int = 24
+    interruption_capacity: int = 15
+    interruption_initial: int = 15
+    interruption_refill_seconds: float = 300.0
     daily_cost_limit_usd: float = 0.0
     own_time_hours: int = 0
     role_turns_per_day_default: int = 6
     role_turns_per_day_max: int = 12
     max_children_per_wake_turn: int = 3
-    max_messages_per_day: int = 6
     max_unanswered: int = 2
     min_interval_minutes: int = 15
     agent_ungated_floor_minutes: int = 55
@@ -171,7 +172,7 @@ class Policy:
                      profile_timezone=profile_timezone)
         if result.agent_can_create not in {"yes", "ask_first", "no"}:
             raise ValueError("agent_can_create must be yes, ask_first, or no")
-        role_max = max(1, min(result.role_turns_per_day_max, result.max_model_wakes_per_day))
+        role_max = max(1, result.role_turns_per_day_max)
         result = replace(result, role_turns_per_day_max=role_max,
                          role_turns_per_day_default=max(1, min(result.role_turns_per_day_default, role_max)),
                          max_children_per_wake_turn=max(1, min(result.max_children_per_wake_turn, 50)))
@@ -180,6 +181,8 @@ class Policy:
                      "noop_max_backoff_hours", "ledger_days"):
             if getattr(result, name) < 1:
                 raise ValueError(f"{name} must be positive")
+        if result.interruption_refill_seconds <= 0:
+            raise ValueError('interruption refill rate must be positive')
         # Readable upper bounds, each far inside the value where date, float
         # or SQLite arithmetic downstream would overflow (with 10% jitter).
         for name, maximum in {
@@ -355,7 +358,10 @@ class Policy:
             old = getattr(wake, attr)
             if old != value:
                 updates[attr] = value
-                clamped[label] = f"{old} → {value} ({rule})"
+                if attr == "expires_at":
+                    clamped[label] = f"{format_timestamp(value)} ({rule})"
+                else:
+                    clamped[label] = f"{old} → {value} ({rule})"
         for attr, limit in (("title", 80), ("note", 2000), ("reason", 280), ("scratch", 4000)):
             change(attr, getattr(wake, attr)[:limit], attr, "length")
         if wake.budget_turns_per_day is not None:

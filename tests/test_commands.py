@@ -59,7 +59,7 @@ def test_status_injection_yaml_ledger_why(runtime):
     w = arm(e,title='build',reason='CI is pending')
     e.ctx.allowed=False
     out = commands.handle('',runtime)
-    assert INJECTION_CONFIG in out and 'not running' in out and 'UTC' in out
+    assert INJECTION_CONFIG in out and 'not running' in out and '2025-10-12T12:00:00Z' in out
     assert 'CI is pending' in commands.handle(f'why {w.id}',runtime)
     e.ctx.allowed=True
     for field in ('fires','checks','model wakes','messages','engaged','cache/cost','verdict'):
@@ -185,7 +185,7 @@ def test_paused_rows_name_the_command_that_resumes_them(runtime):
     rows = {line.split(' ')[0]: line for line in commands.handle('list', runtime).splitlines()}
     assert 'paused · resumes on keep/resume' in rows[governed.id]
     assert 'paused · resumes on resume' in rows[held.id] and 'keep' not in rows[held.id]
-    until = commands._time(e, e.clock.now() + 3 * 86400)
+    until = commands._time(e.clock.now() + 3 * 86400)
     assert f'paused · resumes {until} or on resume' in rows[timed.id] and 'keep' not in rows[timed.id]
     # keep is refused for a command pause, which is why its row no longer offers it.
     assert 'use /pulse resume' in commands.handle(f'keep {held.id}', runtime)

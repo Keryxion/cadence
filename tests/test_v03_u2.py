@@ -87,8 +87,8 @@ def test_implicit_budget_cannot_be_raised_in_wake_turn(engine):
 
 def test_role_settings_and_manifest(engine):
     p = Policy.from_settings({'role_turns_per_day_default': 99, 'role_turns_per_day_max': 99,
-                              'max_model_wakes_per_day': 8, 'max_children_per_wake_turn': 0})
-    assert p.role_turns_per_day_max == 8 and p.role_turns_per_day_default == 8
+                              'interruption_capacity': 8, 'max_children_per_wake_turn': 0})
+    assert p.role_turns_per_day_max == 99 and p.role_turns_per_day_default == 99
     assert p.max_children_per_wake_turn == 1
     p = Policy.from_settings({'role_turns_per_day_default': 0, 'role_turns_per_day_max': 0})
     assert p.role_turns_per_day_default == p.role_turns_per_day_max == 1
@@ -204,14 +204,14 @@ def test_role_daily_dispatch_budget_and_next_local_day(engine, budget):
     assert len(e.ctx.calls) == 3
 
 
-@pytest.mark.parametrize('hold', ['unanswered', 'daily_message_cap'])
+@pytest.mark.parametrize('hold', ['unanswered', 'interruption_limit'])
 def test_owner_role_holds_messages_but_runs(engine, hold):
     e = engine
     w = arm(e, 'self', role=True, creator='user')
     if hold == 'unanswered':
         session(e, unanswered_count=e.policy.max_unanswered)
     else:
-        e.ledger(w, delivered=e.policy.max_messages_per_day)
+        e.policy = replace(e.policy, interruption_capacity=0)
     before = e.daily(KEY)['delivered']
     e.tick()
     o, = e.store.list_occurrences(w.id)
@@ -220,10 +220,7 @@ def test_owner_role_holds_messages_but_runs(engine, hold):
     assert end(e, 'progress', True) == '[SILENT]'
     assert not e.store.get_occurrence(w.id, o.dedupe_key).delivered
     assert e.daily(KEY)['delivered'] == before
-    e.ledger(w, model_turns=e.policy.max_model_wakes_per_day)
-    e.clock.advance(3600)
-    e.dispatch(pending(e, e.store.get_wake(w.id), 'cap'))
-    assert e.store.get_occurrence(w.id, 'cap').error == 'daily_model_cap'
+
 
 
 def test_role_prompt_keeps_explicit_ending(engine):
@@ -231,9 +228,9 @@ def test_role_prompt_keeps_explicit_ending(engine):
     w = arm(e, 'self', role=True)
     o = pending(e, w)
     text = render_wake(w, o, e.store.get_session(KEY), clock=e.clock)
-    assert f'· role {w.id} ·' in text and "- If the chat shows the note's subject was settled" not in text
+    assert "role='true'" in text.splitlines()[0]
     ordinary = render_wake(replace(w, role=False), o, e.store.get_session(KEY), clock=e.clock)
-    assert f'· wake {w.id} ·' in ordinary and "- If the chat shows the note's subject was settled" in ordinary
+    assert "role='true'" not in ordinary.splitlines()[0]
     e.dispatch(o)
     start(e)
     end(e, 'done', False)

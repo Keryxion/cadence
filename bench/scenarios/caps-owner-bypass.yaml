@@ -1,10 +1,12 @@
 id: caps-owner-bypass
-title: Saturated daily messages preserve owner classes and hold watcher until the
-  next local day
+title: An empty interruption bucket preserves owner reminders and holds watchers until the
+  next refill
 cites:
-- 'B1 realism: Saturated daily messages preserve owner classes and hold watcher until
-  the next local day'
+- 'B1 realism: An empty interruption bucket preserves owner reminders and holds watchers until
+  the next refill'
 settings:
+  interruption_capacity: 1
+  interruption_refill_seconds: 3600
   max_unanswered: 10
 arms:
 - ref: owner
@@ -40,17 +42,6 @@ arms:
   session: model-capped
 timeline:
 - t: 0
-  event: ledger
-  ref: owner
-  counts:
-    delivered: 6
-- t: 0
-  event: ledger
-  ref: model-owner
-  counts:
-    model_turns: 24
-    delivered: 6
-- t: 0
   event: file
   text: 'pending
 
@@ -69,7 +60,7 @@ model_policy:
   - outcome: done
     notify: true
     summary: Complete.
-duration: 44000
+duration: 3800
 expectations:
   required_fires:
   - wake: owner
@@ -82,8 +73,8 @@ expectations:
     - 735
   - wake: watcher
     window:
-    - 43200
-    - 43215
+    - 3660
+    - 3675
   - wake: model-owner
     window:
     - 60
@@ -110,7 +101,7 @@ expectations:
       model_wakes: 0
       status: failed
       wake_fields:
-        status_reason: skipped:daily_message_cap
+        status_reason: skipped:interruption_limit
     watcher:
       deliveries: 1
       model_wakes: 1
@@ -130,13 +121,13 @@ expectations:
   observations:
   - event: gate
     ref: timer
-    reason: daily_message_cap
+    reason: interruption_limit
     window:
     - 1380
     - 1380
   - event: gate
     ref: watcher
-    reason: held_daily_cap
+    reason: held_interruptions
     window:
     - 1800
     - 1800

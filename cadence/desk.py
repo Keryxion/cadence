@@ -1,5 +1,4 @@
 """A bounded, read-only view of this chat's responsibilities and budgets."""
-from types import SimpleNamespace
 
 from .commands import _clip, _oneline, _time, messages_count
 from .policy import is_watcher
@@ -40,9 +39,7 @@ def _rhythm(wake) -> str:
 def render_desk(engine_or_store, session, *, clock, timezone, policy, measure=len, turn=None) -> str:
     store = getattr(engine_or_store, 'store', engine_or_store)
     now, key = clock.now(), session.session_key
-    view = SimpleNamespace(store=store, clock=clock, policy=SimpleNamespace(
-        resolved_timezone=lambda: zone(timezone)))
-    wakes = [w for w in store.list_wakes(key) if w.status in {'active', 'paused'}]
+    wakes = [w for w in store.list_wakes(key) if w.status in {'active', 'paused'} and 'continuation' not in w.trigger_json]
     roles = sorted((w for w in wakes if w.role), key=lambda w: (w.updated_at, w.created_at), reverse=True)
     rows = []
     for w in roles:
@@ -54,7 +51,7 @@ def render_desk(engine_or_store, session, *, clock, timezone, policy, measure=le
         today, budget = store.dispatches_today(w.id, zone(timezone)), policy.role_budget(w)
         due = ('paused · ' + _plain(_oneline(w.status_reason or 'paused')) if w.status == 'paused'
                else 'resting until tomorrow' if today >= budget
-               else 'next ' + _time(view, w.next_due_at, compact=True))
+               else 'next ' + _time(w.next_due_at))
         title = _plain(_clip(_oneline(w.title or w.note), 80))
         rows.append(f'- role {w.id} {title} · {_rhythm(w)} · last: {summary} · '
                     f'{due} · today {today}/{budget}')
@@ -63,19 +60,16 @@ def render_desk(engine_or_store, session, *, clock, timezone, policy, measure=le
     next_due = min(due, key=lambda pair: pair[0]) if due else None
     tail = [f'- Other: {sum(not is_watcher(w) for w in other)} wakes, '
             f'{sum(is_watcher(w) for w in other)} watchers · next due ' +
-            (f'{_time(view,next_due[0],compact=True)} ({_clip(_oneline(next_due[1].title or next_due[1].note),40)})'
+            (f'{_time(next_due[0])} ({_clip(_oneline(next_due[1].title or next_due[1].note),40)})'
              if next_due else 'none')]
     counts = store.daily_counts(key, zone(timezone))
-    in_flight = store.messages_in_flight(key)
-    # Inside a wake's own text, its own reserved slot is not a held message: its cap check ran before it was claimed.
-    own = int(turn is not None and turn.state in {'claimed', 'started'} and not turn.force_silent)
     age = _age(now-session.last_human_at) + ' ago' if session.last_human_at is not None else 'unknown'
     cost = cost_line(store,key,zone(timezone),policy)
     tail.append(f'- Owner last wrote {age} · unanswered {session.unanswered_count} · '
-                f'messages today {messages_count(counts["delivered"], in_flight, policy.max_messages_per_day)} · '
-                f'turns today {counts["model_turns"]}/{policy.max_model_wakes_per_day}' + (' · '+cost if cost else ''))
+                f'messages today {messages_count(counts["delivered"],store.messages_in_flight(key))} · '
+                f'turns today {counts["model_turns"]}' + (' · '+cost if cost else ''))
     held = ("the owner hasn't replied yet" if session.unanswered_count >= policy.max_unanswered else
-            "today's message limit" if counts['delivered'] - own >= policy.max_messages_per_day else '')
+            "waiting for an interruption token" if hasattr(engine_or_store, "interruption_tokens") and not engine_or_store.interruption_tokens(key) else '')
     if held: tail.append('- Messages held now: '+held)
     omitted = 0
     while True:

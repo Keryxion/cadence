@@ -248,18 +248,18 @@ def test_I9_busy_and_one_inflight(engine):
     assert len(e.store.list_occurrences(state='claimed')) == 1
 
 
-def test_I10_daily_caps_and_flood(engine):
+def test_I10_interruption_bucket_and_flood(engine):
     e = engine
-    e.policy = replace(e.policy, max_model_wakes_per_day=1, wake_spacing_minutes=0)
+    e.policy = replace(e.policy, interruption_capacity=1, wake_spacing_minutes=0)
     w = arm(e)
     e.tick(); start(e)
     e.intake.post_api_request(session_id='sid', turn_id='turn', usage={'prompt_tokens':10})
     end(e, outcome='progress', notify=True)
     arm(e); e.tick()
     assert len(e.ctx.calls) == 1
-    assert e.store.list_occurrences()[-1].error == 'daily_model_cap'
+    assert e.store.list_occurrences()[-1].error == 'interruption_limit'
     # Different sessions still share the persisted five-injections/minute guard.
-    e.policy = replace(e.policy, max_model_wakes_per_day=24)
+    e.policy = replace(e.policy, interruption_capacity=24)
     for n in range(6):
         key = f'agent:telegram:dm:flood{n}'
         e.store.upsert_session(Session(key, 'telegram', 'dm', str(n), 'sid'))
@@ -373,14 +373,14 @@ def test_I16_dispatch_gate_matrix(engine):
               ('session_paused', {}, {'paused_until':e.clock.now()+60}, {}),
               ('dm_only', {}, {'chat_type':'group'}, {}),
               ('unanswered', {}, {'unanswered_count':2}, {}),
-              ('daily_message_cap', {}, {}, {'max_messages_per_day':0}),
-              ('daily_model_cap', {}, {}, {'max_model_wakes_per_day':0}),
+              ('interruption_limit', {}, {}, {'interruption_capacity':0}),
               ('busy', {}, {'busy_since':e.clock.now()}, {}),
               ('wake_spacing', {}, {'last_wake_turn_at':e.clock.now()}, {}) ]
     original = e.store.get_session(KEY)
     for reason, wc, sc, pc in cases:
+        e.interruption_buckets.clear()
         session(e, **{f.name:getattr(original,f.name) for f in fields(Session) if f.name != 'session_key'})
-        e.policy = replace(e.policy, max_model_wakes_per_day=24, max_messages_per_day=6, **pc) if not any(k in pc for k in ('quiet_hours','max_model_wakes_per_day','max_messages_per_day')) else replace(Policy(clock=e.clock, timezone='UTC'), **pc)
+        e.policy = replace(e.policy, interruption_capacity=15, **pc) if not any(k in pc for k in ('quiet_hours','interruption_capacity')) else replace(Policy(clock=e.clock, timezone='UTC'), **pc)
         session(e, **sc) if sc else None
         w = arm(e, **wc)
         o = pending(e, w)

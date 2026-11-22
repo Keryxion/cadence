@@ -51,16 +51,14 @@ config_schema:
     default: ""
     label: "Time zone"
     description: "IANA name such as Europe/Paris. Blank uses the profile's time zone."
-  max_model_wakes_per_day:
-    type: int
-    default: 24
-    label: "Wake turns per day"
-    description: "Per chat, local day. Each wake turn is a full model turn."
-  max_messages_per_day:
-    type: int
-    default: 6
-    label: "Wake messages per day"
-    description: "Per chat, local day."
+  interruptions:
+    type: dict
+    default:
+      capacity: 15
+      initial: 15
+      refill_per_hour: 12
+    label: "Interruptions"
+    description: "Per-chat token bucket. capacity caps saved tokens, initial sets the restart balance (capped at capacity), and refill_per_hour restores whole tokens evenly over elapsed time."
   own_time_hours:
     type: int
     default: 0
@@ -83,7 +81,7 @@ config_schema:
     type: int
     default: 12
     label: "Most turns a role may take per day"
-    description: "Caps any budget a role sets. The chat's wake-turn limit still applies."
+    description: "Caps the daily turn budget for each role."
   max_children_per_wake_turn:
     type: int
     default: 3
@@ -239,5 +237,5 @@ config_schema:
     default: 30
     label: "Ledger history (days)"
     description: "Keep daily wake counts and cost history for this many days. Maximum 36500 (100 years)."
-provides_tools: [pulse, request]
+provides_tools: [pulse, request, follow_up, get_time]
 provides_hooks: [pre_tool_call, pre_gateway_dispatch, gateway_platform_event, pre_llm_call, pre_api_request, post_api_request, transform_llm_output, on_session_end, agent_loop_stopped, on_session_reset, kanban_task_completed, kanban_task_blocked, on_kanban_worker_exited, subagent_stop, api_request_error]

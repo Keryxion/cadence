@@ -24,16 +24,16 @@ def test_unreported_chatty_output_is_silent_by_default(engine):
     assert e.intake.transform_llm_output(response_text='I have a long unsolicited update.',session_id='sid')=='[SILENT]'
 
 
-def test_interrupted_model_turn_consumes_daily_cap(engine):
+def test_interrupted_model_turn_preserves_token(engine):
     e=engine
-    e.policy=replace(e.policy,max_model_wakes_per_day=1)
+    e.policy=replace(e.policy,interruption_capacity=1)
     arm(e);e.tick();start(e)
     e.intake.post_api_request(session_id='sid',usage={'input_tokens':100,'output_tokens':20})
     e.intake.on_session_end(session_id='sid',failed=True,completed=False)
     e.clock.advance(601)
     w=arm(e);e.tick()
-    assert len(e.ctx.calls)==1
-    assert e.store.list_occurrences(w.id)[0].error=='daily_model_cap'
+    assert len(e.ctx.calls)==2
+    assert e.interruption_tokens(KEY)==1
     assert e.store.get_wake(e.store.list_occurrences()[0].wake_id).tokens_in==100
 
 
@@ -51,10 +51,24 @@ def test_invalid_respond_does_not_stage_scratch(engine):
     e=engine
     w=arm(e)
     e.tick();start(e)
-    result=e.tool.handle({'action':'respond','notify':False,'outcome':'no_change','summary':'x'*281,'scratch':'must not persist','next_check':'1m'},session_id='sid')
+    result=e.tool.handle({'action':'respond','notify':False,'outcome':'no_change','summary':'x'*1025,'scratch':'must not persist','next_check':'1m'},session_id='sid')
     assert result['error']=='invalid_request'
     end(e)
     assert e.store.get_wake(w.id).scratch==''
+
+
+def test_maximum_pulse_summary_round_trips(engine):
+    from cadence.tool import PARAMETERS
+
+    assert PARAMETERS['properties']['summary']['maxLength'] == 1024
+    summary = 'é' * 1024
+    w = arm(engine, 'every')
+    engine.tick()
+    start(engine)
+    end(engine, 'progress', False, summary=summary)
+    assert engine.store.list_occurrences(w.id)[0].summary == summary
+    row, = engine.tool.handle({'action':'list'})['wakes']
+    assert row['last_result']['summary'] == summary
 
 
 def test_successful_silent_progress_counts_even_without_transform(engine):

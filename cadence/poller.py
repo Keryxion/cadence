@@ -4,7 +4,7 @@ Coalescing/claim/refund follows Hermes heartbeat.py; fingerprint gating follows
 cron/monitor.py; estop and busy ordering follows gateway/run_goals.py.
 """
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 import fcntl
 import hashlib
 import json
@@ -21,12 +21,20 @@ from . import governor
 
 LOG = logging.getLogger('cadence')
 RETRY_DELAYS = (30,60,300,900,3600)
-FINAL_SKIP_REASONS = frozenset({'unanswered','daily_model_cap','daily_cost_cap','daily_message_cap','dm_only',
+FINAL_SKIP_REASONS = frozenset({'unanswered','continuation_context_missing','continuation_busy','interruption_limit','daily_model_cap','daily_cost_cap','daily_message_cap','dm_only',
     'non_gateway','session_off','source_disabled','cancel_on_reply','expired','max_fires'})
 # Every claim records its poller's epoch; an epoch outside this set was minted
 # by another (for a startup replay: the crashed) process.
 LOCAL_EPOCHS = set()
 CREATED_EPOCHS = set()  # Every poller epoch this process made; never discarded.
+
+
+def gateway_process_start():
+    # The poller runs inside the gateway. A thread or plugin reload shares
+    # this identity; a new process (even with a recycled PID) does not.
+    import psutil
+    started_at = psutil.Process().create_time()
+    return f'startup:{os.getpid()}:{started_at}', started_at
 
 
 def check_paused():
@@ -40,10 +48,26 @@ def check_paused():
         return True
 
 
+@dataclass
+class InterruptionBucket:
+    tokens: int
+    anchor: float
+    pending: list | None = None
+
+    def balance(self, now, capacity, interval, *, spend=False):
+        refill = int((now - self.anchor) // interval)
+        available = min(capacity, self.tokens + refill)
+        if spend:
+            self.anchor = now if available == capacity else self.anchor + refill * interval
+            self.tokens = max(0, available - 1)
+        return available
+
+
 class Poller:
     def __init__(self,ctx,store,policy,clock,*,paused=check_paused,jitter=None,
                  compression_tip=None,session_key_fn=None,probe_runner=None,boot_at=None):
         self.ctx,self.store,self.policy,self.clock=ctx,store,policy,clock
+        self.interruption_buckets={}
         self.boot_at=clock.now() if boot_at is None else boot_at
         self.paused,self.jitter=paused,jitter or (lambda: random.uniform(-1,1))
         self.compression_tip=compression_tip or self._compression_tip
@@ -144,6 +168,8 @@ class Poller:
                             noticed.add(w.session_key)
             for o in s.list_occurrences() if self.process_start else []:
                 if o.state=='claimed':
+                    if self.retire_unacknowledged_continuation(o):
+                        continue
                     s.refund(o.wake_id,o.dedupe_key,attempt=o.attempt,error='restart_refund')
                     s.set_meta('recovered:'+o.id,'1')
                 elif o.state=='started': self.interrupt(o,'restart')
@@ -156,6 +182,11 @@ class Poller:
             for w in s.list_wakes(status='active') if self.process_start and s.get_meta('epoch') else []:
                 if w.next_due_at is not None and w.next_due_at < self.clock.now():
                     s.set_meta('restart_due:'+w.id,str(w.next_due_at))
+            if any(w.kind == 'startup' for w in s.list_wakes(status='active')):
+                startup_id, started_at = gateway_process_start()
+                if s.get_meta('gateway_startup') != startup_id:
+                    s.add_event('startup', startup_id, {'started_at': started_at})
+                    s.set_meta('gateway_startup', startup_id)
             s.set_meta('epoch',self.epoch)
             s.set_meta('poller_pid',str(os.getpid()))
             s.set_meta('poller_started_at',str(self.clock.now()))
@@ -192,6 +223,26 @@ class Poller:
         ttl=ttl_for_session(self.store,self.store.get_session(w.session_key))[0]
         return {'cache_ttl':ttl if agent_authored(w) and w.kind in {'every','self'} and not w.trigger_json.get('at') else None,
                 'minimum_s':max(self.policy.interval_floor(w),w.pacing_min_s or 0)}
+
+    def interruption_tokens(self, key, *, spend=False):
+        """Use elapsed time so wall-clock corrections never refill a chat.
+
+        Only the gateway owns balances. A worker finishing a turn leaves a
+        timestamped delivery receipt in the same transaction as finish().
+        """
+        with self.store.atomic():
+            now = self.clock.monotonic()
+            capacity = self.policy.interruption_capacity
+            bucket = self.interruption_buckets.setdefault(
+                key, InterruptionBucket(min(capacity, self.policy.interruption_initial), now))
+            if bucket.pending:
+                receipt = self.store.get_meta('interruption_delivery:' + key)
+                if receipt:
+                    delivery, at, limit, interval = json.loads(receipt)
+                    if delivery == bucket.pending:
+                        bucket.balance(at, limit, interval, spend=True)
+                        bucket.pending = None
+            return bucket.balance(now, capacity, self.policy.interruption_refill_seconds, spend=spend)
 
     def daily(self,key):
         return self.store.daily_counts(key,self.policy.resolved_timezone())
@@ -263,8 +314,7 @@ class Poller:
             for o in s.list_occurrences(state='pending'):
                 if not self.eligible(): break
                 w=s.get_wake(o.wake_id)
-                cache_line=self.cache_line(w)  # Pricing may fetch metadata; never hold the write lock.
-                self.evaluate(w,lambda o=o,cache_line=cache_line:self.dispatch(o,cache_line=cache_line))
+                self.evaluate(w,lambda o=o:self.dispatch(o))
         except Exception as exc:
             self.log.warning('cadence tick failed',exc_info=True)
             try: self.store.set_meta('last_error',type(exc).__name__)
@@ -289,12 +339,26 @@ class Poller:
                 s.cas_session(session.session_key,{'busy_since':session.busy_since,'last_activity_at':session.last_activity_at},busy_since=None,busy_epoch=None)
         for o in s.list_occurrences(state='claimed'):
             if o.claimed_at is None or self.clock.now()-o.claimed_at<600: continue
+            if self.retire_unacknowledged_continuation(o):
+                continue
             if int(s.get_meta('accepted:'+o.id) or o.attempt)>=3:
                 s.cas_occurrence(o.wake_id,o.dedupe_key,'claimed','dead',attempt=o.attempt,error='ack_timeout')
                 self.notice(s.get_wake(o.wake_id).session_key,'A wake was not acknowledged after three attempts.')
                 self.terminal_one_shot(s.get_wake(o.wake_id))
                 governor.error(self,s.get_wake(o.wake_id))
             else: s.refund(o.wake_id,o.dedupe_key,attempt=o.attempt,error='ack_timeout')
+
+    def retire_unacknowledged_continuation(self, occurrence):
+        # The worker may already have run this admitted turn.
+        s = self.store
+        wake = s.get_wake(occurrence.wake_id)
+        if 'continuation' not in wake.trigger_json or not s.get_meta('accepted:' + occurrence.id):
+            return False
+        if s.cas_occurrence(wake.id, occurrence.dedupe_key, 'claimed', 'dead',
+                            attempt=occurrence.attempt, error='continuation_ack_unknown'):
+            s.set_meta('continuation_dispatch:' + wake.session_key, '')
+            self.terminal_one_shot(wake)
+        return True
 
     def family_enabled(self,w):
         family='silence' if w.kind=='owner_silent' else 'events' if w.kind in EVENT_KINDS else w.kind if w.kind in PROBE_KINDS else None
@@ -316,6 +380,18 @@ class Poller:
         if event['chat_id'] and event['chat_id']!=w.chat_id: return
         payload=event['payload_json']
         filters=w.trigger_json
+        if w.kind == 'startup':
+            arm = w.probe_state_json or {}
+            armed_at = arm.get('armed_at', w.created_at)
+            if event['created_at'] < armed_at:
+                return  # An older startup was still in the event inbox.
+            if arm.get('gateway') is not None:
+                if arm['gateway'] == event['dedupe_key']:
+                    return
+            elif armed_at >= payload['started_at']:
+                return  # A separate tool worker can only attest its arming time.
+            from .clock import format_timestamp
+            payload = {'started_at': payload['started_at'], 'message': 'Gateway started at ' + format_timestamp(payload['started_at'])}
         if w.kind=='reaction' and filters.get('emojis') and not set(filters['emojis']) & set(payload.get('emojis',[])): return
         if any(filters.get(k) is not None and payload.get(k)!=filters[k] for k in ('task_id','board')): return
         if w.kind=='api_error':
@@ -515,8 +591,8 @@ class Poller:
             return ''
         if self.policy.unanswered_gate(w,s.unanswered_count):
             return 'unanswered'
-        if self.daily(s.session_key)['delivered']>=self.policy.max_messages_per_day:
-            return 'daily_message_cap'
+        if not self.interruption_tokens(s.session_key):
+            return 'interruption_limit'
         return ''
 
     def gate(self,w,o,s):
@@ -541,6 +617,8 @@ class Poller:
         if held_paused: return 'held_paused',True,None
         if w.cancel_on_reply and s and s.last_human_at is not None and s.last_human_at>w.created_at: return 'cancel_on_reply',False,None
         if s is None: return 'missing_session',False,None
+        if 'continuation' in w.trigger_json and s.busy_since is not None:
+            return 'continuation_busy',False,None
         if not s.enabled: return 'session_off',False,None
         if s.paused_until is not None and s.paused_until>now: return 'session_paused',True,None
         if self.policy.dm_only and (s.chat_type!='dm' or w.chat_type!='dm'): return 'dm_only',False,None
@@ -553,6 +631,13 @@ class Poller:
                 health.pop('trial'); self.store.set_meta('provider_health',json.dumps(health))
         if health and (health['until']>now or health.get('trial')):
             return 'provider_unavailable',True,health['until'] if health['until']>now else None
+        if 'continuation' in w.trigger_json:
+            origin = w.trigger_json['continuation']
+            if (not isinstance(origin,dict) or origin.get('chat') != s.session_key or not origin.get('turn')
+                    or not s.current_session_id
+                    or (origin.get('session') != s.current_session_id
+                        and self.compression_tip(origin.get('session')) != s.current_session_id)):
+                return 'continuation_context_missing',False,None
         if w.role and self.store.dispatches_today(w.id,self.policy.resolved_timezone())>=self.policy.role_budget(w):
             return 'role_budget',False,None
         if (not owner_class(w) and self.policy.daily_cost_limit_usd>0
@@ -564,12 +649,8 @@ class Poller:
         message_held=self.message_hold_reason(w,s)
         mute=self.policy.unanswered_gate(w,s.unanswered_count)
         if mute and not message_held: return mute,mute=='held_unanswered',None
-        totals=self.daily(s.session_key)
-        cap='daily_model_cap' if totals['model_turns']>=self.policy.max_model_wakes_per_day else 'daily_message_cap' if totals['delivered']>=self.policy.max_messages_per_day else ''
-        if cap and not (cap=='daily_message_cap' and message_held) and not (owner_class(w) and one_shot(w)):
-            if is_watcher(w):
-                return 'held_daily_cap',True,None
-            return cap,False,None
+        if not message_held and not self.interruption_tokens(s.session_key) and not (owner_class(w) and one_shot(w)):
+            return ('held_interruptions', True, None) if is_watcher(w) else ('interruption_limit', False, None)
         flood=json.loads(self.store.get_meta('injections') or '[]')
         if sum(now-t<60 for t in flood)>=5: return 'global_flood',True,None
         if now<float(self.store.get_meta('not_before:'+o.id) or 0): return 'not_before',True,None
@@ -582,7 +663,7 @@ class Poller:
         if not self.injection_allowed(): return 'injection_disabled',True,None
         return '',False,None
 
-    def dispatch(self,o,*,cache_line=None):
+    def dispatch(self,o):
         # The served set can shrink mid-tick; an unserved home's wake stays untouched for its own gateway.
         if not self.eligible(): return
         s=self.store
@@ -624,8 +705,6 @@ class Poller:
             self.terminal_one_shot(s.get_wake(w.id))
             governor.error(self,s.get_wake(w.id))
             return
-        if cache_line is None:
-            cache_line='' if s.connection.in_transaction else self.cache_line(w)
         held_by=o.error  # Claim clears the stored deferral; retain it for this prompt.
         message_held=self.message_hold_reason(w,session)
         if message_held and (not o.force_silent or o.held_reason.startswith('message_held:')):
@@ -645,16 +724,15 @@ class Poller:
         from .desk import render_desk
         from .intake import marker_tag
         tag=marker_tag(s.marker_secret(),o.id,o.attempt) if session.chat_type!='dm' else None
-        recent=[x.outcome or x.state for x in s.list_occurrences(w.id) if x.state=='done'][-3:]
+        self.interruption_tokens(session.session_key)  # Settle the previous dispatch before replacing its claim.
         late=None
         if o.dedupe_key.startswith('t:'):
             try: late=max(0,self.clock.now()-float(o.dedupe_key[2:]))
             except ValueError: pass
         text=render_wake(w,o,session,clock=self.clock,timezone=self.policy.resolved_timezone(),
-             recent_outcomes=recent,messages_today=self.daily(session.session_key)['delivered']-(0 if o.force_silent else 1),
-             max_messages=self.policy.max_messages_per_day,governor_hint=governor.hint(self,w),late_by_s=late,
+             governor_hint=governor.hint(self,w),late_by_s=late,
              after_restart=bool(s.get_meta('recovered:'+o.id)),held_by=held_by,message_held=message_held,
-             cache_line=cache_line,marker_tag=tag,
+             marker_tag=tag,
              desk=render_desk(self,session,clock=self.clock,timezone=self.policy.resolved_timezone(),policy=self.policy,
                               measure=lambda text: len(escape_text(text)),turn=o)
                   if w.role or w.trigger_json.get('own_time') else '')
@@ -664,6 +742,13 @@ class Poller:
                 health.pop('trial',None); s.set_meta('provider_health',json.dumps(health))
             s.refund(w.id,o.dedupe_key,attempt=o.attempt,error=held_by)
             return
+        # Reading the balance has settled the previous delivery. Only one claim can be
+        # in flight per chat; fence its receipt by occurrence, attempt and epoch.
+        self.interruption_buckets[w.session_key].pending = [o.id, o.attempt, o.epoch]
+        continuation = 'continuation' in w.trigger_json
+        if continuation:
+            # The gateway may execute the admitted turn in a different process.
+            s.set_meta('continuation_dispatch:' + w.session_key, json.dumps([w.id, o.dedupe_key, o.attempt, text]))
         try: accepted=self.ctx.inject_message(text,session_key=w.session_key)
         except Exception: accepted=False
         if accepted:
@@ -672,6 +757,8 @@ class Poller:
             s.set_meta('injections',json.dumps(flood+[self.clock.now()]))
             s.cas_session(session.session_key,{'last_wake_turn_at':session.last_wake_turn_at},last_wake_turn_at=self.clock.now())
         else:
+            if continuation:
+                s.set_meta('continuation_dispatch:' + w.session_key, '')
             if health:
                 health.pop('trial',None); s.set_meta('provider_health',json.dumps(health))
             count=int(s.get_meta('inject_failures:'+o.id) or 0)+1
@@ -688,6 +775,10 @@ class Poller:
         occurrences=[o for o in self.store.list_occurrences(w.id) if o.state!='superseded']
         if not occurrences or any(o.state in {'pending','claimed','started'} for o in occurrences): return
         o=occurrences[-1]
+        if o.state == 'skipped' and o.error == 'continuation_busy':
+            self.store.cas_wake(w.id,'active',expected_version=w.version,
+                                status='done',status_reason='skipped:continuation_busy')
+            return
         if o.state in {'interrupted','dead','missed'} or o.state=='skipped' and o.error in FINAL_SKIP_REASONS:
             # The owner ended these on purpose (a reply, or /pulse off), so they read as cancelled, not failed.
             if o.error in {'cancel_on_reply','session_off'}:

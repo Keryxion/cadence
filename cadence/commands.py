@@ -7,6 +7,7 @@ from .model import Wake, Session, FINISHED_WAKE_STATUSES
 from . import governor
 from . import cache
 from .policy import INJECTION_CONFIG, gateway_platform, owner_requested
+from .clock import format_timestamp
 from .schedule import parse_duration, local_day, _DURATION
 from .tool import session_env, Infeasible
 
@@ -20,10 +21,10 @@ HELP = ('/pulse status | desk | list [all] | ledger [7d] | why <id> | add in 2h 
         'ok|keep|slow|stop|watch <id>')
 
 
-def messages_count(delivered, in_flight, cap):
-    """Messages sent today against the cap. A running wake turn holds a slot until it ends; show it as in progress, not sent."""
+def messages_count(delivered, in_flight):
+    """Messages sent today. A running wake turn holds a slot until it ends; show it as in progress, not sent."""
     sent = max(0, delivered - in_flight)
-    return f'{sent}/{cap}' + (f' (+{in_flight} in progress)' if in_flight else '')
+    return f'{sent}' + (f' (+{in_flight} in progress)' if in_flight else '')
 
 
 def _activation(engine, session, wake):
@@ -60,7 +61,7 @@ def resume_timed(engine):
             continue
         if engine.store.cas_wake(wake.id, 'paused', expected_version=wake.version,
             status='active', status_reason='', **{name:getattr(candidate,name) for name in
-                ('next_due_at','deadline_at','base_interval_s','eff_interval_s','pacing_min_s','pacing_max_s','expires_at','max_fires','trigger_json')}):
+                ('next_due_at','deadline_at','base_interval_s','eff_interval_s','pacing_min_s','pacing_max_s','expires_at','max_fires','trigger_json','probe_state_json')}):
             engine.store.set_meta('resume_after:'+wake.id, '')
 
 
@@ -78,18 +79,16 @@ def _clip(text, limit):
     return cut.rstrip(' \t\r\n.,;:·') + '…'
 
 
-def _time(engine, epoch, *, compact=False):
+def _time(epoch):
     if epoch is None: return 'none'
-    tz = engine.policy.resolved_timezone()
-    fmt = ('%H:%M' if local_day(epoch,tz)==local_day(engine.clock.now(),tz) else '%a %H:%M') if compact else '%Y-%m-%d %H:%M %Z'
-    return datetime.fromtimestamp(epoch,tz).strftime(fmt)
+    return format_timestamp(epoch)
 
 
 def _paused(engine, wake):
     # Only a governor pause takes keep; only a timed /pulse pause resumes on its own (resume_timed).
     if wake.status_reason.startswith('governor:'): return 'paused · resumes on keep/resume'
     until = float(engine.store.get_meta('resume_after:'+wake.id) or 0) if wake.status_reason == 'command' else 0
-    return f'paused · resumes {_time(engine, until)} or on resume' if until else 'paused · resumes on resume'
+    return f'paused · resumes {_time(until)} or on resume' if until else 'paused · resumes on resume'
 
 
 def _role_today(engine, wake):
@@ -110,17 +109,17 @@ def _item(engine, wake, today_budget=None):
     if wake.status in FINISHED_STATUSES: due = ''
     elif wake.status == 'paused': due = _paused(engine, wake)
     elif today_budget and wake.status == 'active' and today_budget[0] >= today_budget[1]: due = 'resting until tomorrow'
-    else: due = 'next '+_time(engine,wake.next_due_at or wake.deadline_at)
+    else: due = 'next '+_time(wake.next_due_at or wake.deadline_at)
     role = f' · today {today_budget[0]}/{today_budget[1]}' if today_budget else ''
     return f'{wake.id} {wake.status} · {_oneline(wake.title) or _clip(_oneline(wake.note),60)} · ' + ('role · ' if wake.role else '') + wake.kind + (f' · {due}' if due else '') + role + (' · you asked' if owner_requested(wake) else '') + (f' · {wake.status_reason}' if wake.status_reason else '')
 
 
 def _occurrences(engine, wake):
-    reasons={'held_unanswered':'held: waiting for your reply', 'held_daily_cap':'held: waiting for daily capacity', 'held_paused':'held: wake paused',
-        'unanswered':'dropped: unanswered mute', 'daily_model_cap':f'dropped: daily model cap ({engine.policy.max_model_wakes_per_day})',
-        'daily_message_cap':f'dropped: daily message cap ({engine.policy.max_messages_per_day})', 'expired_held':'expired while held'}
+    reasons={'held_interruptions':'held: waiting for an interruption token', 'interruption_limit':'dropped: no interruption tokens', 'held_unanswered':'held: waiting for your reply', 'held_daily_cap':'held: waiting for daily capacity', 'held_paused':'held: wake paused',
+        'unanswered':'dropped: unanswered mute', 'daily_model_cap':'dropped: daily model cap',
+        'daily_message_cap':'dropped: daily message cap', 'expired_held':'expired while held'}
     return '\n'.join(f'{o.dedupe_key} · {o.state} · {reasons.get(o.error,o.error.replace("_"," ") or o.outcome or "none")} · '
-        f'matched/created {_time(engine,o.matched_at) if o.matched_at is not None else _time(engine,o.created_at) if o.created_at else "before v0.1.2"} · held-since {_time(engine,o.held_since)} · delivered {"yes" if o.delivered else "no"}'
+        f'matched/created {_time(o.matched_at) if o.matched_at is not None else _time(o.created_at) if o.created_at else "before v0.1.2"} · held-since {_time(o.held_since)} · delivered {"yes" if o.delivered else "no"}'
         for o in engine.store.list_occurrences(wake.id)[-10:])
 
 
@@ -128,6 +127,7 @@ def _ledger(engine, key, days):
     today = datetime.fromisoformat(local_day(engine.clock.now(), engine.policy.resolved_timezone())).date()
     lines = [f'Ledger {days}d: fires · checks · model wakes · messages · engaged · cache/cost · provider deferrals · no_verdict · verdict']
     for wake in engine.store.list_wakes(key):
+        if 'continuation' in wake.trigger_json: continue
         counts = {}
         for n in range(days):
             row = engine.store.get_ledger((today-timedelta(days=n)).isoformat(), wake.id) or {}
@@ -223,16 +223,16 @@ def handle(raw_args, runtime):
                     row=engine.store.get_ledger(local_day(engine.clock.now(),engine.policy.resolved_timezone()),wake.id) or {}
                     for name,value in row.items():
                         if isinstance(value,int): counts[name]=counts.get(name,0)+value
-                active = [w for w in engine.store.list_wakes(key) if w.status in {'active','proposed','paused'}]
+                active = [w for w in engine.store.list_wakes(key) if w.status in {'active','proposed','paused'} and 'continuation' not in w.trigger_json]
                 role_today = {w.id: _role_today(engine,w) for w in active if w.role}  # read once: header and rows agree
                 next_due = min((x for w in active if w.status=='active' and not _resting(engine,w,role_today.get(w.id))
                                 for x in (w.next_due_at,w.deadline_at) if x is not None),default=None)
                 lines = [f'Cadence: {"on" if session.enabled and engine.policy.enabled else "off"} · poller {status["state"]}'
                          + (f' ({status["reason"]})' if status.get('reason') else ''),
                          f'allow_gateway_injection: {str(engine.injection_allowed()).lower()}',
-                         f'Local time: {_time(engine,engine.clock.now())}',
-                         f'Today: fires {counts.get("fires",0)} · checks {counts.get("checks",0)} · model wakes {daily["model_turns"]}/{engine.policy.max_model_wakes_per_day} · messages {messages_count(daily["delivered"],engine.store.messages_in_flight(key),engine.policy.max_messages_per_day)} · engaged {counts.get("engaged",0)} · {cache.display(counts)}',
-                         f'Active items: {sum(w.status=="active" for w in active)} · next due: {_time(engine,next_due)}']
+                         f'UTC time: {_time(engine.clock.now())}',
+                         f'Today: fires {counts.get("fires",0)} · checks {counts.get("checks",0)} · model wakes {daily["model_turns"]} · messages {messages_count(daily["delivered"],engine.store.messages_in_flight(key))} · interruption tokens {engine.interruption_tokens(key)}/{engine.policy.interruption_capacity} · engaged {counts.get("engaged",0)} · {cache.display(counts)}',
+                         f'Active items: {sum(w.status=="active" for w in active)} · next due: {_time(next_due)}']
                 held=sum(o.held_since is not None for o in engine.store.list_occurrences(session_key=key,state='pending'))
                 if engine.policy.daily_cost_limit_usd:
                     from .desk import cost_line
@@ -243,14 +243,14 @@ def handle(raw_args, runtime):
                     lines.append('your Claude cache lasts 5 min, so every wake is cold; set `prompt_caching: {cache_ttl: auto}` (1h for chat) in config.yaml')
                 health=json.loads(engine.store.get_meta('provider_health') or '{}')
                 if health:
-                    lines.append(f'Provider gate: provider_unavailable ({health["class"]}) · next recovery attempt: {_time(engine,health["until"])}; any successful model call clears it.')
-                if status.get('state')=='stalled': lines.append('Stalled since '+_time(engine,status.get('since')))
+                    lines.append(f'Provider gate: provider_unavailable ({health["class"]}) · next recovery attempt: {_time(health["until"])}; any successful model call clears it.')
+                if status.get('state')=='stalled': lines.append('Stalled since '+_time(status.get('since')))
                 if not engine.injection_allowed(): lines.append(INJECTION_CONFIG)
                 lines.extend(_item(engine,w,role_today.get(w.id)) for w in active)
                 lines.extend(f'{w.id}: keep / slow / stop / watch' for w in active if w.status_reason.startswith('governor:'))
                 return '\n'.join(lines)
             if action == 'list' and rest in {'','all'}:
-                wakes = engine.store.list_wakes(key)
+                wakes = [w for w in engine.store.list_wakes(key) if 'continuation' not in w.trigger_json]
                 # list_wakes is ordered by created_at, so the default keeps the newest finished items; creation time never changes.
                 recent = {w.id for w in [w for w in wakes if w.status in FINISHED_STATUSES][-LIST_RECENT_FINISHED:]}
                 visible = wakes if rest=='all' else [w for w in wakes if w.status not in FINISHED_STATUSES or w.id in recent]
@@ -269,7 +269,7 @@ def handle(raw_args, runtime):
                 match = re.fullmatch(r'(\S+)\s+(\d+)/day',rest)
                 if not match: raise ValueError('budget expects <id> <n>/day')
                 wake = engine.store.get_wake(match[1])
-                if wake is None or wake.session_key != key: raise ValueError('unknown item in this chat')
+                if wake is None or wake.session_key != key or 'continuation' in wake.trigger_json: raise ValueError('unknown item in this chat')
                 if not wake.role: raise ValueError('budget applies to roles')
                 budget = max(1,min(int(match[2]),engine.policy.role_turns_per_day_max))
                 if not engine.store.cas_wake(wake.id,wake.status,expected_version=wake.version,budget_turns_per_day=budget):
@@ -291,10 +291,10 @@ def handle(raw_args, runtime):
             if duration and action != 'pause': raise ValueError('for is supported only with pause')
             seconds = parse_duration(duration) if duration else None
             if wid == 'all' and action in {'pause','resume','cancel'}:
-                wakes = [w for w in engine.store.list_wakes(key) if w.status not in FINISHED_STATUSES]
+                wakes = [w for w in engine.store.list_wakes(key) if w.status not in FINISHED_STATUSES and 'continuation' not in w.trigger_json]
             else:
                 wake = engine.store.get_wake(wid)
-                if wake is None or wake.session_key != key: return 'Error: unknown item in this chat.'
+                if wake is None or wake.session_key != key or 'continuation' in wake.trigger_json: return 'Error: unknown item in this chat.'
                 wakes = [wake]
             lines = []
             for wake in wakes:
@@ -338,7 +338,7 @@ def _transition(engine,session,wake,action,seconds):
         _activation(engine,session,wake)
         result=_reschedule(engine,wake)
         candidate,clamps=result.wake,result.clamped
-        changes={name:getattr(candidate,name) for name in ('next_due_at','base_interval_s','eff_interval_s','pacing_min_s','pacing_max_s','expires_at','max_fires','trigger_json')}
+        changes={name:getattr(candidate,name) for name in ('next_due_at','base_interval_s','eff_interval_s','pacing_min_s','pacing_max_s','expires_at','max_fires','trigger_json','probe_state_json')}
         changes.update(status='active',status_reason='')
     elif action in {'cancel','stop'}: changes={'status':'cancelled','status_reason':'command'}
     else: changes={'status':'paused','status_reason':'watch_requested' if action=='watch' else 'command'}

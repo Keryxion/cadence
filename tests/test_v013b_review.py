@@ -69,7 +69,9 @@ def test_first_fire_cache_line_describes_this_wake(engine, monkeypatch):
     engine.clock.advance(w.next_due_at - now + 1)
     engine.tick()
     lines = [l for t in (c[0] for c in engine.ctx.calls) for l in t.splitlines() if 'Cache' in l]
-    assert lines and all('this wake warm' in l for l in lines), lines
+    assert not lines
+    detail, = engine.tool.handle({'action':'list','detailed':True})['wakes']
+    assert 'Cache:' in detail['cache']
 
 
 # PR #30 bot-review round: startup ordering, inbound admission, owner-reply lifetime, output tokens.

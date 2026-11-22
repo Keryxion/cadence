@@ -324,7 +324,7 @@ def test_R3_R9_file_skill():
 
 def test_R3_R10_recording_context_registers_everything(fake_ctx):
     registration.register(fake_ctx)
-    assert set(fake_ctx.tools)=={'pulse','request'}
+    assert set(fake_ctx.tools)=={'pulse','request','follow_up','get_time'}
     assert set(fake_ctx.hooks)==set(registration.HOOKS)
     assert set(fake_ctx.commands)=={'pulse'}
     assert set(fake_ctx.skills)=={'cadence-usage','cadence-report-problem'}

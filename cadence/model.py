@@ -4,10 +4,12 @@ from typing import Any
 import base64
 import secrets
 
+PULSE_SUMMARY_LIMIT = 1024
+
 TIME_KINDS = frozenset({"at", "every", "cron", "self"})
 RECURRING_KINDS = frozenset({"every", "cron", "self"})
 PROBE_KINDS = frozenset({"file", "process", "url", "command"})
-EVENT_KINDS = frozenset({"kanban_completed", "kanban_blocked", "kanban_worker_exited",
+EVENT_KINDS = frozenset({"startup", "kanban_completed", "kanban_blocked", "kanban_worker_exited",
                          "subagent_done", "api_error", "reaction", "message_edited"})
 KINDS = TIME_KINDS | PROBE_KINDS | EVENT_KINDS | {"owner_silent"}
 WAKE_STATUSES = frozenset({"active", "paused", "proposed", "done", "cancelled",

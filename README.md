@@ -11,7 +11,7 @@ Cadence is derived from [HeartBeat 2.0](https://github.com/electricsheephq/heart
 - **Follow-ups and watchers.** A follow-up at a set time, a recurring check, a check-in after a long silence, or a deterministic watcher on a file, process, URL, read-only command or Hermes event. A watcher costs no model call until something changes.
 - **Same conversation, same model.** Every wake is a turn in the chat it belongs to, on that chat's own model. There is no side model, separate cron session or subagent.
 - **Quiet work counts.** A turn that researches, writes or prepares something without messaging you is real progress. Only wakes that keep finding nothing to do slow down, then pause and ask you once.
-- **You set the budgets.** Turns per day, an optional daily cost limit, turns per role, messages per day, and the unanswered mute are your settings. They hold back messages and spending, not initiative: while you're away or asleep the agent can keep working, and it tells you what matters when you're back. Cadence has no quiet hours or do-not-disturb: a wake fires when it is due, at any hour, and holding interruptions back is the job of the client that delivers them. `quiet_hours` settings and `/pulse quiet` overrides left over from earlier versions are ignored. That work still uses turns: the agent's recurring work, roles and own time keep running (and billing) under the mute, within the turns-per-day and cost limits. Roles and own time don't expire on a timer. The agent can tighten its own limits but never widen yours.
+- **You set the budgets.** Interruption capacity and refill interval, an optional daily cost limit, turns per role, and the unanswered mute are your settings. They hold back messages and spending, not initiative: while you're away or asleep the agent can keep working, and it tells you what matters when you're back. Cadence has no quiet hours or do-not-disturb: a wake fires when it is due, at any hour, and holding interruptions back is the job of the client that delivers them. `quiet_hours` settings and `/pulse quiet` overrides left over from earlier versions are ignored. That work still uses turns: the agent's recurring work, roles and own time keep running (and billing) under the mute, within the role and cost limits. Roles and own time don't expire on a timer. The agent can tighten its own limits but never widen yours.
 
 ## See it work
 
@@ -58,7 +58,7 @@ Heartbeats, as OpenClaw popularised them, made agents feel alive. They also prod
 |---|---|
 | Stops silently after compaction, sleep or restart | The schedule and claims live in SQLite on wall-clock time. After a restart or sleep, missed fires collapse into one. |
 | Duplicate or replayed deliveries | Each fire is a durable compare-and-set claim. Only one wake can be in flight per chat, and a wake is never injected into a busy chat. |
-| Message floods (one loop resent 189×) | Daily caps on model turns and messages, spacing between wakes, a mute after unanswered messages, and an error ladder that ends in a pause. |
+| Message floods (one loop resent 189×) | A per-chat interruption bucket, spacing between wakes, a mute after unanswered messages, and an error ladder that ends in a pause. |
 | "HEARTBEAT_OK" leaking into the chat | The model never types a sentinel. It calls `pulse respond notify=false`, and the plugin makes the turn silent. |
 | Messages to the wrong chat or person | There is no destination parameter at all. A wake can only return to the chat that armed it, and only in DMs by default. |
 | Most spend going to no-op ticks | Watchers decide without a model call. The no-op governor backs off, then pauses. |
@@ -92,7 +92,7 @@ Every scenario and its hard bars are in [bench/README.md](bench/README.md); the 
               nothing changed? ──► no model call, nothing sent
                                    │ due / changed / deadline
      gates: enabled · estop · paused · provider health ·
-            unanswered mute · daily caps · busy · spacing · one in flight
+            unanswered mute · interruption tokens · busy · spacing · one in flight
                                    │
            one turn in the same chat, on the chat's own model
                                    │
@@ -102,7 +102,7 @@ Every scenario and its hard bars are in [bench/README.md](bench/README.md); the 
           ledger + no-op governor (slow down → suggest a watcher → pause → ask once)
 ```
 
-One poller per profile runs inside the messaging gateway that serves that profile and ticks every 5 seconds. Hermes loads every profile's plugins when a gateway starts; a gateway that does not serve a profile leaves that profile's schedule alone and delivers nothing for it. A file lock guarantees only one poller even when several Hermes processes share the profile. Every fire is a durable claim with an attempt marker. An accepted turn that never starts is tried three times, and a refused injection backs off and is tried five times, before it is marked dead. A turn that started but never finished (a crash or restart) is recorded as interrupted. Hermes may auto-resume that wake turn, sometimes before cadence's restart recovery has run; cadence keeps the replay silent either way, never counts it as a fire or delivery, and counts it as a model turn toward the daily cap.
+One poller per profile runs inside the messaging gateway that serves that profile and ticks every 5 seconds. Hermes loads every profile's plugins when a gateway starts; a gateway that does not serve a profile leaves that profile's schedule alone and delivers nothing for it. A file lock guarantees only one poller even when several Hermes processes share the profile. Every fire is a durable claim with an attempt marker. An accepted turn that never starts is tried three times, and a refused injection backs off and is tried five times, before it is marked dead. A turn that started but never finished (a crash or restart) is recorded as interrupted. Hermes may auto-resume that wake turn, sometimes before cadence's restart recovery has run; cadence keeps the replay silent either way, never counts it as a fire or delivery, and counts it as a model turn.
 
 ## Install
 Requires **Hermes ≥ 0.21.6** and Python ≥ 3.11 on macOS or Linux. Cadence delivers into **messaging-gateway DMs** (and group or topic chats when `dm_only` is off): Telegram, Discord, Slack, WhatsApp and the other gateway platforms, including plugin adapters registered with the gateway.
@@ -169,6 +169,8 @@ Watchers available to the agent:
 | `command` | A read-only allowlisted command's output changes, it succeeds or fails, or it prints `{"fire": true, …}` |
 | Hermes events | A kanban task completes or blocks, a worker exits, a subagent finishes, the API errors, or someone reacts to or edits a message |
 
+Use `{"kind":"startup"}` to wake on the next gateway startup, including after a host reboot. Set `until.max_fires` to 1 for a one-time post-update check. Otherwise it can fire on subsequent startups until its normal limits apply. A plugin reload or poller restart in the same gateway process does not count.
+
 Hermes events are selected by `trigger.kind`: `kanban_completed`, `kanban_blocked`, `kanban_worker_exited`, `subagent_done`, `api_error`, `reaction` (with an optional `emojis` filter) and `message_edited`.
 
 Only probe and event watchers can carry a `deadline`: it is a one-time "nothing happened" fallback, and the watcher keeps going until it expires.
@@ -182,8 +184,9 @@ These live under `plugins.entries.cadence.settings` and appear in **Settings ▸
 | Agent can arm wakes | `agent_can_create` | `yes` | yes · ask_first (the agent's wakes wait for `/pulse ok <id>`) · no |
 | Direct messages only | `dm_only` | on | Refuse group chats. Unknown chat types are refused too. When off, group and topic wakes are recognised behind the gateway's sender prefix. |
 | Time zone | `timezone` | (blank) | IANA name such as Europe/Paris. Blank uses the profile's time zone. |
-| Wake turns per day | `max_model_wakes_per_day` | 24 | Per chat, local day. Each wake turn is a full model turn. |
-| Wake messages per day | `max_messages_per_day` | 6 | Per chat, local day. |
+| Interruption capacity | `interruptions.capacity` | 15 | Maximum saved tokens per chat. |
+| Initial interruptions | `interruptions.initial` | 15 | Tokens after restart, capped at capacity. |
+| Interruptions restored per hour | `interruptions.refill_per_hour` | 12 | Restore one whole token every 3600 / rate seconds. |
 | Unanswered messages before mute | `max_unanswered` | 2 | Wakes you armed, and one-time reminders you ask for in chat, always fire; agent watchers wait for your reply; other one-time agent reminders are dropped. The agent's recurring work and roles keep running silently, with their messages held until you reply. An agent edit revokes the exemption (for a chat reminder, so does an agent resume), except a watcher-only conversion you requested with `/pulse watch`. |
 | Shortest repeat (minutes) | `min_interval_minutes` | 15 | Floor for every recurring time wake. |
 | Shortest agent timer without a watcher (minutes) | `agent_ungated_floor_minutes` | 55 | Floor for recurring timers the agent arms without a watcher. |
@@ -220,8 +223,8 @@ Every guardrail is configurable:
 - Recurring timers repeat at most every 15 minutes, or every 55 minutes when the agent arms one without a watcher. Watchers check at most once a minute.
 - Roles and own time don't expire on a timer; a role's explicit expiry can be up to 365 days out (`max_reminder_days`). Every other wake expires after 14 days at most, except a one-time reminder you ask for, which can be due up to 365 days out (`max_reminder_days`, never below `max_lifetime_days`). A reminder due later than 14 days stays deliverable for 14 days after its due time, so downtime at the due time follows the catch-up rule instead of expiring silently.
 - A wake that could not fire before it expires is refused, including an owner-silence wait or a probe's next check without a deadline. On create, an implicit lifetime stretches to fit, up to the maximum. Existing wakes keep their expiry; an edit past it is refused with a hint to set `until.expires` when extending can help, otherwise it names the maximum lifetime. A one-shot outside the catch-up window is refused; one due now fires on the next check. A timed resume that cannot fit ends the wake with a notice. Receipts name the silence duration and are at most 240 characters; long ones end with an ellipsis.
-- Daily caps hold watchers until capacity frees, including on a new local day; your unedited one-shot reminders, including one-time reminders you ask for in chat, bypass both caps.
-- After 2 unanswered messages, agent watchers hold until you write, and agent one-time follow-ups and built-in check-ins drop their occurrence. The agent's recurring work, roles and own time keep running with their messages held; the daily message cap holds their messages the same way. Wakes you armed, and one-time reminders you ask for in chat (the agent marks them `owner_asked`), still fire unless the agent edited their trigger, timing or note; a watcher-only conversion you requested with `/pulse watch` keeps owner status. Held matches merge, keeping the latest payload; pauses preserve them and expiry is visible in `/pulse why`.
+- Watchers hold matches until an interruption token refills; your unedited one-shot reminders, including one-time reminders you ask for in chat, can fire with an empty bucket.
+- After 2 unanswered messages, agent watchers hold until you write, and agent one-time follow-ups and built-in check-ins drop their occurrence. The agent's recurring work, roles and own time keep running with their messages held; an empty bucket holds their messages the same way. Wakes you armed, and one-time reminders you ask for in chat (the agent marks them `owner_asked`), still fire unless the agent edited their trigger, timing or note; a watcher-only conversion you requested with `/pulse watch` keeps owner status. Held matches merge, keeping the latest payload; pauses preserve them and expiry is visible in `/pulse why`.
 - A wake turn that carries untrusted data, such as a log line or a web page, cannot arm new recurring work.
 - Hermes' emergency stop halts every wake.
 - `/pulse off` stops everything in that chat, and only you can turn it back on.
@@ -308,3 +311,26 @@ Credits: claim, refund and coalescing semantics follow Hermes core `/heartbeat`.
 Built for [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Electric Sheep. Apache-2.0.
 
 Known issues: provider-exhaustion settlement (#27) remains blocked by [NousResearch/hermes-agent#137357](https://github.com/NousResearch/hermes-agent/issues/137357).
+
+Call `get_time({})` to read the host clock in UTC and the Hermes profile timezone (UTC when unset). Pass an IANA name such as `{"timezone":"America/New_York"}` to select another local timezone. Cadence reports scheduled instants in UTC at second precision, with a trailing `Z`.
+
+Use `follow_up({"at":"30s"})` to get another turn in the current conversation once, after 15 seconds through 15 minutes inclusive. Cancel with `follow_up({"cancel":"<id>"})`. Timers retain chat, session and turn identity as internal metadata. On expiry the model receives `Follow-up fired` with scheduled and current timestamps, plus the current conversation history, including intervening messages. A continuation can arm the next timer. Requested follow-ups leave the interruption bucket unchanged.
+
+Example plugin settings in the profile config.yaml
+
+```yaml
+plugins:
+  entries:
+    cadence:
+      settings:
+        interruptions:
+          capacity: 15
+          initial: 15
+          refill_per_hour: 12
+```
+
+Capacity controls the burst and refill controls the sustained rate. A full 15-token bucket can release 15 messages immediately and restore 12 more tokens over the next hour.
+
+The model-callable `pulse(action="list")` returns compact current responsibilities, with active entries first, next-check timestamps, latest recorded results and hold reasons. Use `pulse(action="list", detailed=true)` for full records and finished history.
+
+Each `follow_up` call creates an independent timer. Relative formats include `30s`, `2 minutes`, and `1m30s`. Timers survive gateway restarts and are orphaned by `/new`. If a turn is already underway when a timer becomes due, Cadence consumes it without queuing a continuation.

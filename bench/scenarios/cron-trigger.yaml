@@ -5,7 +5,7 @@ cites:
 - 'B1 realism: Cron fires on scheduled times over two days and respects the agent
   floor without interval cache snap'
 settings:
-  max_messages_per_day: 100
+  interruption_capacity: 100
 arms: []
 timeline:
 - t: 0
