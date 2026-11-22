@@ -141,8 +141,13 @@ def _finish_in_gateway_worker(path, clock, marker):
             worker.close()
 
 
-def test_separate_process_delivery_refills_from_completion_instant(engine):
+def test_separate_process_delivery_refills_from_completion_instant(engine, monkeypatch):
     import multiprocessing
+    from pathlib import Path
+
+    # Both the checkout directory on CI and the plugin package are named cadence.
+    # Make the spawned interpreter resolve the inner package just as pytest does.
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
 
     engine.policy = replace(engine.policy, interruption_capacity=1)
     wake = arm(engine)
