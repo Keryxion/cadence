@@ -164,11 +164,17 @@ class Runtime:
             LOG.warning('cadence hook adapter %s failed',name,exc_info=True)
             return None
 
-    def tool(self,args,**kwargs):
+    def tool(self,args,*,continuation=False,**kwargs):
         try:
             reason=self.inactive()
             if reason: return json.dumps({'error':'engine_unavailable','reason':reason})
-            with home_scope(self.home): return json.dumps(self.get_engine().tool.handle(args,**kwargs),ensure_ascii=False)
+            with home_scope(self.home):
+                tool = self.get_engine().tool
+                if continuation:
+                    from .follow_up import handle
+                    self.get_engine().refresh()
+                    return json.dumps(handle(tool,args,**kwargs),ensure_ascii=False)
+                return json.dumps(tool.handle(args,**kwargs),ensure_ascii=False)
         except Exception:
             LOG.warning('cadence tool adapter failed',exc_info=True)
             return json.dumps({'error':'engine_unavailable'})
@@ -283,6 +289,9 @@ def _register_surfaces(ctx,runtime):
     def tool(args,**kwargs):
         return runtime.tool(args,**kwargs) if runtime else json.dumps({'error':'engine_unavailable'})
     ctx.register_tool(name='pulse',toolset='cadence',schema=SCHEMA,handler=tool,description=DESCRIPTION)
+    from . import follow_up
+    ctx.register_tool(name='follow_up',toolset='cadence',schema=follow_up.SCHEMA,description=follow_up.DESCRIPTION,
+                      handler=lambda args,**kw:runtime.tool(args,continuation=True,**kw) if runtime else json.dumps({'error':'engine_unavailable'}))
     from .requests import SCHEMA as REQUEST_SCHEMA,DESCRIPTION as REQUEST_DESCRIPTION
     ctx.register_tool(name='request',toolset='cadence',schema=REQUEST_SCHEMA,
                       handler=lambda args,**kw:runtime.request(args,**kw) if runtime else json.dumps({'error':'engine_unavailable'}),

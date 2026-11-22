@@ -5,6 +5,7 @@ cites:
 settings: {}
 arms:
 - ref: recurring
+  existing: true
   session: owner
   args:
     note: Close the named open loop and report only useful news.
@@ -12,6 +13,7 @@ arms:
       kind: every
       every: 1h
 - ref: too_old
+  existing: true
   session: owner
   args:
     note: Close the named open loop and report only useful news.

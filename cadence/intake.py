@@ -9,6 +9,7 @@ import re
 import uuid
 
 from .model import Session
+from .policy import owner_class
 from . import governor
 
 MARKER = re.compile(r'^⟦pulse o:([^\s]+) a:(\d+)(?: n:([0-9a-f]{16}))?⟧(?:\s|$)')
@@ -73,6 +74,8 @@ def fail_open(fn):
         except Exception:
             # No hook payload or raw exception text in log messages.
             self.engine.log.warning('cadence hook %s failed',fn.__name__,exc_info=True)
+            if fn.__name__ == 'transform_llm_output' and kwargs.get('session_id') in self.flights:
+                return '[SILENT]'
             return None
     return call
 
@@ -284,6 +287,8 @@ class Intake:
         self.anchors={}
         self.inbounds=set()
         self.owner_turns={}
+        self.owner_contexts={}
+        self.owner_inbounds={}
 
     def flight_for(self,sid,key):
         # Tools in delegate children inherit the key, but have a different id.
@@ -303,6 +308,7 @@ class Intake:
             key=self.bindings.pop(old)
             self.bindings[sid]=key
             self.turns[sid]=self.turns.pop(old,'')
+            if old in self.owner_contexts: self.owner_contexts[sid]=self.owner_contexts.pop(old)
             if old in self.owner_turns: self.owner_turns[sid]=self.owner_turns.pop(old)
             if old in self.anchors: self.anchors[sid]=self.anchors.pop(old)
             f=self.flights.pop(old,None)
@@ -418,7 +424,9 @@ class Intake:
         authorized=getattr(gateway,'_is_user_authorized_for_source',None)
         if authorized and not authorized(source): return None
         # Only an admitted owner inbound vetoes crash-replay recognition.
-        if key: self.inbounds.add(key)
+        if key:
+            self.inbounds.add(key)
+            self.owner_inbounds[key]=text
         if not mid and getattr(source,'message_id',None): return None
         # A leftover ORIGIN steer always becomes a turn; B owns its count.
         if text.startswith(ORIGIN): return None
@@ -474,6 +482,12 @@ class Intake:
                 if 0<=e.clock.now()-pending['at']<=3600:
                     self.count(key,pending.get('mid'),identity.platform)
                 s.set_meta(stamp,'')
+        inbound = self.owner_inbounds.pop(key, None)
+        previous_context = self.owner_contexts.get(session_id)
+        if not previous_context or previous_context['turn'] != turn_id:
+            self.owner_contexts.pop(session_id, None)
+        if inbound and turn_id and isinstance(user_message,str) and inbound.strip() == user_message.strip():
+            self.owner_contexts[session_id] = dict(chat=key, session=session_id, turn=turn_id, text=inbound)
         parsed=marker(user_message,secret=s.get_meta('marker_secret'),require_tag=(identity.chat_type != 'dm'))
         if not parsed:
             row=conversation_history[-1] if conversation_history else None
@@ -484,6 +498,9 @@ class Intake:
                         owner_seen=True
                         self._count_origins(key,text,turn_id,hashlib.sha256(text.encode()).hexdigest()[:16],platform=platform)
                     elif row.get('platform_message_id'):
+                        if (turn_id and text and text == user_message and
+                                not s.get_meta(f'nonhuman:{key}:{row["platform_message_id"]}')):
+                            self.owner_contexts[session_id] = dict(chat=key,session=session_id,turn=turn_id,text=text)
                         owner_seen=True
                         self.count(key,row['platform_message_id'],platform)
         if owner_seen: self.owner_turns[session_id]=turn_id
@@ -551,6 +568,10 @@ class Intake:
                         if tip is not None:
                             self._session_switch(w,session_id)
                             w=s.get_wake(wid)
+                origin=w.trigger_json.get('continuation')
+                if origin and (origin.get('chat') != key or (origin.get('session') != session_id
+                            and e.compression_tip(origin.get('session')) != session_id)):
+                    invalid=True
                 if w.status!='active': invalid=True
                 if w.cancel_on_reply and session.last_human_at is not None and o.claimed_at is not None and session.last_human_at>o.claimed_at:
                     invalid=True
@@ -566,6 +587,10 @@ class Intake:
                 if o.state=='claimed' and s.start(wid,dedupe,attempt=attempt):
                     s.cas_wake(w.id,w.status,expected_version=w.version,fires=w.fires+1,model_turns=w.model_turns+1,last_fired_at=now)
                     e.ledger(w,fires=1,model_turns=1)
+                    if origin:
+                        return {'context': 'Resume work from the following originating owner turn. '
+                                'Reply naturally or use follow_up again while the work is pending.\n'
+                                + json.dumps({'turn':origin['turn'],'owner_message':origin['text']},ensure_ascii=False)}
                 return None
             # Compression is a lineage continuation, including when only a
             # human turn has visited the new tip before /new arrives.
@@ -850,15 +875,33 @@ class Intake:
             if f.invalid or not o or o.state!='started' or o.attempt!=f.attempt: return '[SILENT]'
             w=s.get_wake(o.wake_id)
             session=s.get_session(f.session_key)
-            silence=(not e.policy.enabled or not session.enabled or e.paused() or
-                     o.force_silent or not o.notify) or (
-                o.outcome is None and response_text.strip().casefold() in BARE_SILENCE)
-            if o.notify and o.summary.strip() and o.summary_hash:
-                silence=silence or any(x.delivered and x.summary.strip() and x.summary_hash==o.summary_hash and x.ended_at is not None and
-                    0<=e.clock.now()-x.ended_at<=86400 for x in s.list_occurrences(o.wake_id,state='done'))
-            if silence:
-                s.update_occurrence(o.wake_id,o.dedupe_key,'started',attempt=f.attempt,force_silent=True)
+            continuation = 'continuation' in w.trigger_json and o.outcome is None
+            notify = o.notify or continuation
+            silent = (not notify or not e.policy.enabled or not session.enabled or e.paused()
+                      or o.force_silent or not response_text.strip()
+                      or response_text.strip().lower() == '[silent]')
+            if notify and o.summary.strip() and o.summary_hash:
+                silent = silent or any(x.delivered and x.summary_hash == o.summary_hash and x.ended_at is not None
+                    and 0 <= e.clock.now()-x.ended_at <= 86400 for x in s.list_occurrences(w.id,state='done'))
+
+            # Serial with all role and watcher releases on this profile's store.
+            # The adapter consumes its own SendResult. An admitted final keeps its charge.
+            admission = 'admitted:'+o.id
+            if s.get_meta(admission):
                 return '[SILENT]'
+            discretionary = not (owner_class(w) and w.kind == 'at')
+            if not silent and discretionary and not e.interruption_tokens(f.session_key):
+                silent = True
+                if w.role and f.scratch is None:
+                    f.scratch = (o.summary or response_text.strip())[:4000]
+            if silent:
+                s.update_occurrence(w.id,o.dedupe_key,'started',attempt=f.attempt,force_silent=True)
+                return '[SILENT]'
+            if continuation:
+                s.update_occurrence(w.id,o.dedupe_key,'started',attempt=f.attempt,notify=True)
+            s.set_meta(admission,'adapter outcome unknown')
+            if discretionary:
+                e.interruption_tokens(f.session_key,spend=True)
         return None
 
     @fail_open
@@ -869,6 +912,9 @@ class Intake:
         anchor=self.anchors.get(session_id)
         # Held rows end with the turn the finalizer names. A stop without a turn id can arrive while the
         # worker still sends its last prepared request, so it must not drop the anchor.
+        context = self.owner_contexts.get(session_id)
+        if context and (not turn_id or context['turn'] == turn_id):
+            self.owner_contexts.pop(session_id, None)
         if anchor and turn_id and anchor[0]==turn_id: del self.anchors[session_id]
         f=self.flights.get(session_id)
         if turn_id and self.turns.get(session_id) and turn_id!=self.turns[session_id]: return None
@@ -894,12 +940,12 @@ class Intake:
             # between claim/start/transform and successful finalization.
             w=s.get_wake(o.wake_id)
             silenced=o.force_silent or not o.notify or not e.policy.enabled or not session.enabled or e.paused()
-            delivered=bool(o.notify and not silenced and not f.owner_replied)
+            admitted = bool(s.get_meta('admitted:'+o.id))
+            delivered=bool(admitted and o.notify and not silenced and not f.owner_replied)
             if not s.finish(o.wake_id,o.dedupe_key,attempt=o.attempt,outcome=o.outcome or 'unreported',delivered=delivered,force_silent=silenced): return None
             if f.scratch is not None:
                 s.cas_wake(w.id,w.status,expected_version=w.version,scratch=f.scratch)
             if delivered and session:
-                e.interruption_tokens(key, spend=True)
                 session=s.get_session(key)
                 s.cas_session(key,{'unanswered_count':session.unanswered_count},
                               unanswered_count=session.unanswered_count+1,first_notice_sent=True)

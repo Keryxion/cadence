@@ -13,6 +13,7 @@ timeline:
   event: arm
   arm:
     ref: warm
+    existing: true
     args:
       note: Report useful news for warm
       trigger:

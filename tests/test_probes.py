@@ -176,12 +176,12 @@ def test_arming_refuses_unsafe_probes(engine, trigger):
 
 def test_process_identity_is_recorded_when_armed(engine, monkeypatch):
     monkeypatch.setitem(sys.modules,'psutil',SimpleNamespace(Process=lambda pid: SimpleNamespace(create_time=lambda:123.0)))
-    result = engine.tool.handle({'action':'create','note':'Watch process','trigger':{'kind':'process','pid':42}})
+    result = engine.tool.handle({'action':'create','role':True,'note':'Watch process','trigger':{'kind':'process','pid':42}})
     assert result['wake']['probe_state_json']['create_time'] == 123.0
 
 
 def test_recorded_command_cwd_is_supported(engine, tmp_path):
-    result = engine.tool.handle({'action':'create','note':'Watch repo','trigger':{'kind':'command','command':['git','status'],'cwd':str(tmp_path)}})
+    result = engine.tool.handle({'action':'create','role':True,'note':'Watch repo','trigger':{'kind':'command','command':['git','status'],'cwd':str(tmp_path)}})
     assert result['ok']
 
 

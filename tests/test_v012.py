@@ -346,7 +346,8 @@ def test_cache_tool_consumers_and_owner_result(engine, hermes_helpers, monkeypat
     from cadence import cache
     monkeypatch.setattr(cache,'cost',lambda *a,**kw: None)
     cache.touch(engine.store,engine.store.get_session(KEY),started_at=engine.clock.now(),route='anthropic|claude-opus-5.5|api.anthropic.com',prompt=100,read=100,api_mode='anthropic_messages')
-    created=engine.tool.handle({'action':'create','note':'Task','trigger':{'kind':'self','every':'1h'}})
+    from test_v0114 import create
+    created=create(engine,{'kind':'self','every':'1h'})
     assert created['wake']['eff_interval_s']==3420 and created['wake']['next_due_at']==engine.clock.now()+3420
     assert 'warm' in created['cache']
     updated=engine.tool.handle({'action':'update','id':created['wake']['id'],'trigger':{'kind':'self','every':'75m'}})

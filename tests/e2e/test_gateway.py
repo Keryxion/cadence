@@ -63,6 +63,24 @@ def test_owner_at_wake_delivers_once(make_rig):
     rig.assert_tools_ok()
 
 
+def test_follow_up_keeps_origin_after_intervening_owner_turn(make_rig):
+    from tests.fakes.fake_llm_provider import Text, ToolCall
+
+    rig = make_rig()
+    rig.director.script("build", ToolCall("follow_up", {"at": "30s"}), Text("TIMER-ARMED"))
+    rig.owner("Check my running build [in:build]", "TIMER-ARMED")
+    timer, = [w for w in rig.rows("wakes") if "continuation" in json.loads(w["trigger_json"])]
+    rig.owner("Discuss dinner [in:dinner]", "reply to dinner")
+    rig.director.action = lambda record: Text("ORIGINAL-BUILD-COMPLETE")
+    assert rig.settled(timer["id"])["delivered"] == 1
+    assert len(rig.director.wake_starts) == 1
+    assert sum("ORIGINAL-BUILD-COMPLETE" in t for t in rig.texts()) == 1
+    messages = rig.director.wake_requests[0]["messages"]
+    assert any("originating owner turn" in str(m) and "Check my running build" in str(m)
+               for m in messages)
+    rig.assert_tools_ok()
+
+
 @pytest.mark.parametrize("loud", [False, True], ids=["default", "tool-progress-reasoning"])
 def test_silent_verdict_shows_nothing(make_rig, loud):
     rig = make_rig(loud=loud)
@@ -295,10 +313,11 @@ def test_owner_reply_clears_mute(make_rig):
     # Create all timers in ONE owner turn, then allow two unanswered notifications.
     from tests.fakes.fake_llm_provider import Text, ToolCall
 
-    rig.director.script("mute", *[ToolCall("pulse", {"action": "create", "note": f"mute-{i}",
-                              "trigger": {"kind": "at", "at": f"in {10+15*i}s"}}) for i in range(3)],
+    rig.director.script("mute", *[ToolCall("pulse", {"action": "create", "owner_asked": True, "note": f"mute-{i}",
+                              "trigger": {"kind": "at", "at": f"in {10+15*i}s"}}) for i in range(2)],
                         Text("MUTE-ARMED"))
     rig.owner("arm three notifications [in:mute]", "MUTE-ARMED")
+    rig.existing_agent_wake("legacy mute check",{"kind":"at","at":"in 40s"})
     wakes = sorted(rig.rows("wakes"), key=lambda w: w["next_due_at"])
     assert len(wakes) == 3 and all(w["creator"] == "agent" for w in wakes)
     for w in wakes[:2]:
@@ -399,14 +418,12 @@ def test_mute_holds_watcher_until_reply(make_rig):
     # One owner turn arms both nudges and the watcher, without clearing the
     # unanswered count between deliveries. The file belongs to this rig only.
     rig.director.script("watcher-mute", *[
-        ToolCall("pulse", {"action": "create", "note": f"watcher-mute-{i}",
+        ToolCall("pulse", {"action": "create", "owner_asked": True, "note": f"watcher-mute-{i}",
                            "trigger": {"kind": "at", "at": f"in {10+15*i}s"}})
         for i in range(2)],
-        ToolCall("pulse", {"action": "create", "note": "watch held file matches",
-                           "trigger": {"kind": "file", "path": str(watched),
-                                       "pattern": "MATCH-", "check_every": "1s"}}),
         Text("WATCHER-MUTE-ARMED"))
     rig.owner("arm nudges and file watcher [in:watcher-mute]", "WATCHER-MUTE-ARMED")
+    rig.existing_agent_wake("watch held file matches",{"kind":"file","path":str(watched),"pattern":"MATCH-","check_every":"1s"})
     wakes = rig.rows("wakes")
     assert len(wakes) == 3 and all(w["creator"] == "agent" for w in wakes), wakes
     watcher = next(w["id"] for w in wakes if w["kind"] == "file")

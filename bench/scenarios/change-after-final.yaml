@@ -8,6 +8,7 @@ settings:
   probe_commands: $FIXTURES/read-status
 arms:
 - ref: silent
+  existing: true
   args:
     note: Report useful news for silent
     trigger:
@@ -18,6 +19,7 @@ arms:
       check_every: 5m
       fire_on: change
 - ref: deadline
+  existing: true
   args:
     note: Report useful news for deadline
     trigger:

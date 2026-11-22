@@ -5,6 +5,7 @@ cites:
 settings: {}
 arms:
 - ref: task
+  existing: true
   args:
     note: Follow up until the owner replies.
     trigger:
@@ -13,6 +14,7 @@ arms:
     until:
       owner_replies: true
 - ref: pending_reply
+  existing: true
   args:
     note: Wait until later unless the owner replies.
     trigger:

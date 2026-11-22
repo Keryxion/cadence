@@ -81,6 +81,6 @@ def test_a_turn_held_by_the_message_limit_still_sees_the_limit_on_its_desk(engin
     e.ledger(role, delivered=6)
     e.dispatch(pending(e, role))
     text = e.ctx.calls[-1][0]
-    assert "Messages are held right now (waiting for an interruption token)" in text
-    assert "messages today 6 ·" in text and 'in progress' not in text
+    assert 'Interruption tokens available: 0' in text
+    assert 'messages today 6 (+1 in progress)' in text
     assert "Messages held now: waiting for an interruption token" in text

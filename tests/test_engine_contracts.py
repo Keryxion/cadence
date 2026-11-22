@@ -15,7 +15,7 @@ from cadence.policy import Policy
 
 def test_permission_matrix_and_proposals(engine):
     e = engine
-    args = dict(action='create', note='n', trigger={'kind':'at','at':'+1h'})
+    args = dict(action='create',note='n',role=True,trigger={'kind':'self'})
     e.policy = replace(e.policy, agent_can_create='ask_first')
     result = e.tool.handle(args, session_id='sid')
     assert result['ok'] and result['wake']['status']=='proposed'

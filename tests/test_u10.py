@@ -214,7 +214,7 @@ e=Poller(GatewayCtx(home),store,Policy(clock=clock,timezone='UTC'),clock,
 kind=sys.argv[3]; path=home/'build.log'; path.write_text('start\n')
 body=[b'initial']; probes._get_url=lambda url,**kwargs:body[0]
 trigger={'kind':kind,'pattern':'(a+)+$','path':str(path)} if kind=='file' else {'kind':kind,'pattern':'.*"x".*','url':'http://example.test'}
-r=e.tool.handle({'action':'create','note':'Check build','trigger':trigger},session_id='sid')
+r=e.tool.handle({'action':'create','role':True,'note':'Check build','trigger':trigger},session_id='sid')
 assert r.get('ok'),r
 wid=r['wake']['id']; e.tick()
 old=store.get_wake(wid).probe_state_json
@@ -252,7 +252,7 @@ def test_R10_A4_regex_tick_deadline_and_gateway_thread(engine, tmp_path, kind):
 @pytest.mark.parametrize('pattern', ['[', 'x'*513])
 @pytest.mark.parametrize('kind', ['file', 'url'])
 def test_R10_A4_invalid_or_long_pattern_refused(engine, kind, pattern):
-    result = engine.tool.handle({'action':'create','note':'Watch','trigger':{
+    result = engine.tool.handle({'action':'create','role':True,'note':'Watch','trigger':{
         'kind':kind,'path':'build.log','url':'https://example.test','pattern':pattern}})
     assert result.get('error') == 'invalid_request'
     assert not engine.store.list_wakes()

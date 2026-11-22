@@ -5,6 +5,7 @@ cites:
 settings: {}
 arms:
 - ref: scheduled
+  existing: true
   session: owner
   args:
     note: Close the named open loop and report only useful news.
@@ -12,6 +13,7 @@ arms:
       kind: at
       at: in 5m
 - ref: external
+  existing: true
   session: owner
   args:
     note: Close the named open loop and report only useful news.

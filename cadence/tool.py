@@ -31,8 +31,8 @@ PARAMETERS = obj({
     'notify':BOOL, 'summary':STR, 'next_check':STR, 'scratch':STR,
 })
 PARAMETERS['required'] = ['action']
-DESCRIPTION = ('Your own time in this chat. Use create to arm a wake/watcher (note and trigger.kind required), or a role '
-               '(role=true on every/cron/self) for a standing responsibility you own: no expiry, a turns-per-day budget, a desk view; list to inspect; '
+DESCRIPTION = ('Use create with role=true to schedule discretionary work (note and trigger.kind required). '
+               'Each role may use a timer, cron or watcher and starts at most once per hour. Use list to inspect; '
                'update to change instructions or trigger; pause to suspend; resume to restart a paused wake; '
                'cancel to end it. During a wake turn, use respond to set '
                'outcome and notify, optionally scratch/next_check; outcome=progress with notify=false and a summary is real work, never counted as idle. Bounds and clamps are reported. Never type silence markers. '
@@ -95,12 +95,12 @@ class Tool:
         if notice: result['settings_error']=notice
         return result
 
-    def owner_turn_evidence(self, session_id, flight):
+    def verified_owner(self, session_id, key):
         e = self.engine
-        requests=getattr(e,'requests',None)
-        if requests and requests.context(session_id): return requests.standing(session_id)
-        return (flight is None and bool(session_id) and bool(turn := e.intake.turns.get(session_id))
-                and e.intake.owner_turns.get(session_id) == turn)
+        context = e.intake.owner_contexts.get(session_id)
+        requests = getattr(e, 'requests', None)
+        return (bool(context) and context['chat'] == key and context['turn'] == e.intake.turns.get(session_id)
+                and e.intake.flight_for(session_id,key) is None and not (requests and session_id in requests.turns))
 
     def _handle(self, args, *, session_id='', **kwargs):
         e = self.engine
@@ -128,10 +128,12 @@ class Tool:
             with e.store.atomic():
                 s = e.store.get_session(s.session_key)
                 flight = e.intake.flight_for(session_id, s.session_key)
-                evidence = self.owner_turn_evidence(session_id, flight)
+                evidence = self.verified_owner(session_id, s.session_key)
                 requests=getattr(e,'requests',None)
                 request_context=requests.context(session_id) if requests else None
                 created_in = 'wake_turn' if flight else 'human_turn'
+                if action == 'update' and args.get('owner_asked') and not evidence:
+                    return {'error':'verified_owner_reminder_required'}
                 if action == 'respond':
                     return self.respond(args, flight)
                 if action == 'list':
@@ -143,7 +145,7 @@ class Tool:
                         return {'error':'role_not_babysit'}
                     parent = e.store.get_wake(flight.wake_id) if flight else None
                     child_key = e.child_key(flight) if flight else ''
-                    if args.get('role') and (args.get('trigger') or {}).get('kind') not in RECURRING_KINDS:
+                    if args.get('role') and (args.get('trigger') or {}).get('kind') not in RECURRING_KINDS | PROBE_KINDS | EVENT_KINDS:
                         return {'error':'role_needs_recurring'}
                     parent_role = bool(parent and (parent.role or parent.trigger_json.get('own_time')))
                     depth = (1 if parent_role else parent.depth+1) if parent else 0
@@ -158,7 +160,11 @@ class Tool:
                     if not gate.allowed:
                         return {'error':gate.reason,'detail':gate.detail}
                     kind = (args.get('trigger') or {})['kind']
-                    requested = args.get('owner_asked') is True and evidence and kind == 'at'
+                    requested = args.get('owner_asked') is True and kind == 'at' and evidence
+                    if args.get('owner_asked') and not requested:
+                        return {'error':'verified_owner_reminder_required'}
+                    if not requested and not args.get('role'):
+                        return {'error':'role_required'}
                     w = Wake(s.session_key, args.get('note',''), (args.get('trigger') or {})['kind'],
                              platform=s.platform, chat_type=s.chat_type, chat_id=s.chat_id,
                              armed_session_id=session_id or s.current_session_id, created_in=created_in,
@@ -178,8 +184,6 @@ class Tool:
                     if child_key:
                         e.store.set_meta(child_key,str(children+1))
                     item = {'ok':True,'armed':w.status=='active','wake':asdict(w),'clamped':result.clamped,'cache':self.cache_result(w),'receipt':self.receipt(w,s)}
-                    if args.get('owner_asked') is True and not requested:
-                        item['owner_asked_ignored'] = 'wake_turn' if flight is not None else 'not_owner_turn' if not evidence else 'not_one_shot'
                     return item
                 if action not in {'update','pause','resume','cancel'}:
                     return {'error':'unknown_action'}
@@ -194,6 +198,9 @@ class Tool:
                     wakes = [w]
                 results = []
                 for w in wakes:
+                    if w.trigger_json.get('continuation') and action != 'cancel':
+                        if args.get('id') == 'all': continue
+                        return {'error':'continuation_is_fixed'}
                     if action == 'update' and 'role' in args:
                         return {'error':'role_is_fixed'}
                     if action == 'update' and w.trigger_json.get('builtin') and any(k in args for k in ('trigger','until','babysit','pacing')):
@@ -445,6 +452,8 @@ class Tool:
                 trigger['every']=every
             if every is not None:
                 duration=parse_duration(every)
+                if w.role and 'trigger' in args and duration < 3600:
+                    raise ValueError('role interval must be at least one hour')
                 if 'trigger' in args or w.base_interval_s is None:
                     updates.update(base_interval_s=duration,eff_interval_s=duration)
             elif kind=='every' and w.base_interval_s is None:
@@ -551,6 +560,8 @@ class Tool:
             scratch=scratch[:4000]
         if 'next_check' in args:
             w=e.store.get_wake(o.wake_id)
+            if w.role and parse_duration(args['next_check']) < 3600:
+                raise ValueError('role next_check must be at least one hour')
             if w.kind not in RECURRING_KINDS:
                 clamps['next_check']='next_check ignored: not recurring'
             else:

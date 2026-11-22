@@ -60,6 +60,8 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
         f"Local time: {local:%a %d %b %H:%M} ({tz_name}){owner_clause} · fire {wake.fires + 1} of {fire_limit}",
         f"Why: {escape_text(why)}", f"Your note: {escape_text(wake.note)}",
     ]
+    if 'continuation' in wake.trigger_json:
+        return lines[0] + '\nResume the requested follow-up using the originating turn supplied by Cadence.'
     if wake.scratch:
         lines.append(f"Scratch: {escape_text(wake.scratch)}")
     if desk and (wake.role or wake.trigger_json.get('own_time')):

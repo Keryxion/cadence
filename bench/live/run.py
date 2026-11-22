@@ -90,7 +90,7 @@ def prearm(rig, spec):
         engine = Poller(ctx, store, Policy.from_settings(entry.get('settings', {}), clock=clock),
                         clock, session_key_fn=lambda: session['session_key'])
         try:
-            created = engine.tool.handle({'action': 'create', 'note': spec['note'],
+            created = engine.tool.handle({'action': 'create', 'role':True, 'note': spec['note'],
                 'trigger': {k: v for k, v in spec.items() if k != 'note'}},
                 session_id=session['current_session_id'])
             assert created.get('ok') and created['wake']['creator'] == 'agent', created

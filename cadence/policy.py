@@ -30,7 +30,7 @@ def is_watcher(wake):
 
 
 def holds_messages(wake):
-    return not is_owner(wake) and wake.kind in RECURRING_KINDS and not is_watcher(wake)
+    return wake.role or not is_owner(wake) and wake.kind in RECURRING_KINDS and not is_watcher(wake)
 
 
 def one_shot(wake):
@@ -299,7 +299,7 @@ class Policy:
         if action == "resume" and wake.status_reason.startswith("governor:") and created_in != "human_turn":
             return Gate(False, "needs_owner")
         kind = new_kind if new_kind is not None else wake.kind
-        if wake.role and kind not in RECURRING_KINDS:
+        if wake.role and kind not in RECURRING_KINDS | EVENT_KINDS | PROBE_KINDS:
             return Gate(False, 'role_needs_recurring')
         if kind not in KINDS:
             return unknown_kind(kind)
@@ -324,7 +324,7 @@ class Policy:
         floor = self.min_interval_minutes * 60
         if agent_authored(wake) and not probe_gated:
             floor = max(floor, self.agent_ungated_floor_minutes * 60)
-        return floor
+        return max(3600, floor) if wake.role else floor
 
     def lifetime_setting(self, wake):
         # An owner reminder is never bounded below the general lifetime, so raising either keeps it valid.

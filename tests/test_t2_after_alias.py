@@ -7,7 +7,13 @@ import pytest
 from cadence.tool import DESCRIPTION
 from test_engine import engine
 from test_v0113 import owner_turn
-from test_v0114 import create, receipt
+from test_v0114 import receipt
+
+
+def create(e,trigger=None,**args):
+    owner_turn(e)
+    return e.tool.handle(dict(action="create",note="Remind me",trigger=trigger or {"kind":"at","at":"in 1h"},
+                              owner_asked=args.pop("owner_asked",True),**args),session_id="sid")
 
 
 NOT_SET = ('If a result is proposed (armed=false and its receipt names a /pulse ok command), nothing is set yet: '
@@ -22,6 +28,9 @@ def test_create_after_matches_literal_at_without_mutating_args(engine, requested
     original = deepcopy(args)
     result = engine.tool.handle(args, session_id='sid')
     assert args == original
+    if not requested:
+        assert result.get('error') == 'role_required'
+        return
     assert result.get('ok') and result['armed'] is True, result
     wake = engine.store.get_wake(result['wake']['id'])
     literal = create(engine, {'kind':'at','at':'in 10m'}, owner_asked=requested)
@@ -84,7 +93,8 @@ def test_other_after_shapes_still_return_unknown_kind(engine, trigger, action):
 
 def test_owner_silent_after_is_unchanged(engine):
     trigger = {'kind':'owner_silent','after':'90m'}
-    result = create(engine, trigger)
+    from test_v0114 import create as existing
+    result = existing(engine,trigger)
     assert result.get('ok'), result
     assert result['wake']['kind'] == 'owner_silent'
     assert result['wake']['trigger_json'] == trigger
@@ -129,6 +139,9 @@ def test_at_with_after_matches_literal_at(engine, requested):
     original = deepcopy(args)
     result = engine.tool.handle(args, session_id='sid')
     assert args == original
+    if not requested:
+        assert result.get('error') == 'role_required'
+        return
     assert result.get('ok') and result['armed'] is True, result
     literal = create(engine, {'kind':'at','at':'in 20m'}, owner_asked=requested)
     assert literal.get('ok'), literal

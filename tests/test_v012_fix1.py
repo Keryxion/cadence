@@ -139,6 +139,7 @@ def test_R4_codex_normal_end_without_usage_counts_and_caps(engine):
     engine.tick()
     start(engine)
     assert engine.tool.handle({'action': 'respond', 'outcome': 'progress', 'notify': True}, session_id='sid')['ok']
+    assert engine.intake.transform_llm_output(session_id='sid',response_text='Update') is None
     engine.intake.on_session_end(session_id='sid', turn_id='turn', completed=True)
     assert engine.store.list_occurrences(first.id)[0].api_calls == 0
     assert engine.daily(KEY)['model_turns'] == 1
@@ -278,7 +279,8 @@ def test_N7_tool_cache_fields_match_due_or_unknown_watcher(engine, hermes_helper
     cache.touch(engine.store, engine.store.get_session(KEY), started_at=engine.clock.now(),
                 route='anthropic|claude-opus-5.5|api.anthropic.com', prompt=100, read=100, api_mode='anthropic_messages')
     trigger = {'kind':kind, **({'at':'in 3h'} if kind == 'at' else {'every':'1h'} if kind == 'every' else {})}
-    created = engine.tool.handle({'action':'create', 'note':'Task', 'trigger':trigger})
+    from test_v0114 import create
+    created = create(engine,trigger)
     updated = engine.tool.handle({'action':'update', 'id':created['wake']['id'], 'note':'Task update'})
     listed = engine.tool.handle({'action':'list'})['wakes'][0]
     for text in (created['cache'], updated['cache'], listed['cache']):

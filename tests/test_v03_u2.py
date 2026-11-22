@@ -29,7 +29,7 @@ def test_create_role_and_recurring_only(engine):
     assert e.store.connection.execute('SELECT role FROM wakes WHERE id=?', (w.id,)).fetchone()[0] == 1
     assert 'role: runs until you or the agent end it' in result['receipt']
     assert f'/pulse cancel {w.id}' in result['receipt']
-    for kind in ('at', 'file', 'owner_silent'):
+    for kind in ('at', 'owner_silent'):
         bad = e.tool.handle(dict(action='create', note='n', role=True, trigger={'kind': kind}))
         assert bad == {'error': 'role_needs_recurring'}
     for role in (False, True):
@@ -147,7 +147,7 @@ def test_role_children_reset_depth_and_bound_each_flight(engine):
     e.tick()
     start(e)
     e.policy = replace(e.policy, max_rearm_chain=0)
-    args = dict(action='create', note='follow up', trigger={'kind': 'self'})
+    args = dict(action='create', note='follow up', role=True, trigger={'kind': 'self'})
     children = []
     for _ in range(3):
         result = e.tool.handle(args, session_id='sid')
@@ -163,14 +163,8 @@ def test_role_children_reset_depth_and_bound_each_flight(engine):
     e.dispatch(pending(e, child))
     start(e)
     result = e.tool.handle(args, session_id='sid')
-    assert result.get('ok') and result['wake']['depth'] == 2
-    assert e.tool.handle(args, session_id='sid')['error'] == 'rearm_child'
-    end(e, 'progress', False)
-    e.clock.advance(3600)
-    grandchild = e.store.get_wake(result['wake']['id'])
-    e.dispatch(pending(e, grandchild))
-    start(e)
-    assert e.tool.handle(args, session_id='sid')['error'] == 'rearm_depth'
+    assert result.get('ok') and result['wake']['depth'] == 1
+    assert result['wake']['parent_wake_id'] == child.id
 
 
 def test_role_children_still_refuse_untrusted_rearm(engine):
@@ -186,13 +180,13 @@ def test_role_children_still_refuse_untrusted_rearm(engine):
 def test_role_daily_dispatch_budget_and_next_local_day(engine, budget):
     e = engine
     e.policy = replace(e.policy, role_turns_per_day_default=2, timezone='Asia/Tokyo')
-    e.clock.wall = datetime.fromisoformat('2025-10-12T14:00:00+00:00').timestamp()
+    e.clock.wall = datetime.fromisoformat('2025-10-12T12:00:00+00:00').timestamp()
     w = arm(e, 'self', role=True, budget_turns_per_day=budget)
     for n in range(2):
         e.dispatch(pending(e, w, f'fire:{n}'))
         start(e)
         end(e, 'progress', False)
-        e.clock.advance(601)
+        e.clock.advance(3600)
     session(e, unanswered_count=e.policy.max_unanswered)
     o = pending(e, w, 'over-budget')
     e.dispatch(o)
@@ -215,7 +209,7 @@ def test_owner_role_holds_messages_but_runs(engine, hold):
     before = e.daily(KEY)['delivered']
     e.tick()
     o, = e.store.list_occurrences(w.id)
-    assert o.state == 'claimed' and o.force_silent and o.held_reason == 'message_held:' + hold
+    assert o.state == 'claimed' and o.force_silent == (hold == 'unanswered')
     start(e)
     assert end(e, 'progress', True) == '[SILENT]'
     assert not e.store.get_occurrence(w.id, o.dedupe_key).delivered

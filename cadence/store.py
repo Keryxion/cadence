@@ -561,4 +561,8 @@ class Store:
                 (SELECT 1 FROM occurrences o
                  WHERE o.wake_id=substr(meta.key,7,instr(substr(meta.key,7),'/')-1)
                    AND o.dedupe_key=substr(meta.key,7+instr(substr(meta.key,7),'/')))""")
+            self.connection.execute("""DELETE FROM meta WHERE key LIKE 'admitted:%' AND NOT EXISTS
+                (SELECT 1 FROM occurrences o
+                 WHERE o.wake_id=substr(meta.key,10,instr(substr(meta.key,10),'/')-1)
+                   AND o.dedupe_key=substr(meta.key,10+instr(substr(meta.key,10),'/')))""")
             self.set_meta("last_gc_at", str(now))

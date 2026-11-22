@@ -81,9 +81,9 @@ def test_g5_gc_preserves_daily_role_budget(engine):
     start(e)
     end(e, 'progress', False)
     first = e.store.list_occurrences(w.id)[0]
-    for _ in range(201):
+    for i in range(201):
         e.clock.advance(60)
-        e.tick()
+        e.dispatch(pending(e,w,f'match:{i}'))
     assert sum(o.error == 'role_budget' for o in e.store.list_occurrences(w.id)) == 201
     e.store.gc(ledger_days=30)
     assert e.store.dispatches_today(w.id, e.policy.resolved_timezone()) == 1
@@ -215,7 +215,7 @@ def test_desk_ignores_a_claim_superseded_before_it_started(engine):
     e.dispatch(pending(e, w))
     start(e)
     end(e, 'progress', False, summary='drafted notes')
-    e.clock.advance(601)
+    e.clock.advance(3600)
     e.dispatch(pending(e, e.store.get_wake(w.id), 'second'))
     e.intake.on_session_reset(old_session_id='sid', new_session_id='new')
     assert e.store.get_occurrence(w.id, 'second').state == 'superseded'

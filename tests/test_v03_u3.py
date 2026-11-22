@@ -112,10 +112,10 @@ def test_own_time_trigger_protection_pacing_and_children(engine):
     assert result['error'] == 'builtin_settings_owned'
     e.policy = replace(e.policy, max_rearm_chain=0)
     for _ in range(e.policy.max_children_per_wake_turn):
-        result = e.tool.handle(dict(action='create', note='follow up', trigger={'kind': 'self'}), session_id='sid')
+        result = e.tool.handle(dict(action='create', role=True, note='follow up', trigger={'kind': 'self'}), session_id='sid')
         assert result.get('ok'), result
         assert result['wake']['depth'] == 1 and result['wake']['parent_wake_id'] == w.id
-    assert e.tool.handle(dict(action='create', note='extra', trigger={'kind': 'self'}), session_id='sid')['error'] == 'rearm_child'
+    assert e.tool.handle(dict(action='create', role=True, note='extra', trigger={'kind': 'self'}), session_id='sid')['error'] == 'rearm_child'
     result = e.tool.handle(dict(action='respond', outcome='progress', notify=False,
                                summary='worked', next_check='2h'), session_id='sid')
     assert result.get('ok'), result

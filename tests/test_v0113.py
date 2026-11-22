@@ -85,31 +85,19 @@ def test_negative_controls(engine, control):
             engine.intake.pre_llm_call(session_id='sid', turn_id='later',
                                      user_message='Internal event', platform='telegram')
     kind = 'every' if control == 'every' else 'subagent_done' if control == 'watcher' else 'at'
-    w, result = create(engine, requested=control != 'undeclared', kind=kind)
-    assert flag(w) is False
-    if control != 'undeclared':
-        assert result.get('owner_asked_ignored') == ('not_one_shot' if kind != 'at' else 'not_owner_turn')
-    else:
-        assert 'owner_asked_ignored' not in result
-    finish(engine)
-    session(engine, unanswered_count=engine.policy.max_unanswered)
-    o = pending(engine, w)
-    expected = 'held_unanswered' if kind == 'subagent_done' else '' if kind == 'every' else 'unanswered'
-    assert engine.gate(w, o, engine.store.get_session(KEY))[0] == expected
-    session(engine, unanswered_count=0)
-    engine.policy = replace(engine.policy, interruption_capacity=0)
-    expected = 'held_interruptions' if kind == 'subagent_done' else '' if kind == 'every' else 'interruption_limit'
-    assert engine.gate(w, o, engine.store.get_session(KEY))[0] == expected
+    result = engine.tool.handle({'action':'create','note':'reminder','trigger':{'kind':kind,'at':'in 1m'},
+                                 'owner_asked':control != 'undeclared'},session_id='sid')
+    assert result['error'] == ('role_required' if control == 'undeclared' else 'verified_owner_reminder_required')
+    assert not engine.store.list_wakes(KEY)
 
 
 def test_wake_turn_never_grants(engine):
     parent = arm(engine)
     engine.tick()
     start(engine)
-    w, result = create(engine)
-    assert result.get('owner_asked_ignored') == 'wake_turn'
-    assert w.parent_wake_id == parent.id and flag(w) is False
-    assert engine.policy.unanswered_gate(w, engine.policy.max_unanswered) == 'unanswered'
+    result = engine.tool.handle(dict(action='create',note='reminder',trigger={'kind':'at','at':'in 1m'},
+                                    owner_asked=True),session_id='sid')
+    assert result['error'] == 'verified_owner_reminder_required'
 
 
 @pytest.mark.parametrize('edit', [
@@ -132,6 +120,10 @@ def test_retime_requires_declaration_and_current_owner_turn(engine, declared, ev
     w, _ = create(engine)
     if not evidence:
         engine.intake.pre_llm_call(session_id='sid', turn_id='internal', platform='telegram')
+    if declared and not evidence:
+        assert engine.tool.handle(dict(action='update',id=w.id,owner_asked=True),session_id='sid')['error'] == 'verified_owner_reminder_required'
+        assert flag(engine.store.get_wake(w.id))
+        return
     call(engine, {'action':'update','id':w.id,'trigger':{'kind':'at','at':'in 2m'},
                   **({'owner_asked':True} if declared else {})})
     assert flag(engine.store.get_wake(w.id)) is (declared and evidence)
@@ -158,7 +150,7 @@ def test_pause_preserves_agent_resume_requires_declaration(engine, wid, declared
 
 
 def test_owner_can_retime_earlier_agent_reminder(engine):
-    w, _ = create(engine, requested=False)
+    w = arm(engine)
     owner_turn(engine)
     call(engine, {'action':'update','id':w.id,'trigger':{'kind':'at','at':'in 2m'},'owner_asked':True})
     assert flag(engine.store.get_wake(w.id)) is True
@@ -196,7 +188,7 @@ def test_builtin_and_slash_owner_unchanged(engine, command):
     builtin = arm(engine, 'owner_silent', trigger_json={'builtin':True})
     assert engine.policy.unanswered_gate(builtin, engine.policy.max_unanswered) == 'unanswered'
     assert engine.policy.unanswered_gate(w, engine.policy.max_unanswered) is None
-    call(engine, {'action':'update','id':w.id,'title':'Invoice','owner_asked':True})
+    call(engine, {'action':'update','id':w.id,'title':'Invoice'})
     assert not flag(engine.store.get_wake(w.id)) and not engine.store.get_wake(w.id).agent_edited
     session(engine, unanswered_count=engine.policy.max_unanswered)
     engine.policy = replace(engine.policy, interruption_capacity=0)
@@ -268,7 +260,7 @@ def test_owner_asked_reminder_fires_when_due_despite_wake_spacing(engine):
     e = engine
     owner_turn(e)
     asked, _ = create(e)
-    own, _ = create(e, requested=False)
+    own = arm(e,next_due_at=e.clock.now()+60)
     assert asked.owner_requested and not own.owner_requested
     finish(e)
     session(e, last_wake_turn_at=e.clock.now())  # a wake turn just ran
