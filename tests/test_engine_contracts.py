@@ -185,7 +185,8 @@ def test_gateway_event_mapping_fail_open_and_manifest(engine):
     assert data['manifest_version']==2 and data['kind']=='standalone'
     config=data['config_schema']
     expected=({f.name for f in fields(Policy)}-{'clock','profile_timezone',
-              'interruption_capacity','interruption_initial','interruption_refill_seconds'}) | {'interruptions'}
+              'interruption_capacity','interruption_initial','interruption_refill_seconds',
+              'role_turns_per_day_default','role_turns_per_day_max'}) | {'interruptions'}
     assert set(config)==expected
     p=Policy()
     for key, value in config.items():

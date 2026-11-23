@@ -90,6 +90,9 @@ class Policy:
     interruption_initial: int = 15
     interruption_refill_seconds: float = 300.0
     daily_cost_limit_usd: float = 0.0
+    execution_capacity: int = 30
+    execution_refill_per_hour: float = 1.25
+    responsibility_budget_max: int = 120
     own_time_hours: int = 0
     role_turns_per_day_default: int = 6
     role_turns_per_day_max: int = 12
@@ -172,6 +175,8 @@ class Policy:
                      profile_timezone=profile_timezone)
         if result.agent_can_create not in {"yes", "ask_first", "no"}:
             raise ValueError("agent_can_create must be yes, ask_first, or no")
+        if result.execution_capacity < 1 or result.execution_refill_per_hour <= 0 or result.responsibility_budget_max < 30:
+            raise ValueError('execution capacity/refill must be positive; responsibility budget maximum must be at least 30')
         role_max = max(1, result.role_turns_per_day_max)
         result = replace(result, role_turns_per_day_max=role_max,
                          role_turns_per_day_default=max(1, min(result.role_turns_per_day_default, role_max)),
@@ -322,6 +327,7 @@ class Policy:
         return Gate(True, status=wake.status)
 
     def interval_floor(self, wake: Wake, *, probe_gated: bool = False) -> float:
+        if wake.managed and wake.responsibility_id: return 0
         if wake.babysit:
             return max(300, self.min_interval_minutes * 60)
         floor = self.min_interval_minutes * 60
@@ -370,7 +376,7 @@ class Policy:
                 raise ValueError('budget.turns_per_day must be an integer')
             change('budget_turns_per_day', max(1, min(value, self.role_turns_per_day_max)),
                    'budget.turns_per_day', 'role_turns_per_day_max')
-        floor = self.interval_floor(wake, probe_gated=probe_gated)
+        floor = 0 if wake.managed and wake.responsibility_id else self.interval_floor(wake, probe_gated=probe_gated)
         floor_rule = "babysit_floor" if wake.babysit else ("agent_ungated_floor" if agent_authored(wake) and not probe_gated else "min_interval")
         if wake.kind in RECURRING_KINDS:
             if wake.pacing_min_s is not None:

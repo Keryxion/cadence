@@ -44,7 +44,7 @@ def context_reached(cell):
 def awaiting_approval(reply):
     reply = reply.replace('’', "'").replace('‘', "'")
     for sentence in re.split(r'[.!?]+', reply):
-        for phrase in re.finditer(r'(await\w*|pending|need\w*|require\w*|please|waiting).*?(approv|/pulse ok)|approv\w*.*?(pending|required|needed)', sentence, re.I | re.S):
+        for phrase in re.finditer(r'(await\w*|pending|need\w*|require\w*|please|waiting).*?(approv|/cadence approve)|approv\w*.*?(pending|required|needed)', sentence, re.I | re.S):
             words = re.findall(r"\w+(?:'\w+)?", sentence[:phrase.start()])[-4:]
             # An approval-first phrase can carry its own negation: "Approval is not pending."
             inner = phrase.group(0) if phrase.group(3) else ''

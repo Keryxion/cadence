@@ -28,7 +28,7 @@ def test_create_role_and_recurring_only(engine):
     assert w.role is True and w.expires_at is None and w.budget_turns_per_day is None
     assert e.store.connection.execute('SELECT role FROM wakes WHERE id=?', (w.id,)).fetchone()[0] == 1
     assert 'role: runs until you or the agent end it' in result['receipt']
-    assert f'/pulse cancel {w.id}' in result['receipt']
+    assert f'/cadence cancel {w.id}' in result['receipt']
     for kind in ('at', 'file', 'owner_silent'):
         bad = e.tool.handle(dict(action='create', note='n', role=True, trigger={'kind': kind}))
         assert bad == {'error': 'role_needs_recurring'}
@@ -94,7 +94,7 @@ def test_role_settings_and_manifest(engine):
     assert p.role_turns_per_day_default == p.role_turns_per_day_max == 1
     from pathlib import Path
     schema = yaml.safe_load((Path(__file__).parents[1] / 'plugin.yaml').read_text())['config_schema']
-    for name, default in [('role_turns_per_day_default', 6), ('role_turns_per_day_max', 12), ('max_children_per_wake_turn', 3)]:
+    for name, default in [('responsibility_budget_max',120),('execution_capacity',30),('max_children_per_wake_turn',3)]:
         assert schema[name]['type'] == 'int' and schema[name]['default'] == default
 
 

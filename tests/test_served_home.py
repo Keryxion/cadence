@@ -99,7 +99,7 @@ def test_unserved_mid_run_releases_lock_and_holds_due_wakes(tmp_path, clock):
         assert locked(tmp_path)
         ctx.runner.served = False
         assert until(lambda: not locked(tmp_path))
-        store = Store(tmp_path/'plugin-data/cadence/pulse.db', clock)
+        store = Store(tmp_path/'plugin-data/cadence/cadence.db', clock)
         store.upsert_session(Session(KEY, 'telegram', 'dm', 'unit', 'sid', clock.now(), clock.now(), 'episode'))
         arm(SimpleNamespace(store=store, clock=clock))
         clock.advance(10)

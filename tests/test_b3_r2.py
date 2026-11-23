@@ -295,8 +295,8 @@ def test_cleanup_refusal_cannot_leave_an_active_wake(tmp_path):
     r,c,store,e=rig(tmp_path,'W');r.clock.wall=epoch(e['sends'][0]['at'])
     r.active=e;r.send(e,'request:0',e['sends'][0]['text'],'request');r.clock.sleep(15);r.turns()
     w=store.list_wakes('chat')[0]
-    r.emit('send_intent',e['id'],key='setup_cancel:'+w.id,text='/pulse cancel '+w.id,purpose='setup')
-    for n in range(1,6): r.emit('send_intent',e['id'],key=f'setup_cancel:{w.id}:retry:{n}',text='/pulse cancel '+w.id,purpose='setup')
+    r.emit('send_intent',e['id'],key='setup_cancel:'+w.id,text='/cadence cancel '+w.id,purpose='setup')
+    for n in range(1,6): r.emit('send_intent',e['id'],key=f'setup_cancel:{w.id}:retry:{n}',text='/cadence cancel '+w.id,purpose='setup')
     r.clock.sleep(120)
     assert r.cleanup(e) is False and r.has('cleanup_failed',e['id'])
     assert not r.has('setup_failed',None)

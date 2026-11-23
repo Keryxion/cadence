@@ -57,7 +57,7 @@ class GatewayCtx(FakeCtx):
 @pytest.fixture
 def engine(tmp_path, clock):
     ctx = GatewayCtx(tmp_path)
-    store = Store(tmp_path / 'plugin-data/cadence/pulse.db', clock)
+    store = Store(tmp_path / 'plugin-data/cadence/cadence.db', clock)
     store.upsert_session(Session(KEY, 'telegram', 'dm', 'unit', 'sid', clock.now(),
                                  clock.now(), 'episode'))
     policy = Policy(clock=clock, timezone='UTC')
@@ -404,10 +404,10 @@ def test_I17_six_silent_runs_pause_one_card(engine):
     assert e.store.get_wake(w.id).status_reason == 'governor:noop'
     admit(e,'h1')
     card = e.intake.pre_llm_call(session_id='sid', user_message='hello')
-    assert '/pulse watch' in card['context']
+    assert '/cadence watch' in card['context']
     admit(e,'h2')
     again = e.intake.pre_llm_call(session_id='sid', user_message='again')
-    assert again is None or '/pulse watch' not in again.get('context','')
+    assert again is None or '/cadence watch' not in again.get('context','')
     assert len(e.ctx.calls) == 6
 
 

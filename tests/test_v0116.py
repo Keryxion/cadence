@@ -252,8 +252,8 @@ def test_version_changelog_and_skill():
     section = changelog.split('## 0.1.16 — 2026-10-14')[1].split('## 0.1.15')[0]
     assert '#72' in section and '#76' in section and 'round-3' in section
     skill = (root/'skills/cadence-usage/SKILL.md').read_text()
-    assert all(x in skill for x in ['HH:MM', 'tomorrow HH:MM', 'in 10 minutes', 'ISO', 'kind: at'])
-    assert 'set `owner_asked: true` on the `at` create' in skill
+    assert all(x in skill for x in ['HH:MM', 'tomorrow HH:MM', 'in 10 minutes', 'ISO', '`at`'])
+    assert 'Set `owner_asked` only for a verified request' in skill
 
 
 @pytest.mark.parametrize('text', ['in 1h'+' '*40000+'x', 'every 1h'+' '*40000+'x', 'in 1h'+' '*40000,

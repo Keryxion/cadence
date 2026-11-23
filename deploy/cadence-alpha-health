@@ -13,7 +13,7 @@ def sample(directory, pid, since, now):
     if pid <= 0:
         raise ValueError('gateway has no MainPID')
     os.kill(pid, 0)
-    with sqlite3.connect((directory / 'pulse.db').as_uri() + '?mode=ro',
+    with sqlite3.connect((directory / 'cadence.db').as_uri() + '?mode=ro',
                          uri=True, timeout=1) as db:
         meta = dict(db.execute('SELECT key, value FROM meta'))
     if meta.get('poller_pid') != str(pid) or not meta.get('epoch'):

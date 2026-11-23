@@ -59,9 +59,9 @@ def test_optional_fields_late_governor_and_owner(clock):
 
 def test_register_is_import_light_and_stub(fake_ctx, plugin):
     plugin.register(fake_ctx)
-    assert set(fake_ctx.tools)=={'pulse','request','follow_up','get_time'}
+    assert set(fake_ctx.tools)=={'responsibility','trigger','respond','request','follow_up','get_time'}
     assert 'pre_llm_call' in fake_ctx.hooks
-    assert set(fake_ctx.commands)=={'pulse'}
+    assert set(fake_ctx.commands)=={'cadence'}
     # A fresh isolated interpreter proves import-light behavior independently
     # of the renderer/store modules imported by this pytest process.
     root = str(Path(__file__).resolve().parents[1] / "__init__.py")

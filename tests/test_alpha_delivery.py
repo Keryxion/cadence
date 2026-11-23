@@ -121,7 +121,7 @@ def health(tmp_path):
 
     def check(**updates):
         values = dict(meta, **updates)
-        with sqlite3.connect(tmp_path / 'pulse.db') as db:
+        with sqlite3.connect(tmp_path / 'cadence.db') as db:
             db.execute('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)')
             db.executemany('INSERT OR REPLACE INTO meta VALUES (?, ?)', values.items())
         return module.sample(tmp_path, os.getpid(), now - 10, now)
@@ -152,7 +152,7 @@ def test_health_requires_lock_owner(tmp_path):
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
     now = time.time()
-    with sqlite3.connect(tmp_path / 'pulse.db') as db:
+    with sqlite3.connect(tmp_path / 'cadence.db') as db:
         db.execute('CREATE TABLE meta (key TEXT, value TEXT)')
         db.executemany('INSERT INTO meta VALUES (?, ?)', dict(
             poller_pid=str(os.getpid()), epoch='e', poller_started_at=str(now-2),

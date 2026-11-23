@@ -20,7 +20,7 @@ PARAMETERS = obj({
     'action': {'type': 'string', 'enum': ['create', 'list', 'update', 'pause', 'resume', 'cancel', 'respond']},
     'id': STR, 'title': STR, 'note': STR, 'reason': STR,
     'detailed': {'type':'boolean', 'description':'For list, include full records and finished history. Default false returns compact current responsibilities.'},
-    'trigger': obj({**{k: STR for k in ('kind','at','every','cron','after','path','pattern','url','check_every','deadline','cwd')},
+    'trigger': obj({**{k: STR for k in ('kind','at','every','cron','after','path','pattern','url','check_every','deadline','cwd','task_id','board')},
                     'fire_on': {'type':'string','enum':['change','success','failure','json']},
                     'pid': {'type':'integer'}, 'command': {'type':'array','items':STR},
                     'emojis': {'type':'array','items':STR}}),
@@ -40,7 +40,7 @@ DESCRIPTION = ('Your own time in this chat. Use create to arm a wake/watcher (no
                'outcome and notify, optionally scratch/next_check; outcome=progress with notify=false and a summary is real work, never counted as idle. Bounds and clamps are reported. Never type silence markers. '
                'Results include a `cache` line; pick intervals the line marks warm. '
                'Results include a receipt line; tell the owner what it says, not a promise of your own. '
-               'If a result is proposed (armed=false and its receipt names a /pulse ok command), nothing is set yet: say so first and ask the owner to send that command; never call it set, done or scheduled. '
+               'If a result is proposed (armed=false and its receipt names a /cadence approve command), nothing is set yet: say so first and ask the owner to send that command; never call it set, done or scheduled. '
                'When a create is refused, tell the owner why and what can be done; never arm a stand-in or relay wake '
                'that re-arms later to get around a limit. '
                'For a one-time "at" wake the owner asks for in their current message, set owner_asked=true: '
@@ -372,7 +372,7 @@ class Tool:
                 if seconds>=size and seconds%size==0: return f'{seconds/size:g}{unit}'
             return f'{seconds:g}s'
         watcher=w.kind in PROBE_KINDS | EVENT_KINDS
-        if w.status=='proposed': parts=[f'Not set yet: it is armed only after the owner sends /pulse ok {w.id}.']
+        if w.status=='proposed': parts=[f'Not set yet: it is armed only after the owner sends /cadence approve {w.id}.']
         elif w.status=='paused': parts=['Paused.']
         elif w.kind=='at': parts=['Already due; awaiting its wake turn.' if w.next_due_at is None else
             'Due now; it fires on the next check.' if w.next_due_at<=e.clock.now() else f'Fires once at {format_timestamp(w.next_due_at)}.']
@@ -406,7 +406,7 @@ class Tool:
             text=text[:239]
             boundary=text.rfind('. ')
             text=(text[:boundary+1] if boundary>=0 else text)+'…'
-        if w.role: text+=f' · role: runs until you or the agent end it (/pulse cancel {w.id})'
+        if w.role: text+=f' · role: runs until you or the agent end it (/cadence cancel {w.id})'
         return text
 
     def reschedule(self,w):

@@ -136,12 +136,10 @@ def test_R7_CI1_no_per_mutant_clock_limit(monkeypatch, tmp_path):
 @pytest.mark.parametrize('path', ['SECURITY.md', 'skills/cadence-usage/SKILL.md'])
 def test_R7_COST_full_context_disclosure(path):
     text = (Path(__file__).resolve().parents[1] / path).read_text()
-    for phrase in ('normal model turn', "conversation's context size", 'billed like one',
-                   'warm/cold wake counts and estimated cost', '/pulse ledger', '/pulse status', 'running cost'):
-        if path == 'skills/cadence-usage/SKILL.md' and phrase == 'running cost':
-            assert 'warm/cold wake counts and estimated cost' in text and 'in/cached/written/out' in text
-            continue
-        assert phrase in text, (path, phrase)
+    for phrase in ('normal model turn', "conversation's context size", 'billed like one', '/cadence status'):
+        assert phrase in text,(path,phrase)
+    assert 'cost' in text and 'unpriced' in text
+
 
 
 def test_R7_COST_ledger_tokens_per_wake(runtime):

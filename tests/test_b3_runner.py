@@ -44,12 +44,12 @@ class FakeClient:
                     db.execute('INSERT OR IGNORE INTO sessions VALUES (?,?,?,?)', (self.sid,'chat',now,None))
                 self.store.cas_session('chat', {'unanswered_count':self.store.get_session('chat').unanswered_count}, unanswered_count=0)
                 reply = '✨ Session reset! Starting fresh.\n\nModel: fixture'
-            elif text == '/pulse status':
+            elif text == '/cadence status':
                 self.store.set_meta('quiet:chat','{}'); reply = 'Cadence running.'
-            elif text.startswith('/pulse cancel '):
+            elif text.startswith('/cadence cancel '):
                 w=self.store.get_wake(text.split()[-1]);self.store.cas_wake(w.id,w.status,status='cancelled')
                 reply=w.id+' cancelled · fixture wake'
-            elif text == '/pulse on':
+            elif text == '/cadence on':
                 self.store.cas_session('chat',{'enabled':self.store.get_session('chat').enabled},enabled=True);reply='Cadence on for this chat.'
             else: raise AssertionError(text)
             self.message(reply,False,now+1);return m
@@ -110,7 +110,7 @@ def rig(tmp_path, kind):
         db.execute("INSERT INTO sessions VALUES ('s','chat',0,NULL)")
         db.execute('CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT, timestamp REAL, tool_calls TEXT, tool_name TEXT, tool_call_id TEXT, platform_message_id TEXT)')
     clock = FakeClock(epoch(e['sends'][0]['at'])-120)
-    store = Store(tmp_path/'pulse.db', clock); store.upsert_session(Session(session_key='chat', current_session_id='s'))
+    store = Store(tmp_path/'cadence.db', clock); store.upsert_session(Session(session_key='chat', current_session_id='s'))
     client = FakeClient(clock, store, state, e, tmp_path/'jobs'); clock.callback = client.tick
     runner = Runner(s, tmp_path/'run.jsonl', client, home, tmp_path/'jobs', 'chat', clock=clock,
                     pulse=Pulse(store.path), transcript=Transcript(state, now=clock.now), until_day=e['day'])
@@ -161,12 +161,12 @@ def test_s_timeout_and_cleanup_order(tmp_path):
     assert r.run() == 0
     assert r.has('s_no_first_delivery', e['id'])
     assert not any(text == 'stop checking in on me' for _, text in c.sent)
-    assert any(text.startswith('/pulse cancel ') for _, text in c.sent)
+    assert any(text.startswith('/cadence cancel ') for _, text in c.sent)
     store.close()
     r, c, store, e = rig(tmp_path/'off', 'S'); c.stop_off = True
     assert r.run() == 0
     texts = [text for _, text in c.sent]
-    assert next(i for i, t in enumerate(texts) if t.startswith('/pulse cancel ')) < texts.index('/pulse on')
+    assert next(i for i, t in enumerate(texts) if t.startswith('/cadence cancel ')) < texts.index('/cadence on')
     assert r.pulse.session('chat')['enabled']
     setup = [row['action'] for row in r.rows if row['kind'] == 'setup']
     assert setup.index('archive') < setup.index('cancel') < setup.index('on') < setup.index('verify_enabled')
@@ -272,7 +272,7 @@ def test_s_resume_archives_and_restores_chat(tmp_path):
     assert resumed.run() == 0
     texts = [text for _, text in c.sent]
     assert texts.count('check on me every hour today') == 1
-    assert any(text.startswith('/pulse cancel ') for text in texts)
-    assert '/pulse on' in texts and resumed.pulse.session('chat')['enabled']
+    assert any(text.startswith('/cadence cancel ') for text in texts)
+    assert '/cadence on' in texts and resumed.pulse.session('chat')['enabled']
     assert resumed.has('resume_cleanup', e['id'])
     store.close()

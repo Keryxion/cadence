@@ -143,7 +143,7 @@ def test_list_default_shows_live_items_and_newest_finished(runtime):
         e.clock.advance(60)
     out = commands.handle('list', runtime)
     assert finished[0].id not in out and all(w.id in out for w in finished[1:])
-    assert out.splitlines()[-1] == '1 older finished item hidden; /pulse list all'
+    assert out.splitlines()[-1] == '1 older finished item hidden; /cadence list all'
     # Bookkeeping that rewrites an old finished wake (here a session rebind) must not bring it back.
     assert e.store.cas_wake(finished[0].id, 'cancelled', armed_session_id='sid2')
     assert finished[0].id not in commands.handle('list', runtime)
@@ -153,7 +153,7 @@ def test_list_default_shows_live_items_and_newest_finished(runtime):
     out = commands.handle('list', runtime)
     assert live.id in out and last.id in out
     assert finished[0].id not in out and finished[1].id not in out
-    assert out.splitlines()[-1] == '2 older finished items hidden; /pulse list all'
+    assert out.splitlines()[-1] == '2 older finished items hidden; /cadence list all'
     out = commands.handle('list all', runtime)
     assert all(w.id in out for w in finished+[live, last]) and 'hidden' not in out
 
@@ -188,7 +188,7 @@ def test_paused_rows_name_the_command_that_resumes_them(runtime):
     until = commands._time(e.clock.now() + 3 * 86400)
     assert f'paused · resumes {until} or on resume' in rows[timed.id] and 'keep' not in rows[timed.id]
     # keep is refused for a command pause, which is why its row no longer offers it.
-    assert 'use /pulse resume' in commands.handle(f'keep {held.id}', runtime)
+    assert 'use /cadence resume' in commands.handle(f'keep {held.id}', runtime)
 
 
 def test_finished_rows_show_no_next_time(runtime):

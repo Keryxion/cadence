@@ -33,10 +33,12 @@ def test_update_rejects_event_without_changing_wake(engine):
     assert engine.store.get_wake(w.id) == w
 
 
-def test_trigger_schema_drops_event_without_adding_filters():
+def test_trigger_schema_uses_named_events_and_supports_kanban_filters():
     fields = PARAMETERS['properties']['trigger']['properties']
     assert 'event' not in fields
-    assert 'task_id' not in fields and 'board' not in fields
+    from cadence.responsibilities import WHEN_FIELDS
+    for name in ('kanban_completed','kanban_blocked','kanban_worker_exited'):
+        assert {'task_id','board'} <= WHEN_FIELDS[name][0].keys()
 
 
 @pytest.mark.parametrize('status', ['active','paused','proposed'])
@@ -147,9 +149,8 @@ def test_version_changelog_and_skill():
     section = changelog.split('## 0.1.15 — 2026-10-14')[1].split('## 0.1.14')[0]
     assert '#57' in section and '#68' in section and 'owner_asked' in section
     skill = (root/'skills/cadence-usage/SKILL.md').read_text()
-    assert ('When the owner asks for a one-time reminder in their current message, '
-            'set `owner_asked: true` on the `at` create; never set it for your own follow-ups.') in skill
-    assert 'The receipt is what to repeat.' in skill
+    assert 'Set `owner_asked` only for a verified request' in skill
+    assert 'Relay the actual receipt' in skill
 
 
 @pytest.mark.parametrize('kind,trigger', [

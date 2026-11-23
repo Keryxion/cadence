@@ -18,7 +18,7 @@ def test_proposal_result_is_not_armed_and_its_receipt_leads_with_not_set(engine)
     result = create(engine)
     assert result.get('ok') and result['armed'] is False and result['wake']['status'] == 'proposed', result
     text = receipt(result)
-    assert text.startswith('Not set yet:') and f'/pulse ok {result["wake"]["id"]}' in text
+    assert text.startswith('Not set yet:') and f'/cadence approve {result["wake"]["id"]}' in text
     assert 'armed:' not in text and 'Fires' not in text
 
 
@@ -63,7 +63,7 @@ def test_turn_context_never_counts_a_proposal_as_armed(engine):
     engine.policy = replace(engine.policy, agent_can_create='ask_first')
     assert create(engine).get('ok')
     text = context(engine, 'next')
-    assert 'Cadence: 1 awaiting /pulse ok;' in text and 'armed' not in text
+    assert 'Cadence: 1 awaiting /cadence approve;' in text and 'armed' not in text
     engine.policy = replace(engine.policy, agent_can_create='yes')
     assert create(engine).get('ok')
-    assert 'Cadence: 1 armed, 1 awaiting /pulse ok;' in context(engine, 'later')
+    assert 'Cadence: 1 armed, 1 awaiting /cadence approve;' in context(engine, 'later')

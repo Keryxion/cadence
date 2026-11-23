@@ -127,7 +127,7 @@ def test_agent_lifetime_edit_revokes_owner_status(engine, edit, field):
 @pytest.mark.parametrize('field,value', [('expires_at',None),('max_fires',2),('cancel_on_reply',True),('babysit',True)])
 def test_owner_command_lifetime_edit_preserves_owner_status(engine, monkeypatch, field, value):
     prepare = engine.tool.prepare
-    # /pulse exposes no arbitrary lifetime edit syntax. Exercise its shared
+    # /cadence exposes no arbitrary lifetime edit syntax. Exercise its shared
     # prepare seam, keeping the actual owner command and persisted fields.
     def edited(wake, args, **kwargs):
         result = prepare(wake,args,**kwargs)

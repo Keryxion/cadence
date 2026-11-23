@@ -27,9 +27,13 @@ def command_matches(text, reply):
     reply = display(reply)
     if text == '/new': return 'Confirm /new' in reply and '/approve' in reply
     if text == '/approve': return reply.startswith(('✨ Session reset! Starting fresh.', '✨ New session started!'))
-    if text == '/pulse status': return reply.startswith('Cadence ')
-    if text == '/pulse on': return reply == 'Cadence on for this chat.'
-    if text.startswith('/pulse cancel '): return bool(re.match(re.escape(text.split()[-1])+r' cancelled\b', reply))
+    if text == '/cadence status': return reply.startswith(('Cadence ','Cadence:'))
+    if text == '/cadence on': return reply in {'Cadence on for this chat.','Cadence on for this conversation.'}
+    if text.startswith('/cadence cancel '):
+        if re.match(re.escape(text.split()[-1])+r' cancelled\b',reply): return True
+        try: result=json.loads(reply)
+        except ValueError: return False
+        return result.get('id')==text.split()[-1] and result.get('status')=='cancelled'
     return False
 
 

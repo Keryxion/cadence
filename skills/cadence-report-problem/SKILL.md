@@ -25,7 +25,7 @@ If your deployment's instructions explicitly route this plugin's problems, or al
 
 ## 3. Diagnose
 
-- `/pulse status` (or `/pulse`), in the affected gateway chat: scheduler state, injection consent, today's counts and next due.
+- `/cadence status` (or `/cadence`), in the affected gateway chat: scheduler state, injection consent, today's counts and next due.
 - `hermes logs --since 1h -n 2000 | grep -i heartbeat`: recent scheduler and plugin log lines; redact private data before sharing.
 
 Safe reproduction for this plugin:
@@ -45,7 +45,7 @@ If they show the problem is in Hermes itself rather than this plugin, point the 
 - Recent plugin log lines: `hermes logs --since 1h -n 2000 | grep -i heartbeat`
 
 Widen `--since` in the log commands to cover when the failure happened.
-Quote only short log excerpts and status lines that the user has seen. Leave out tokens, keys, email addresses, the text of private messages, and the wake titles and notes that `/pulse status` shows; write `<note>` in their place.
+Quote only short log excerpts and status lines that the user has seen. Leave out tokens, keys, email addresses, the text of private messages, and the wake titles and notes that `/cadence status` shows; write `<note>` in their place.
 
 ## 5. Look for an existing report
 

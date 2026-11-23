@@ -204,7 +204,7 @@ def test_proposal_and_paused_receipts_do_not_promise_fire(engine):
     result = create(engine, until={'owner_replies':True})
     assert result.get('ok'), result
     text = receipt(result)
-    assert text.startswith(f'Not set yet: it is armed only after the owner sends /pulse ok {result["wake"]["id"]}.')
+    assert text.startswith(f'Not set yet: it is armed only after the owner sends /cadence approve {result["wake"]["id"]}.')
     assert 'Fires' not in text and 'Next at' not in text and 'min apart' not in text
     engine.policy = replace(engine.policy, agent_can_create='yes')
     w = arm(engine, status='paused')
@@ -297,10 +297,10 @@ def test_docs_and_version():
     assert 'Results include a receipt line; tell the owner what it says, not a promise of your own.' in DESCRIPTION
     assert '## 0.1.15 — 2026-10-14' in (root/'CHANGELOG.md').read_text()
     skill = (root/'skills/cadence-usage/SKILL.md').read_text()
-    assert 'receipt' in skill and 'awaiting your OK' in skill
+    assert 'receipt' in skill and '/cadence approve' in skill
     readme = (root/'README.md').read_text()
     assert 'receipt' in readme
-    assert 'On create, an implicit lifetime stretches to fit, up to the maximum.' in readme
+    assert '`max_reminder_days`' in readme and 'expiry' in readme
     changelog = (root/'CHANGELOG.md').read_text()
     assert '## 0.1.14 — 2026-10-14' in changelog
     assert '#56' in changelog.split('## 0.1.13')[0]

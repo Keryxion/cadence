@@ -196,7 +196,7 @@ def test_unresolved_episode_turn_voids_continues_and_requeues(tmp_path):
 def test_cleanup_transient_client_error_recovers(tmp_path,applied):
     r,c,store,e=shape_rig(tmp_path);original=c.send; failed=[]
     def send(text):
-        if text.startswith('/pulse cancel ') and not failed:
+        if text.startswith('/cadence cancel ') and not failed:
             failed.append(True)
             if applied: original(text)
             raise ClientError('synthetic transient')
@@ -215,7 +215,7 @@ def test_resume_uncertain_cleanup_reverifies_without_resend(tmp_path):
     r,c,store,e=shape_rig(tmp_path);declare(r);assert r.baseline()
     r.clock.wall=epoch(e['sends'][0]['at']);r.tick_episode(e);r.clock.sleep(15);r.turns()
     r.emit('close',e['id'],close_at=r.clock.now()); w=store.list_wakes('chat')[0]
-    r.emit('send_intent',e['id'],key='setup_cancel:'+w.id,text='/pulse cancel '+w.id,purpose='setup')
+    r.emit('send_intent',e['id'],key='setup_cancel:'+w.id,text='/cadence cancel '+w.id,purpose='setup')
     r.emit('client_error',e['id'],operation='send',key='setup_cancel:'+w.id)
     store.cas_wake(w.id,w.status,status='cancelled')
     count=len(c.sent);resumed=restart(r,c)
@@ -273,7 +273,7 @@ def test_smoke_unexercised_bars_and_old_history(tmp_path):
 
 def test_s_on_only_when_off(tmp_path):
     r,c,store,e=shape_rig(tmp_path,'S');assert r.run()==0
-    assert not any(text=='/pulse on' for _,text in c.sent)
+    assert not any(text=='/cadence on' for _,text in c.sent)
     store.close()
 
 
@@ -281,7 +281,7 @@ def test_setup_command_mismatch_reason(tmp_path):
     r,c,store,e=shape_rig(tmp_path,'N');original=c.send
     def send(text):
         m=original(text)
-        if text=='/pulse status':c.messages[-1]['text']='Error: unavailable'
+        if text=='/cadence status':c.messages[-1]['text']='Error: unavailable'
         return m
     c.send=send
     assert r.run()==1
@@ -424,7 +424,7 @@ def test_r5_hard_failure_cleanup_and_deadline(tmp_path,monkeypatch):
             monkeypatch.setattr('bench.soak.score.hard_failure',hard_failure)
             original=c.send
             def send(text):
-                if stalled and text.startswith('/pulse cancel '):
+                if stalled and text.startswith('/cadence cancel '):
                     c.sent.append((r.clock.now(),text))
                     return c.message(text,True)  # No reply or state change.
                 return original(text)
@@ -434,7 +434,7 @@ def test_r5_hard_failure_cleanup_and_deadline(tmp_path,monkeypatch):
             assert failure['reason']=='synthetic_hard_failure'
             created={w['id'] for w in r.wakes(e,all_created=True)}
             assert set(descendants)<created and builtin.id not in created
-            cancels=[text.split()[-1] for _,text in c.sent if text.startswith('/pulse cancel ')]
+            cancels=[text.split()[-1] for _,text in c.sent if text.startswith('/cadence cancel ')]
             assert cancels and builtin.id not in cancels
             assert store.get_wake(builtin.id).status=='active'
             if stalled:

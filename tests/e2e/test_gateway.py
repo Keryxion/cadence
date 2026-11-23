@@ -12,7 +12,7 @@ class Finding(AssertionError):
 
 
 # One Hermes tool-progress bubble for the pulse tool, nothing else.
-PROGRESS_BUBBLE = re.compile(r"⚙️ pulse(?:\.\.\.|: [^\n]*)?")
+PROGRESS_BUBBLE = re.compile(r"⚙️ (?:trigger|respond)(?:\.\.\.|: [^\n]*)?")
 
 
 def record_latency(rig, due_at, wall_offset):
@@ -102,7 +102,7 @@ def test_silent_verdict_shows_nothing(make_rig, loud):
             return Text("PROGRESS-CONTROL-DONE")
 
         script = Script()
-        script.actions = [ToolCall("pulse", {"action": "list"}), progress_visible]
+        script.actions = [ToolCall("trigger", {"action": "list"}), progress_visible]
         rig.llm._responder = script
         try:
             rig.owner("list wakes for display control", "PROGRESS-CONTROL-DONE")
@@ -212,7 +212,7 @@ def test_midturn_compaction_carrier(make_rig):
         before = rig.visible_ids()
         rig.driver.dm("/steer OWNER-CARRIER")
         rig.wait(lambda: any("OWNER-CARRIER" in t for t in rig.new_visible(before)), "carrier steer ack", 20)
-        return ToolCall("pulse", {"action": "list"})
+        return ToolCall("trigger", {"action": "list"})
 
     # Director's owner queues do not execute callbacks; Script supplies arrival timing.
     from tests.e2e.core.history._helpers import Script
@@ -227,9 +227,9 @@ def test_midturn_compaction_carrier(make_rig):
     assert any("OWNER-CARRIER" in str(r) and "Gateway message origin" in str(r) for r in rig.llm.main_requests())
     before_events, before_human = len(rig.events()), rig.session()["last_human_at"]
     rig.director.notify = False
-    rig.director.wake_script.actions = [ToolCall("pulse", {"action": "list"}),
-                                         ToolCall("pulse", {"action": "list"}), rig.director.respond()]
-    rig.llm.prompt_tokens_fn = lambda body: 20000 if any("⟦pulse o:" in str(m.get("content"))
+    rig.director.wake_script.actions = [ToolCall("trigger", {"action": "list"}),
+                                         ToolCall("trigger", {"action": "list"}), rig.director.respond()]
+    rig.llm.prompt_tokens_fn = lambda body: 20000 if any("⟦cadence o:" in str(m.get("content"))
                                                         for m in body["messages"]) else 100
     wid = rig.arm()
     before = rig.visible_ids()
@@ -318,8 +318,8 @@ def test_owner_reply_clears_mute(make_rig):
     # Create all timers in ONE owner turn, then allow two unanswered notifications.
     from tests.fakes.fake_llm_provider import Text, ToolCall
 
-    rig.director.script("mute", *[ToolCall("pulse", {"action": "create", "note": f"mute-{i}",
-                              "trigger": {"kind": "at", "at": f"in {10+15*i}s"}}) for i in range(3)],
+    rig.director.script("mute", *[ToolCall("trigger", {"action": "create", "title": f"mute-{i}", "note": f"mute-{i}",
+                              "when": {"kind": "at", "at": f"in {10+15*i}s"}}) for i in range(3)],
                         Text("MUTE-ARMED"))
     rig.owner("arm three notifications [in:mute]", "MUTE-ARMED")
     wakes = sorted(rig.rows("wakes"), key=lambda w: w["next_due_at"])
@@ -393,7 +393,7 @@ def test_api_error_watcher_no_self_loop(make_rig):
 
 
 def test_invalid_setting_does_not_halt_wakes(make_rig):
-    # A rejected live setting must not halt wakes; /pulse status names it.
+    # A rejected live setting must not halt wakes; /cadence status names it.
     import hermes_yaml as yaml
 
     rig = make_rig()
@@ -422,11 +422,11 @@ def test_mute_holds_watcher_until_reply(make_rig):
     # One owner turn arms both nudges and the watcher, without clearing the
     # unanswered count between deliveries. The file belongs to this rig only.
     rig.director.script("watcher-mute", *[
-        ToolCall("pulse", {"action": "create", "note": f"watcher-mute-{i}",
-                           "trigger": {"kind": "at", "at": f"in {10+15*i}s"}})
+        ToolCall("trigger", {"action": "create", "title": f"watcher-mute-{i}", "note": f"watcher-mute-{i}",
+                           "when": {"kind": "at", "at": f"in {10+15*i}s"}})
         for i in range(2)],
-        ToolCall("pulse", {"action": "create", "note": "watch held file matches",
-                           "trigger": {"kind": "file", "path": str(watched),
+        ToolCall("trigger", {"action": "create", "title": "Held file", "note": "watch held file matches",
+                           "when": {"kind": "file", "path": str(watched),
                                        "pattern": "MATCH-", "check_every": "1s"}}),
         Text("WATCHER-MUTE-ARMED"))
     rig.owner("arm nudges and file watcher [in:watcher-mute]", "WATCHER-MUTE-ARMED")
@@ -512,6 +512,31 @@ def test_cache_stays_in_receipt_and_wake_starts_with_metadata(make_rig):
     text = rig.director._text(rig.wake_openers()[0]["messages"][-1])
     lines = [line for line in text.splitlines() if line.startswith("Cache:")]
     assert not lines, text
-    assert "[pulse trigger='at'" in text.splitlines()[0]
+    assert "[cadence trigger='at'" in text.splitlines()[0]
     assert text.splitlines()[1] == "cache-line"
+    rig.assert_tools_ok()
+
+
+def test_responsibility_two_due_triggers_share_one_gateway_turn(make_rig):
+    """Exercise the new contract through real commands, model tools and delivery."""
+    from datetime import datetime, timezone
+    rig=make_rig()
+    due=datetime.fromtimestamp(time.time()+30,timezone.utc).isoformat()
+    command={'action':'create','title':'Shared readiness','charter':'Review both readiness signals.',
+             'checks':{'min_per_24h':1,'budget_per_24h':30},'initial_at':due}
+    rig.owner('/cadence responsibility '+json.dumps(command),'r_')
+    responsibility=next(w for w in rig.rows('wakes') if w['role'])
+    for note in ('Review build.','Review deployment.'):
+        command={'action':'create','responsibility_id':responsibility['id'],
+                 'note':note,'when':{'kind':'at','at':due}}
+        rig.owner('/cadence trigger '+json.dumps(command),'t_')
+    row=rig.settled(responsibility['id'])
+    assert row['state']=='done' and row['delivered']==1
+    assert len(rig.director.wake_starts)==1
+    assert len(rig.wake_openers())==1
+    text=rig.wake_openers()[0]['messages'][-1]['content']
+    assert 'Review build.' in str(text) and 'Review deployment.' in str(text)
+    wakes=rig.rows('wakes')
+    assert all(w['fires']==1 for w in wakes)
+    assert next(w for w in wakes if w['role'])['status']=='active'
     rig.assert_tools_ok()

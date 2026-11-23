@@ -53,8 +53,9 @@ def test_real_loader_worker_registration_and_same_session_silence(tmp_path, monk
         loaded = manager._plugins['cadence']
         assert loaded.enabled, loaded.error
         assert seen and all(name.startswith('plugin-load:') for name in seen)
-        assert 'pulse' in loaded.tools_registered
-        assert 'pulse' in loaded.commands_registered
+        assert {'responsibility','trigger','respond'} <= set(loaded.tools_registered)
+        assert 'pulse' not in loaded.tools_registered
+        assert 'cadence' in loaded.commands_registered
         registration = sys.modules[loaded.module.__name__+'.cadence.registration']
         assert set(registration.HOOKS) == set(loaded.hooks_registered) == set(manifest.provides_hooks)
         assert set(manifest.provides_tools) == set(loaded.tools_registered)
@@ -81,35 +82,34 @@ def test_real_loader_worker_registration_and_same_session_silence(tmp_path, monk
         fresh_key='agent:telegram:dm:fresh'
         tokens=set_session_vars(platform='telegram',chat_id='fresh',chat_type='dm',session_key=fresh_key,session_id='fresh-sid')
         try:
-            status=manager._plugin_commands['pulse']['handler']('status')
+            status=manager._plugin_commands['cadence']['handler']('status')
             assert 'plugins:\n  entries:\n    cadence:\n      allow_gateway_injection: true' in status
             assert engine.store.get_session(fresh_key).last_human_at is None
-            assert 'injection_disabled' in manager._plugin_commands['pulse']['handler']('add in 1m Verify consent')
+            assert 'injection_disabled' in manager._plugin_commands['cadence']['handler']('add in 1m Verify consent')
         finally: clear_session_vars(tokens)
         (home/'config.yaml').write_text('plugins:\n  entries:\n    cadence:\n      enabled: true\n      allow_gateway_injection: true\n      settings:\n        timezone: UTC\n')
         key = 'agent:telegram:dm:fixture'
         # Gateway commands get a bound HERMES_SESSION_KEY (no target argument).
         tokens=set_session_vars(platform='telegram',chat_id='fixture',chat_type='dm',session_key=key,session_id='sid')
         try:
-            out = manager._plugin_commands['pulse']['handler']('add in 1m Check the report')
+            out = manager._plugin_commands['cadence']['handler']('add in 1m Check the report')
         finally:
             clear_session_vars(tokens)
-        assert 'w_' in out, out
+        assert 't_' in out, out
         manager.invoke_hook('pre_gateway_dispatch',event=NS(internal=False,message_id='owner-1',text='Follow up',
             source=NS(platform=NS(value='telegram'),chat_type='dm',chat_id='fixture',message_id='owner-1',is_bot=False)))
-        full_schema = sys.modules[loaded.module.__name__+'.cadence.tool'].SCHEMA
-        assert full_schema['name'] == 'pulse' and full_schema['description']
-        tool_schema = full_schema['parameters']
-        assert 'respond' in tool_schema['properties']['action']['enum']
-        assert not {'target','session','chat','platform','model'} & set(tool_schema['properties'])
+        full_schema = sys.modules[loaded.module.__name__+'.cadence.responsibilities'].TRIGGER_SCHEMA
+        assert full_schema['name']=='trigger' and full_schema['description']
+        for shape in full_schema['parameters']['oneOf']:
+            assert not {'target','session','chat','platform','model'} & set(shape['properties'])
         # The real loader must have put a valid definition into Hermes' global ToolRegistry.
         from tools.registry import registry as hermes_registry
         time_schema, = hermes_registry.get_definitions({'get_time'}, quiet=True)
         assert time_schema['function']['name'] == 'get_time'
         result = json.loads(hermes_registry.dispatch('get_time', {'timezone':'UTC'}))
         assert result['utc'] == result['local'].replace('+00:00', 'Z')
-        definition = hermes_registry.get_definitions({'pulse'}, quiet=True)[0]['function']
-        assert definition['parameters']['required'] == ['action']
+        definition = hermes_registry.get_definitions({'trigger'}, quiet=True)[0]['function']
+        assert definition['parameters']['oneOf']
         clock.advance(60)
         engine.tick()
         assert len(calls) == 1 and calls[0]['session_key'] == key
@@ -119,7 +119,7 @@ def test_real_loader_worker_registration_and_same_session_silence(tmp_path, monk
         try:
             manager.invoke_hook('pre_llm_call',session_id='sid',turn_id='turn',platform='telegram',user_message=calls[0]['content'])
             # Dispatch through Hermes' real registry, exactly as the agent loop does.
-            result = json.loads(hermes_registry.dispatch('pulse',{'action':'respond','outcome':'no_change','notify':False,'summary':'nothing new'},session_id='sid'))
+            result = json.loads(hermes_registry.dispatch('respond',{'outcome':'no_change','notify':False,'summary':'nothing new'},session_id='sid'))
             assert result['ok'], result
         finally:
             reset_current_session_key(session_token)

@@ -1,4 +1,4 @@
-"""0.3.2: /pulse status agrees with the desk about a role that has spent today's budget."""
+"""0.3.2: /cadence status agrees with the desk about a role that has spent today's budget."""
 from types import SimpleNamespace
 
 from cadence import commands

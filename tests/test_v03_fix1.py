@@ -244,8 +244,8 @@ def test_f6_governor_cards_only_offer_valid_conversions(engine):
     lines = result['context'].splitlines()
     for w in (role, owntime):
         line = next(x for x in lines if f'({w.id}) paused' in x)
-        assert line.endswith('keep / slow / stop via /pulse.') and '/pulse watch' not in line
-    assert any('/pulse watch '+ordinary.id in x for x in lines)
+        assert line.endswith('keep / slow / stop via /cadence.') and '/cadence watch' not in line
+    assert any('/cadence watch '+ordinary.id in x for x in lines)
 
 
 def test_f7_new_role_cannot_escape_creating_budget(engine):

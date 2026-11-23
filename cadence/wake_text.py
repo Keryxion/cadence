@@ -23,7 +23,7 @@ def _age(seconds: float) -> str:
 
 def escape_text(text: str) -> str:
     # Only the engine header may contain a live occurrence marker.
-    return html.escape(re.sub(r"⟦pulse\b", "[pulse", text), quote=False)
+    return html.escape(re.sub(r"⟦(?:pulse|cadence)\b", "[cadence", text), quote=False)
 
 
 def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: Clock,
@@ -62,7 +62,8 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
         fields.append(f"late_by='{_age(late_by_s)}'")
     if after_restart:
         fields.append("after_restart='true'")
-    lines = [f"⟦pulse o:{occurrence.id} a:{occurrence.attempt}{tag}⟧ [pulse {' '.join(fields)}]",
+    mechanism = "cadence" if wake.managed else "pulse"
+    lines = [f"⟦{mechanism} o:{occurrence.id} a:{occurrence.attempt}{tag}⟧ [{mechanism} {' '.join(fields)}]",
              escape_text(wake.note)]
     if wake.reason and wake.reason != wake.note:
         lines.append(f"Why: {escape_text(wake.reason)}")
@@ -83,7 +84,8 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
         text = escape_text(text).encode("utf-8")[:2048].decode("utf-8", errors="ignore")
         source = html.escape(wake.kind, quote=True)
         lines += [f'<wake-payload source="{source}" trust="untrusted">', text, "</wake-payload>"]
-    lines.append('Call pulse respond with the outcome, a brief summary, and whether to notify the owner.')
+    lines.append('Call respond with the outcome, a brief summary, and whether to notify the owner.' if wake.managed else
+                 'Call pulse respond with the outcome, a brief summary, and whether to notify the owner.')
     message_labels={'unanswered':"the owner hasn't replied yet",
                     'interruption_limit':'waiting for an interruption token', 'daily_message_cap':"today's message limit"}
     if message_held in message_labels:
@@ -91,5 +93,5 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
                      "keep anything the owner should hear in your notes and tell them when they're back.")
     # Only the built-in check-in contacts the owner unasked, so only it says how to stop.
     if wake.trigger_json.get('builtin'):
-        lines.append('If you notify, end with one line saying they can say "stop checking in" or use /pulse off.')
+        lines.append('If you notify, end with one line saying they can say "stop checking in" or use /cadence off.')
     return "\n".join(lines)

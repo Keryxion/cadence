@@ -79,7 +79,8 @@ identity come from the current conversation; there is no destination field.
 Field types and validation:
 
 - `id`, `title`, `charter`, `notes`, `reason`: strings; title, charter and reason
-  must be nonempty when supplied. Notes default to empty; an update replaces
+  must be nonempty when supplied. Titles allow 80 characters, charters 2,000,
+  and notes 16,000. Notes default to empty; an update replaces
   them in full. Deleted and finished work retains an inspectable execution record.
 - `checks`: object with required integer `min_per_24h` and `budget_per_24h`.
   Validate `1 <= min_per_24h <= budget_per_24h` against owner limits. Derive bucket
@@ -162,13 +163,6 @@ Durations are positive strings such as `20m` or `2h`.
 | `api_error` | None | Provider API error, aggregated with cooldown |
 | `reaction` | Optional `emojis`: string array | Reaction in this conversation matches the filter, or any reaction if omitted |
 | `message_edited` | None | Message edited in this conversation |
-| `websocket` | `url`: WS(S) URL, `condition`: object with optional `event`: nonempty string and `pattern`: regex; at least one required | Incoming message matches the event name and/or payload pattern supplied |
-
-WebSocket conditions reject unknown fields and invalid patterns. If both event
-and pattern are supplied, both must match. A URL alone cannot arm an unspecified
-condition. Connection establishment, loss and reconnection do not themselves
-satisfy a message condition; transport and reconnection policy are outside this
-tool contract.
 
 Probe types (`file`, `process`, `url`, `command`) also accept `check_every`, a
 positive polling duration within owner source limits. Probe and event watchers
@@ -198,6 +192,11 @@ per-turn child limits without accumulating depth just for continuing ownership.
 
 ## Bounded execution
 
+Owner-requested standalone reminders retain owner reminder treatment for
+notifications and cost. An agent change to their instructions or timing revokes
+that exemption; owner-requested responsibilities still use responsibility budgets.
+All started turns require global execution capacity.
+
 Execution and notifications have separate budgets because useful work can be
 silent and a quiet owner should not prevent preparation or progress.
 
@@ -212,8 +211,9 @@ Admit both required execution tokens together; never spend one without the
 other. Pending or refused injections consume no tokens and do not satisfy the minimum.
 If either bucket lacks capacity, eligible work waits and all limits are checked
 again before starting. One responsibility's empty bucket does not block another
-with capacity. Refill never exceeds capacity; no global capacity/refill defaults
-are fixed by this spec. Cancellation or expiry of deferred work is visible.
+with capacity. Refill never exceeds capacity; global execution defaults are capacity 30 and refill 1.25 per hour, configurable
+by the owner. Global means all conversations served within the same Hermes
+profile. Notification defaults are capacity 15 and refill 12 per hour. Cancellation or expiry of deferred work is visible.
 
 Notification holds and unanswered-message limits hold messages while eligible
 responsibility checks can run silently and keep findings in notes. Quiet checks
@@ -240,9 +240,9 @@ source content cannot grant consent or authorize unbounded work.
 
 A compact desk view opens responsibility turns and is available to the owner:
 charters, latest work, next opportunities, started checks against the minimum,
-bucket/notification holds, missed minimums and available usage/cost. Active work,
-notes, ownership, limits and pending occurrences must survive installation
-without silent loss or duplicate checks; unsupported items are explained visibly.
+bucket/notification holds, missed minimums and available usage/cost. The model
+starts with fresh saved state; no conversion of previously scheduled work is
+required. WebSocket sources are outside this implementation.
 
 Verify the action and field tables, all trigger types and these interactions:
 

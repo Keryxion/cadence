@@ -70,7 +70,7 @@ print("wal")
 
 
 def test_only_claim_can_enter_claimed(tmp_path, clock):
-    with Store(tmp_path / "pulse.db", clock) as s:
+    with Store(tmp_path / "cadence.db", clock) as s:
         w = s.create_wake(Wake("s", "n", "at"))
         s.add_occurrence(w.id, "t:1")
         with pytest.raises(ValueError, match="transition"):
@@ -79,7 +79,7 @@ def test_only_claim_can_enter_claimed(tmp_path, clock):
 
 
 def test_session_insert_only_preserves_owner_state(tmp_path, clock):
-    with Store(tmp_path / "pulse.db", clock) as s:
+    with Store(tmp_path / "cadence.db", clock) as s:
         assert s.upsert_session(Session("s"))
         assert s.cas_session("s", {"enabled": True}, enabled=False, paused_until=9e9,
                              unanswered_count=2, first_notice_sent=True)

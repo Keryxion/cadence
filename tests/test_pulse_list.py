@@ -42,31 +42,29 @@ def test_list_rejects_nonboolean_detail_flag(engine, value):
     assert engine.tool.handle({'action':'list','detailed':value}, session_id='sid')['error'] == 'invalid_request'
 
 
-def test_registered_pulse_serializes_absolute_times(engine, monkeypatch):
+def test_registered_trigger_serializes_absolute_times(engine, monkeypatch):
     import json
     from cadence.registration import Runtime, register
-
+    from cadence.responsibilities import Responsibilities
     from test_follow_up import owner
     engine.policy = replace(engine.policy, timezone='America/New_York')
+    engine.responsibilities = Responsibilities(engine)
     monkeypatch.setattr(Runtime, 'start', lambda self: None)
     runtime = register(engine.ctx, clock=engine.clock)
     runtime._engine = engine
     try:
-        handler = engine.ctx.tools['pulse']['handler']
-        def pulse(**args):
-            return json.loads(handler(args, session_id='sid'))
-
-        args = dict(action='create', note='Check the build', trigger={'kind':'at', 'after':'10m'})
-        created = pulse(**args)
+        handler = engine.ctx.tools['trigger']['handler']
+        created = json.loads(handler({'action':'create','title':'Build','note':'Check the build',
+            'when':{'kind':'at','at':'in 10m'}},session_id='sid'))
         due = '2025-10-12T12:10:00Z'
+        assert created['record']['next_due_at'] == due
         owner(engine, 'test-turn', 'Check again later')
         follow = engine.ctx.tools['follow_up']['handler']
-        assert json.loads(follow({'at':'10m'}, session_id='sid'))['due_at'] == due
-        assert created['wake']['next_due_at'] == due
-        assert due in created['receipt']
-        assert pulse(action='list')['wakes'][0]['next_check_at'] == due
-        assert pulse(action='list', detailed=True)['wakes'][0]['next_due_at'] == due
-        assert pulse(action='pause', id='all')['results'][0]['wake']['next_due_at'] == due
+        assert json.loads(follow({'at':'10m'},session_id='sid'))['due_at'] == due
+        listed=json.loads(handler({'action':'list'},session_id='sid'))
+        assert listed['items'][0]['next_due_at']==due
+        paused=json.loads(handler({'action':'pause','id':created['id']},session_id='sid'))
+        assert paused['record']['next_due_at']==due
     finally:
-        runtime._engine = None
+        runtime._engine=None
         runtime.close()

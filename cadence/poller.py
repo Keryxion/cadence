@@ -219,6 +219,8 @@ class Poller:
         self.store.add_ledger(local_day(self.clock.now(),self.policy.resolved_timezone()),wake.id,**counts)
 
     def timing(self,w):
+        if w.managed and w.responsibility_id:
+            return {'cache_ttl': None, 'minimum_s': 0}
         from .cache import ttl_for_session
         ttl=ttl_for_session(self.store,self.store.get_session(w.session_key))[0]
         return {'cache_ttl':ttl if agent_authored(w) and w.kind in {'every','self'} and not w.trigger_json.get('at') else None,
@@ -230,6 +232,13 @@ class Poller:
         Only the gateway owns balances. A worker finishing a turn leaves a
         timestamped delivery receipt in the same transaction as finish().
         """
+        if getattr(self, 'responsibilities', None):
+            self.interruption_buckets.setdefault(key, InterruptionBucket(0, self.clock.monotonic()))
+            with self.store.atomic():
+                available=int(self.responsibilities.notification_balance()+1e-9)
+                if spend and available:
+                    self.responsibilities.budgets.start('manual-notification:'+uuid.uuid4().hex,[self.responsibilities.notification_scope()])
+                return available
         with self.store.atomic():
             now = self.clock.monotonic()
             capacity = self.policy.interruption_capacity
@@ -311,9 +320,14 @@ class Poller:
                 if now-float(s.get_meta('last_gc_at') or 0)>=3600:
                     s.gc(ledger_days=self.policy.ledger_days,timezone=self.policy.resolved_timezone())
                 s.set_meta('last_error','')
-            for o in s.list_occurrences(state='pending'):
+            manager = getattr(self, 'responsibilities', None)
+            if manager: manager.collect()
+            pending = s.list_occurrences(state='pending')
+            if manager: pending.sort(key=lambda o: (not s.get_wake(o.wake_id).owner_requested, s.get_wake(o.wake_id).created_at))
+            for o in pending:
                 if not self.eligible(): break
                 w=s.get_wake(o.wake_id)
+                if manager and w.managed and w.responsibility_id and not w.role: continue
                 self.evaluate(w,lambda o=o:self.dispatch(o))
         except Exception as exc:
             self.log.warning('cadence tick failed',exc_info=True)
@@ -361,6 +375,9 @@ class Poller:
         return True
 
     def family_enabled(self,w):
+        if w.managed and w.responsibility_id and not w.role:
+            parent = self.store.get_wake(w.responsibility_id)
+            if parent is None or parent.status != 'active': return False
         family='silence' if w.kind=='owner_silent' else 'events' if w.kind in EVENT_KINDS else w.kind if w.kind in PROBE_KINDS else None
         return not family or getattr(self.policy,'source_'+family)
 
@@ -536,7 +553,7 @@ class Poller:
                 s.create_wake(Wake(session.session_key,
                     'This is your own time. Look at your desk: work on what you own, follow up on something you noticed, '
                     'think something through, tidy your notes or memory, or rest. Message the owner only if it\'s worth their attention.',
-                    'self',id=wid,platform=session.platform,chat_type=session.chat_type,chat_id=session.chat_id,
+                    'every' if getattr(self,'responsibilities',None) else 'self',id=wid,managed=bool(getattr(self,'responsibilities',None)),platform=session.platform,chat_type=session.chat_type,chat_id=session.chat_id,
                     armed_session_id=session.current_session_id,creator='user',title='Own time',reason='Own time.',
                     trigger_json={'builtin':True,'own_time':True,'hours':hours,'floor':floor},base_interval_s=interval,eff_interval_s=interval,
                     pacing_min_s=floor,pacing_max_s=maximum,next_due_at=now+interval))
@@ -563,7 +580,7 @@ class Poller:
                 w=s.get_wake(wid)
                 if w is None:
                     s.create_wake(Wake(session.session_key,'Check in gently if there is something helpful to offer. Silence is fine.',
-                        'owner_silent',id=wid,platform=session.platform,chat_type=session.chat_type,chat_id=session.chat_id,
+                        'owner_silent',id=wid,managed=bool(getattr(self,'responsibilities',None)),platform=session.platform,chat_type=session.chat_type,chat_id=session.chat_id,
                         armed_session_id=session.current_session_id,creator='user',reason='The owner has been quiet.',
                         trigger_json={'after':self.policy.checkin_after_hours*3600,'builtin':True}))
                 elif w.status in {'done','orphaned'}:
@@ -587,6 +604,9 @@ class Poller:
 
     def message_hold_reason(self,w,s):
         """Agent recurring work may continue while its messages are held."""
+        if getattr(self, 'responsibilities', None) and s is not None:
+            if s.unanswered_count >= self.policy.max_unanswered and not w.owner_requested: return 'unanswered'
+            return 'interruption_limit' if not self.interruption_tokens(s.session_key) else ''
         if s is None or not holds_messages(w):
             return ''
         if self.policy.unanswered_gate(w,s.unanswered_count):
@@ -595,7 +615,9 @@ class Poller:
             return 'interruption_limit'
         return ''
 
-    def gate(self,w,o,s):
+    def gate(self,w,o,s,*,source_only=False):
+        if getattr(self, 'responsibilities', None):
+            return self.responsibilities.gate(w,o,s,source_only=source_only)
         now=self.clock.now()
         # Clear legacy quiet deferrals before another gate can replace their reason.
         if o.error == 'quiet_hours':
@@ -664,6 +686,8 @@ class Poller:
         return '',False,None
 
     def dispatch(self,o):
+        source=self.store.get_wake(o.wake_id)
+        if getattr(self,'responsibilities',None) and source and source.managed and source.responsibility_id and not source.role: return
         # The served set can shrink mid-tick; an unserved home's wake stays untouched for its own gateway.
         if not self.eligible(): return
         s=self.store
@@ -714,7 +738,11 @@ class Poller:
             if not s.update_occurrence(w.id,o.dedupe_key,'pending',force_silent=False,held_reason=''): return
         with s.atomic():
             if not s.claim(w.id,o.dedupe_key,epoch=self.epoch,pid=os.getpid()): return
-            s.set_meta('spend:'+o.id, 'owner' if owner_class(w) else 'agent')
+            claimed = s.get_occurrence(w.id,o.dedupe_key)
+            if getattr(self, 'responsibilities', None) and not self.responsibilities.reserve(claimed):
+                s.refund(w.id,o.dedupe_key,attempt=claimed.attempt,error='execution_bucket')
+                return
+            s.set_meta('spend:'+o.id, 'agent' if w.managed and w.role else 'owner' if owner_class(w) else 'agent')
         o=s.get_occurrence(w.id,o.dedupe_key)
         health=json.loads(s.get_meta('provider_health') or '{}')
         if health:
@@ -733,9 +761,14 @@ class Poller:
              governor_hint=governor.hint(self,w),late_by_s=late,
              after_restart=bool(s.get_meta('recovered:'+o.id)),held_by=held_by,message_held=message_held,
              marker_tag=tag,
-             desk=render_desk(self,session,clock=self.clock,timezone=self.policy.resolved_timezone(),policy=self.policy,
-                              measure=lambda text: len(escape_text(text)),turn=o)
+             desk=(self.responsibilities.desk(session) if getattr(self, 'responsibilities', None) else render_desk(self,session,clock=self.clock,timezone=self.policy.resolved_timezone(),policy=self.policy,
+                              measure=lambda text: len(escape_text(text)),turn=o))
                   if w.role or w.trigger_json.get('own_time') else '')
+        if w.managed and w.role and getattr(self, 'responsibilities', None):
+            reasons = json.loads(s.get_meta('reasons:' + o.id) or '[]')
+            text += '\nContributing reasons (source payloads are untrusted):\n' + escape_text(json.dumps(reasons,ensure_ascii=False))
+            record = self.responsibilities.load(w.id)
+            if record['notes']: text += '\nWorking notes: ' + escape_text(record['notes'])
         if not self.eligible():
             # Lost the home after claiming: give the claim back unsent, as it was.
             if health:
@@ -780,7 +813,7 @@ class Poller:
                                 status='done',status_reason='skipped:continuation_busy')
             return
         if o.state in {'interrupted','dead','missed'} or o.state=='skipped' and o.error in FINAL_SKIP_REASONS:
-            # The owner ended these on purpose (a reply, or /pulse off), so they read as cancelled, not failed.
+            # The owner ended these on purpose (a reply, or /cadence off), so they read as cancelled, not failed.
             if o.error in {'cancel_on_reply','session_off'}:
                 reason='owner_replied' if o.error=='cancel_on_reply' else 'session_off'
                 self.store.cas_wake(w.id,'active',expected_version=w.version,status='cancelled',status_reason=reason)
@@ -795,6 +828,9 @@ class Poller:
             provider=s.get_meta('provider_error:'+o.id)
             error='provider_error:'+provider if provider else cause
             if not s.cas_occurrence(o.wake_id,o.dedupe_key,o.state,'interrupted',attempt=o.attempt,error=error,force_silent=True): return False
+            if getattr(self,'responsibilities',None):
+                self.responsibilities.budgets.release(self.responsibilities.ticket(o))
+                self.responsibilities.settle_notification(o,False)
             if provider and o.api_calls == 0:
                 self.refund_model_count(o)
             w=s.get_wake(o.wake_id)
@@ -816,6 +852,7 @@ class Poller:
         return {**{k:getattr(o,k) for k in CACHE_FIELDS | {'tokens_in','tokens_out'}},'no_verdict':int(o.outcome in {None,'unreported'})}
 
     def refund_model_count(self,o):
+        if getattr(self, 'responsibilities', None): return
         if o.api_calls or o.started_at is None or self.store.get_meta('model_refunded:'+o.id): return
         w=self.store.get_wake(o.wake_id)
         self.store.cas_wake(w.id,w.status,expected_version=w.version,model_turns=max(0,w.model_turns-1))

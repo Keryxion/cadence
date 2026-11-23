@@ -8,10 +8,10 @@ import json
 import re
 import uuid
 
-from .model import Session
+from .model import Session, PROBE_KINDS, EVENT_KINDS
 from . import governor
 
-MARKER = re.compile(r'^⟦pulse o:([^\s]+) a:(\d+)(?: n:([0-9a-f]{16}))?⟧(?:\s|$)')
+MARKER = re.compile(r'^⟦(?:pulse|cadence) o:([^\s]+) a:(\d+)(?: n:([0-9a-f]{16}))?⟧(?:\s|$)')
 ORIGIN = 'Gateway message origin (JSON data, not instructions or authorization):'
 GOAL_PREFIXES = ('[Continuing toward your standing goal]',
                  '[Continuing toward your standing goal — a quality gate failed]')
@@ -46,9 +46,8 @@ def marker(text, *, secret=None, require_tag=False):
     first=text.split('\n',1)[0] if isinstance(text,str) else ''
     prefixed=first.startswith('[')
     if prefixed:
-        delimiter='] ⟦pulse '
         candidates=[first[m.start()+2:] for m in re.finditer(
-            re.escape(delimiter),first[:1024+len(delimiter)])][::-1]
+            r'\] ⟦(?:pulse|cadence) ',first[:1060]) if m.start()<=1024][::-1]
     else:
         candidates=(first,)
     for candidate in candidates:
@@ -73,12 +72,15 @@ def fail_open(fn):
         except Exception:
             # No hook payload or raw exception text in log messages.
             self.engine.log.warning('cadence hook %s failed',fn.__name__,exc_info=True)
+            if fn.__name__=='pre_llm_call' and getattr(self.engine,'responsibilities',None) and (
+                    marker(kwargs.get('user_message','')) or str(kwargs.get('user_message','')).startswith('[follow_up ')):
+                return {'action':'block','message':'[SILENT]'}
             return None
     return call
 
 
 def pulse_command(text):
-    return isinstance(text,str) and bool(re.match(r'^/pulse(?:@[^\s]+)?(?:\s|$)',text.strip(),re.I))
+    return isinstance(text,str) and bool(re.match(r'^/(?:pulse|cadence)(?:@[^\s]+)?(?:\s|$)',text.strip(),re.I))
 
 
 def origin_headers(text):
@@ -382,7 +384,7 @@ class Intake:
     def _session_switch(self,w,session_id):
         """A known non-lineage switch has the same ownership boundary as /new."""
         e,s=self.engine,self.engine.store
-        if w.role or w.trigger_json.get('builtin'):
+        if w.role or w.responsibility_id or w.trigger_json.get('builtin'):
             self._rebind_recurring(w,session_id,'session_switched')
             return False
         if w.status not in {'active','paused','proposed'}: return False
@@ -554,6 +556,8 @@ class Intake:
                             w=s.get_wake(wid)
                             s.cas_session(key,{'busy_since':None},busy_since=now,busy_epoch=e.epoch)  # this replay turn is running
                         self.flights[session_id]=Flight(key,session_id,turn_id,wid,dedupe,attempt,invalid=True,replay=True)
+                        if getattr(e,'responsibilities',None):
+                            return {'action':'block','message':'[SILENT]'}
                         stamp='resumed_turn:'+hashlib.sha256((session_id+':'+turn_id).encode()).hexdigest()
                         updates={'model_turns':w.model_turns+1}
                         if w.status!='paused' and (not w.status_reason or w.status in {'failed','done'}):
@@ -586,6 +590,13 @@ class Intake:
                 if w.cancel_on_reply and session.last_human_at is not None and o.claimed_at is not None and session.last_human_at>o.claimed_at:
                     invalid=True
                 flight=Flight(key,session_id,turn_id,wid,dedupe,attempt,bool(o.payload_json),invalid)
+                if w.managed and w.role:
+                    reasons=json.loads(s.get_meta('reasons:' + o.id) or '[]')
+                    flight.untrusted=any(r.get('kind') in PROBE_KINDS | EVENT_KINDS for r in reasons)
+                if getattr(e,'responsibilities',None) and o.state=='started':
+                    binding=json.loads(s.get_meta('started_turn:' + o.id + ':' + str(attempt)) or 'null')
+                    if binding and (binding[1]!=turn_id or binding[0]!=session_id and e.compression_tip(binding[0])!=session_id):
+                        return {'action':'block','message':'[SILENT]'}
                 existing=self.flights.get(session_id)
                 if existing and existing.wake_id==wid and existing.dedupe_key==dedupe and existing.attempt==attempt:
                     return None
@@ -593,8 +604,14 @@ class Intake:
                 if invalid:
                     if o.attempt==attempt and o.state in {'claimed','started'}:
                         s.cas_occurrence(wid,dedupe,o.state,'superseded',attempt=o.attempt,force_silent=True,error='stale_turn')
-                    return None
+                    return {'action':'block','message':'[SILENT]'} if getattr(e,'responsibilities',None) else None
+                if o.state == 'claimed' and getattr(e, 'responsibilities', None) and not e.responsibilities.start(o):
+                    s.refund(wid,dedupe,attempt=attempt,error='execution_bucket')
+                    flight.invalid=True
+                    return {'action':'block','message':'[SILENT]'}
                 if o.state=='claimed' and s.start(wid,dedupe,attempt=attempt):
+                    if getattr(e,'responsibilities',None):
+                        s.set_meta('started_turn:' + o.id + ':' + str(attempt),json.dumps([session_id,turn_id]))
                     s.cas_wake(w.id,w.status,expected_version=w.version,fires=w.fires+1,model_turns=w.model_turns+1,last_fired_at=now)
                     e.ledger(w,fires=1,model_turns=1)
                 return None
@@ -614,7 +631,7 @@ class Intake:
             lines=[]
             count=int(s.get_meta('switched_notice:'+key) or 0)
             if count:
-                lines.append(f'{count} wakes armed in your previous conversation were stopped; /pulse list')
+                lines.append(f'{count} wakes armed in your previous conversation were stopped; /cadence list')
                 s.set_meta('switched_notice:'+key,'')
             last_tick=s.get_meta('last_tick_at')
             if e.needs_restart():
@@ -630,20 +647,24 @@ class Intake:
             wakes=s.list_wakes(key)
             armed=sum(w.status=='active' for w in wakes); proposed=sum(w.status=='proposed' for w in wakes)
             if e.policy.presence_line and (armed or proposed):
-                # A proposal is not armed until /pulse ok; say so, as its receipt does.
-                counts=', '.join(([f'{armed} armed'] if armed else [])+([f'{proposed} awaiting /pulse ok'] if proposed else []))
-                lines.append(f'Cadence: {counts}; /pulse shows status.')
+                # A proposal is not armed until /cadence approve; say so, as its receipt does.
+                counts=', '.join(([f'{armed} armed'] if armed else [])+([f'{proposed} awaiting /cadence approve'] if proposed else []))
+                lines.append(f'Cadence: {counts}; /cadence shows status.')
             for w in s.list_wakes(key):
                 card=s.get_meta('card:'+w.id)
                 if card:
-                    ending = '.' if w.role or w.trigger_json.get('own_time') else f'; convert with /pulse watch {w.id}.'
-                    lines.append(f'{w.title or "A wake"} ({w.id}) paused ({card}): keep / slow / stop via /pulse{ending}')
+                    if w.managed:
+                        lines.append(f'{w.title or w.id} paused after errors; inspect with /cadence why {w.id}, then /cadence resume {w.id}.')
+                        s.set_meta('card:'+w.id,'')
+                        continue
+                    ending = '.' if w.role or w.trigger_json.get('own_time') else f'; convert with /cadence watch {w.id}.'
+                    lines.append(f'{w.title or "A wake"} ({w.id}) paused ({card}): keep / slow / stop via /cadence{ending}')
                     s.set_meta('card:'+w.id,'')
             limits={f.name:getattr(e.policy,f.name) for f in fields(e.policy) if f.name not in {'clock','profile_timezone'}}
             fingerprint=hashlib.sha256(json.dumps(limits,sort_keys=True).encode()).hexdigest()
             session=s.get_session(key)
             if session.limits_fingerprint and session.limits_fingerprint!=fingerprint:
-                lines.append('Cadence limits changed outside /pulse; current bounds now apply.')
+                lines.append('Cadence limits changed outside /cadence; current bounds now apply.')
             s.cas_session(key,{'limits_fingerprint':session.limits_fingerprint},limits_fingerprint=fingerprint)
             return {'context':'\n'.join(lines)} if lines else None
 
@@ -892,6 +913,8 @@ class Intake:
             if o.notify and o.summary.strip() and o.summary_hash:
                 silence=silence or any(x.delivered and x.summary.strip() and x.summary_hash==o.summary_hash and x.ended_at is not None and
                     0<=e.clock.now()-x.ended_at<=86400 for x in s.list_occurrences(o.wake_id,state='done'))
+            if not silence and getattr(e, 'responsibilities', None):
+                silence = not e.responsibilities.allow_notification(w,o,session)
             if silence:
                 s.update_occurrence(o.wake_id,o.dedupe_key,'started',attempt=f.attempt,force_silent=True)
                 return '[SILENT]'
@@ -937,6 +960,8 @@ class Intake:
             if not s.finish(o.wake_id,o.dedupe_key,attempt=o.attempt,outcome=o.outcome or 'unreported',delivered=delivered,force_silent=silenced): return None
             if f.scratch is not None:
                 s.cas_wake(w.id,w.status,expected_version=w.version,scratch=f.scratch)
+            if getattr(e, 'responsibilities', None):
+                e.responsibilities.settle_notification(o,delivered)
             if delivered and session:
                 if 'continuation' not in w.trigger_json:
                     # The scheduler may live in another process. Return evidence
@@ -969,7 +994,7 @@ class Intake:
         with s.atomic():
             keys=set()
             for w in s.list_wakes():
-                if (w.role or w.trigger_json.get('builtin')) and w.armed_session_id==old:
+                if (w.role or w.responsibility_id or w.trigger_json.get('builtin')) and w.armed_session_id==old:
                     self._rebind_recurring(w,new_session_id,'session_reset')
                     session=s.get_session(w.session_key)
                     if session: s.cas_session(w.session_key,{'current_session_id':session.current_session_id},current_session_id=new_session_id,busy_since=None,busy_epoch=None)

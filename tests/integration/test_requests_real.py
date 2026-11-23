@@ -1,4 +1,4 @@
-"""Real loader/pulse compatibility and fail-closed requests; no gateway/device I/O."""
+"""Real loader/cadence compatibility and fail-closed requests; no gateway/device I/O."""
 import inspect
 import json
 import os

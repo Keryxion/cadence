@@ -24,19 +24,21 @@ def reply(e, **args):
 
 
 def test_R2_G1_registered_contract_and_results(engine, monkeypatch):
+    from cadence.responsibilities import Responsibilities
     e=engine
-    monkeypatch.setattr(Runtime, 'start', lambda self: None)
-    r=register(e.ctx, clock=e.clock)
+    e.responsibilities=Responsibilities(e)
+    monkeypatch.setattr(Runtime,'start',lambda self:None)
+    r=register(e.ctx,clock=e.clock)
     r._engine=e
     try:
-        spec=e.ctx.tools['pulse']
-        schema=spec['schema']
-        assert set(schema)=={'name','description','parameters'}
-        assert schema['name']=='pulse'
-        assert all(action in schema['description'] for action in schema['parameters']['properties']['action']['enum'])
-        result=spec['handler']({'action':'create','note':'test','trigger':{'kind':'every','every':'2m'}},session_id='sid')
+        assert 'pulse' not in e.ctx.tools
+        spec=e.ctx.tools['trigger']
+        assert set(spec['schema'])=={'name','description','parameters'}
+        assert spec['schema']['name']=='trigger'
+        result=spec['handler']({'action':'create','title':'Test','note':'Check test.',
+            'when':{'kind':'every','every':'2m'}},session_id='sid')
         assert isinstance(result,str)
-        assert json.loads(result)['clamped']['every']
+        assert json.loads(result)['record']['when']['kind']=='every'
         assert json.loads(spec['handler']({'action':'create'},session_id='sid'))['error']
         r._engine=None
         monkeypatch.setattr(r,'get_engine',lambda: (_ for _ in ()).throw(ValueError('fixture')))

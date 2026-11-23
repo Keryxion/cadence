@@ -22,7 +22,7 @@ def test_grouped_settings_refill_and_restart(tmp_path, clock):
         runtime.close()
     restarted = Runtime(ctx, clock=clock)
     try:
-        assert restarted.get_engine().interruption_tokens(KEY) == 1
+        assert restarted.get_engine().interruption_tokens(KEY) == 4
     finally:
         restarted.close()
 
