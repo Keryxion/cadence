@@ -45,10 +45,12 @@ check. Keeping the charter separate from timing lets the agent adjust its
 approach without losing ownership or its notes.
 
 The minimum is a fallback for neglected scheduling. It becomes active as soon
-as the responsibility is active, without requiring a trigger. Cadence computes
-the next fallback opportunity from the time left in the accounting period and
-the remaining minimum checks. Started triggered checks reduce the remaining
-minimum; pending work does not. A fallback turn prompts the agent to review the
+as the responsibility is active, without requiring a trigger. Treat its fallback
+as a one-token bucket refilling continuously at `min_per_24h / 24` per hour.
+Start it empty on activation. When full, a fallback is due; any started check
+empties it, including a check started by another trigger. Pending checks do not
+empty it. A long hold creates one overdue opportunity, not a catch-up burst.
+There is no calendar boundary. A fallback turn prompts the agent to review the
 work and fix its next scheduled time. Meeting the minimum alone does not
 establish the intended schedule.
 
@@ -84,8 +86,9 @@ Field types and validation:
   capacity and refill from the budget; no separate bucket fields are accepted.
   An edit settles refill at the old rate up to the edit time, then applies the
   new capacity and rate. Raising the budget does not mint tokens; lowering it
-  caps the current balance. Pause/resume and accounting-period boundaries do
-  not reset the balance.
+  caps the current balance. Pause/resume does not reset the balance. Pause
+  freezes the fallback clock; resume continues from the saved credit. Changing
+  the minimum settles fallback credit at the old rate before applying the new one.
 - `initial_at`: optional absolute timestamp or relative delay for the first
   opportunity. Without it, arrange an initial opportunity automatically.
 - `owner_asked`: boolean, default false. A true value requires verified evidence
@@ -96,7 +99,7 @@ Creation returns `id`, `status`, `armed`, `receipt` and the accepted record.
 A proposal has `status: proposed`, `armed: false` and an approval instruction;
 it consumes no execution capacity until approved by the owner. Updates return
 the accepted record and any explicit adjustments. Inspection includes status,
-charter, notes, provenance, limits, bucket balance, accounting-period boundaries,
+charter, notes, provenance, limits, bucket balance, next fallback due time,
 started checks, next opportunity, latest result, attached triggers and hold or
 missed-minimum reasons. Compact lists put active entries first. Repeated finish,
 delete or pause requests are safe and report the resulting state. Resuming a
@@ -176,7 +179,12 @@ condition alone. Plugin reloads and scheduler restarts do not count as startups.
 Only human activity resets an owner-silence episode.
 
 Triggers for the same responsibility may coexist. Repeated pending matches
-coalesce rather than creating a catch-up burst. A recurring interval expresses
+coalesce rather than creating a catch-up burst. At admission, list every contributing trigger
+ID and kind in the wake, including each trigger's instruction if supplied. Mark a
+due fallback separately (it need not have a trigger ID). One coalesced start
+spends one global and one responsibility token, not one per match. Each included
+trigger counts that start once toward its own `max_fires`. Matches arriving after
+admission stay pending for a later check. A recurring interval expresses
 that trigger's opportunities; it does not impose minimum spacing on checks from
 other triggers. Pausing/deleting a trigger does not stop the responsibility's
 minimum backstop; pause/delete the responsibility to stop all of its work.
@@ -237,6 +245,11 @@ notes, ownership, limits and pending occurrences must survive installation
 without silent loss or duplicate checks; unsupported items are explained visibly.
 
 Verify the action and field tables, all trigger types and these interactions:
+
+- Cross midnight with no token and pending work: only elapsed refill can admit
+  it. Restart while a timer and an event for the same responsibility are held;
+  on refill, admit one wake listing both triggers (and the fallback if due),
+  preserving their instructions and charging each execution bucket only once.
 
 - Daily work at 9 a.m. has a minimum of one and an explicit timed trigger. If the
   agent forgets the next schedule, the adaptive minimum prompts it to fix it.
