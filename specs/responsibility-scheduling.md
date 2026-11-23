@@ -72,15 +72,22 @@ independently: a turn does not consume a notification token merely by starting.
 Keep the owner's cost limit distinct from both buckets: it limits spend on
 agent-initiated work. Neither bucket changes a responsibility's daily check limits.
 
-Each responsibility also has its own token bucket, separate from both global
-buckets. A responsibility check consumes a token from its responsibility bucket
-as well as the global execution bucket when it starts. If its responsibility
-bucket is empty, eligible work is deferred until a token is available, not
-discarded, subject to the other applicable limits and guardrails. A pending check
-does not count toward the daily minimum or maximum; the adaptive backstop accounts
-for checks that have started. The responsibility bucket does not replace or change
-the daily minimum or maximum. Bucket capacity and refill details are not specified
-here.
+Each responsibility has its own token bucket, separate from both global buckets.
+Its burst capacity and ongoing refill rate are configured when the responsibility
+is created, within the owner's limits. The bucket starts full and supports a large
+initial burst capacity, allowing concentrated initial work before the ongoing refill
+rate paces subsequent runs. Refill cannot raise the balance above the configured
+capacity. No numeric capacity or refill defaults are prescribed here.
+
+A responsibility check starts only when both its own bucket and the global
+execution bucket have a token and the other applicable limits and guardrails allow
+it. On start it consumes one token from each bucket and counts toward both daily
+limits; a deferred check consumes neither token and does not count toward either
+limit. If either token is unavailable, eligible work is delayed, not discarded,
+and remains subject to all limits and guardrails when it can run. The adaptive
+backstop accounts for checks that have started, not pending work. The responsibility
+bucket does not replace or change the daily minimum or maximum. Notification
+capacity and refill details remain unspecified.
 
 ## Simplify the controls
 
@@ -176,6 +183,16 @@ compatibility alias.
   applicable daily maximum, consent, busy state and cost limits also allow it.
   The delayed check counts when started, and the adaptive backstop accounts for
   started checks rather than treating a pending trigger as a check.
+- At creation, configure each responsibility's own burst capacity and refill rate
+  without requiring any prescribed numeric defaults. A full, sufficiently large
+  initial bucket permits concentrated checks while global capacity, daily maximum
+  and other guardrails permit; after its tokens are spent, later checks wait for
+  refill, which never raises the balance above capacity.
+- Exhaust one responsibility's bucket while another has tokens: the first's
+  eligible work remains pending without consuming a global token or counting as a
+  check, while the second can start if global capacity and other limits permit.
+  Once refilled, the first can start only when both tokens and all guardrails allow;
+  it then consumes one token from each bucket and counts against both daily limits.
 - With an empty responsibility bucket, eligible work for that responsibility is
   deferred until a token is available, not discarded. A started check consumes
   both its responsibility token and a global execution token; its daily limits
