@@ -164,7 +164,12 @@ apply.
 ## Triggers and supporting work
 
 The `trigger` tool schedules a responsibility's next run by time or activates it
-from an event. Sources include processes, the web and WebSocket connections.
+from an event. Every trigger must specify an explicit time or condition that
+determines when it becomes eligible to run. Creation or editing without either
+is refused. The responsibility's automatic minimum backstop does not satisfy
+this requirement for a trigger.
+
+Sources include processes, the web and WebSocket connections.
 Their detailed source behavior and tool schemas are not prescribed here.
 Triggered checks use the same daily counts, execution buckets, cost limits,
 consent and conversation boundaries as automatic checks. A pending event or due
@@ -301,7 +306,9 @@ interval constraint to a responsibility's daily limits and adaptive backstop.
 - Make a missed minimum and its cause visible when tokens, consent, cost,
   availability or busy state prevent it. Do not bypass a constraint to catch up.
 - Schedule the next check by time or activate it from process, web or WebSocket
-  events. Each started check counts toward both daily limits.
+  events. Require an explicit time or condition for every trigger; reject
+  creation or editing that supplies neither, even when the responsibility has
+  an automatic minimum backstop. Each started check counts toward both daily limits.
 - Every agent-initiated turn, including a silent check, own-time turn, watcher
   turn or continuation, consumes a global execution token on start. A pending
   injection consumes none. A responsibility check additionally consumes one
