@@ -60,14 +60,28 @@ T_FIELDS = {'when': WHEN, 'title': {**TEXT,'maxLength':80}, 'note': {**TEXT,'max
 def tool_schema(name, fields, variants, description):
     alternatives = []
     for action, (required, optional) in variants.items():
-        allowed = set(required) | set(optional)
+        allowed = dict.fromkeys((*required, *optional))
         schema = obj({'action': {'const': action}, **{k: fields[k] for k in allowed}}, ('action', *required))
         if action == 'update':
             schema['anyOf'] = [{'required': [k]} for k in optional]
         if name == 'trigger' and action == 'create':
             schema['anyOf'] = [{'required': ['responsibility_id']}, {'required': ['title', 'note']}]
         alternatives.append(schema)
-    return {'name': name, 'description': description, 'parameters': {'type':'object','oneOf': alternatives}}
+    # Hermes removes root oneOf/anyOf/allOf before tool discovery and provider
+    # requests. Publish ordinary properties and retain each action's closed shape
+    # in conditionals, which survive that normalization.
+    actions = '; '.join(f"{action}: requires {', '.join(required) or 'no other fields'}; "
+                        f"optional {', '.join(optional) or 'none'}"
+                        for action, (required, optional) in variants.items())
+    published = {key for required, optional in variants.values() for key in (*required, *optional)}
+    parameters = obj({'action': {'type': 'string', 'enum': list(variants), 'description': actions},
+                      **{key: value for key, value in fields.items() if key in published}}, ('action',))
+    conditional = alternatives[-1]
+    for alternative in reversed(alternatives[:-1]):
+        conditional = {'if': {'properties': {'action': alternative['properties']['action']}, 'required': ['action']},
+                       'then': alternative, 'else': conditional}
+    parameters.update(conditional)
+    return {'name': name, 'description': description, 'parameters': parameters}
 
 
 R_ACTIONS = {
@@ -119,13 +133,13 @@ def validate(value, schema):
              'array': isinstance(value, list)}
     if kind and not valid.get(kind, False):
         raise ValueError(f'expected {kind}')
-    if kind == 'object':
+    if kind == 'object' or 'properties' in schema:
         missing = set(schema.get('required', ())) - value.keys()
-        unknown = value.keys() - schema['properties'].keys()
+        unknown = value.keys() - schema['properties'].keys() if schema.get('additionalProperties') is False else set()
         if missing or unknown:
             raise ValueError(f'missing fields: {sorted(missing)}; unknown fields: {sorted(unknown)}')
         for k, v in value.items():
-            validate(v, schema['properties'][k])
+            if k in schema['properties']: validate(v, schema['properties'][k])
     if kind == 'array':
         if len(value) < schema.get('minItems', 0): raise ValueError('empty array')
         for v in value: validate(v, schema['items'])
@@ -135,6 +149,14 @@ def validate(value, schema):
     if kind == 'integer' and value < schema.get('minimum', -math.inf): raise ValueError('integer below minimum')
     if 'anyOf' in schema and not any(set(v.get('required', ())) <= value.keys() for v in schema['anyOf']):
         raise ValueError('supply the required target or at least one field to change')
+    if 'if' in schema:
+        try:
+            validate(value, schema['if'])
+        except ValueError:
+            branch = 'else'
+        else:
+            branch = 'then'
+        if branch in schema: validate(value, schema[branch])
 
 
 class Responsibilities:
@@ -637,11 +659,13 @@ class Responsibilities:
             self.budgets.start(ticket, [self.notification_scope()])
         self.budgets.release(ticket)
 
-    def desk(self, session):
-        with self.store.atomic(): return self._desk(session)
+    def desk(self, session, *, before_start=False):
+        with self.store.atomic(): return self._desk(session, before_start=before_start)
 
-    def _desk(self, session):
-        rows = ['Your responsibilities:']
+    def _desk(self, session, *, before_start=False):
+        rows = (["Pre-start snapshot: this turn's token charges and fallback reset are not included. "
+                 "Use responsibility.get for current values during the check."] if before_start else [])
+        rows.append('Your responsibilities:')
         for r in self.records(session.session_key):
             w = self.store.get_wake(r['id'])
             if w.status not in {'active', 'paused'}: continue

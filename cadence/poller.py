@@ -767,7 +767,7 @@ class Poller:
              governor_hint=governor.hint(self,w),late_by_s=late,
              after_restart=bool(s.get_meta('recovered:'+o.id)),held_by=held_by,message_held=message_held,
              marker_tag=tag,
-             desk=(self.responsibilities.desk(session) if getattr(self, 'responsibilities', None) else render_desk(self,session,clock=self.clock,timezone=self.policy.resolved_timezone(),policy=self.policy,
+             desk=(self.responsibilities.desk(session, before_start=True) if getattr(self, 'responsibilities', None) else render_desk(self,session,clock=self.clock,timezone=self.policy.resolved_timezone(),policy=self.policy,
                               measure=lambda text: len(escape_text(text)),turn=o))
                   if w.role or w.trigger_json.get('own_time') else '')
         if w.managed and w.role and getattr(self, 'responsibilities', None):

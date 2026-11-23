@@ -59,6 +59,9 @@ def test_initial_check_counts_only_on_start_and_notes_survive(modern):
     assert balance(e,rid)==30
     assert e.store.get_wake(rid).fires==0
     assert 'Prior findings' in e.ctx.calls[-1][0]
+    assert 'Pre-start snapshot' in e.ctx.calls[-1][0]
+    assert 'token charges and fallback reset are not included' in e.ctx.calls[-1][0]
+    assert 'Pre-start snapshot' not in e.responsibilities.desk(e.store.get_session(KEY))
     finish(e)
     assert balance(e,rid)==29
     assert e.store.get_wake(rid).fires==1

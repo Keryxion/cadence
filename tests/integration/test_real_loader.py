@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
+from schema_contracts import assert_action_schema
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -100,16 +101,28 @@ def test_real_loader_worker_registration_and_same_session_silence(tmp_path, monk
             source=NS(platform=NS(value='telegram'),chat_type='dm',chat_id='fixture',message_id='owner-1',is_bot=False)))
         full_schema = sys.modules[loaded.module.__name__+'.cadence.responsibilities'].TRIGGER_SCHEMA
         assert full_schema['name']=='trigger' and full_schema['description']
-        for shape in full_schema['parameters']['oneOf']:
-            assert not {'target','session','chat','platform','model'} & set(shape['properties'])
+        assert not {'target','session','chat','platform','model'} & set(full_schema['parameters']['properties'])
         # The real loader must have put a valid definition into Hermes' global ToolRegistry.
         from tools.registry import registry as hermes_registry
         time_schema, = hermes_registry.get_definitions({'get_time'}, quiet=True)
         assert time_schema['function']['name'] == 'get_time'
         result = json.loads(hermes_registry.dispatch('get_time', {'timezone':'UTC'}))
         assert result['utc'] == result['local'].replace('+00:00', 'Z')
-        definition = hermes_registry.get_definitions({'trigger'}, quiet=True)[0]['function']
-        assert definition['parameters']['oneOf']
+        from tools.schema_sanitizer import sanitize_tool_schemas
+        definitions = sanitize_tool_schemas(hermes_registry.get_definitions({'responsibility', 'trigger'}, quiet=True))
+        for definition in definitions:
+            function = definition['function']
+            assert_action_schema(function['name'], function['parameters'])
+        # Follow the real discovery path as well as the registry. Old supported
+        # loaders without tool search still exercise provider normalization above.
+        if importlib.util.find_spec('tools.tool_search'):
+            from tools.tool_search import dispatch_tool_describe
+            with monkeypatch.context() as guard:
+                guard.setattr(socket, 'socket', lambda *a, **k: pytest.fail('discovery attempted a socket'))
+                described = json.loads(dispatch_tool_describe(
+                    {'names': ['responsibility', 'trigger']}, current_tool_defs=definitions))
+            for name in ('responsibility', 'trigger'):
+                assert_action_schema(name, described['tools'][name]['parameters'])
         clock.advance(60)
         engine.tick()
         assert len(calls) == 1 and calls[0]['session_key'] == key

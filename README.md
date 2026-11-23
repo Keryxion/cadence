@@ -168,7 +168,7 @@ observations, not a provider invoice.
 ## Development
 
 ```bash
-python -m pip install pytest pyyaml croniter psutil
+python -m pip install pytest pyyaml croniter psutil jsonschema
 python -m pytest -q
 ```
 
