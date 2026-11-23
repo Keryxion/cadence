@@ -40,10 +40,13 @@ bypass any limit. The owner is told when the agent takes on a responsibility,
 what it owns, and how to stop it. Where owner approval is required, creation is
 a proposal and no work starts until approval.
 
-Creating an active responsibility immediately enables automatic scheduling to
-meet its minimum checks per 24-hour period. No explicit trigger or recurring
-schedule is needed to start that scheduling. A minimum of one check per 24 hours
-is sufficient for an instruction such as "check on this daily." The agent can
+Creating an active responsibility immediately enables its automatic minimum
+backstop. The agent should use an explicit trigger to express the intended next
+check time. For "check on this daily," a minimum of one check per 24 hours is
+appropriate, alongside a trigger for a useful time such as 9 a.m. in the owner's
+timezone. The minimum provides a fallback if the agent forgets to schedule the
+next check; the fallback turn prompts it to review the responsibility and fix
+the next scheduled time. The agent can
 also create supporting wakes and watchers during a responsibility check,
 within the owner's active-item and per-turn child
 limits. A standing responsibility does not accumulate wake-chain depth merely
@@ -55,7 +58,7 @@ rules; it cannot evade limits through repeated re-arming.
 Each responsibility has a minimum and maximum number of checks per 24-hour
 period, set at creation within the owner's limits. References to a day or daily
 limits in this specification mean that 24-hour accounting period. The minimum
-is at least one and cannot exceed the maximum. Automatic minimum scheduling
+is at least one and cannot exceed the maximum. The automatic minimum backstop
 begins as soon as the responsibility becomes active, including after approval
 when creation requires it; it does not wait for the agent to create a trigger.
 The supported maximum includes at least 30 checks per day when the owner
@@ -73,10 +76,13 @@ next automatic opportunity from the time remaining in the day and the remaining
 minimum wakeups. As triggered checks start, the backstop adapts to the reduced
 number still needed. It is not a fixed-interval heartbeat. Pending triggers do
 not satisfy the minimum or stand in for checks that have started.
+The agent uses a backstop turn to do any useful work due and ensure that the
+next explicit trigger is set appropriately. Meeting the minimum alone does not
+establish the intended time of day for future checks.
 
 An initial check time may be supplied at creation. Without one, Cadence arranges
 an initial opportunity without requiring a separate schedule. After a check,
-the agent can use `trigger` to arrange the next useful opportunity. The adaptive
+the agent should use `trigger` to arrange the next useful opportunity. The adaptive
 backstop operates alongside those triggers, within the daily maximum.
 
 A due time is an opportunity, not a delivery guarantee. Execution tokens,
@@ -273,11 +279,16 @@ interval constraint to a responsibility's daily limits and adaptive backstop.
 ## Acceptance cases
 
 - Create, inspect, edit and delete a responsibility without supplying a recurring
-  trigger. As soon as it is active, automatic scheduling works toward its minimum
-  checks per 24-hour period. For "check on this daily," a minimum of one is valid
-  and requires no explicit trigger. Its charter and notes survive compaction,
+  trigger. As soon as it is active, the automatic minimum backstop applies.
+  Its charter and notes survive compaction,
   a new session in the same conversation and a restart. Owner removal or agent
   completion ends it visibly.
+- For daily work intended at 9 a.m., set a minimum of one check per 24 hours
+  and an explicit trigger for 9 a.m. in the owner's timezone. If the agent forgets
+  to arrange the next check and the minimum would otherwise go unmet, the backstop
+  prompts a check that reviews the work and fixes the next scheduled time.
+  A fallback check counts toward the daily limits but does not replace the
+  intended schedule for future checks.
 - Support both owner-requested and agent-created responsibilities, prioritize
   the former, and require approval before running a proposed responsibility.
 - Set a minimum and a permitted maximum of 30 checks per day at creation. Reject
