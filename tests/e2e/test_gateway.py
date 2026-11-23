@@ -278,11 +278,13 @@ def test_restart_with_pending_wake(make_rig):
                    "crashed wake recovers as interrupted", 30)
     rig.tick_barrier(seconds=20)
     assert row["attempt"] == 1 and len(rig.director.wake_starts) == 2
-    # Hermes may replay at the model (NousResearch/hermes-agent#137358).
-    # cadence must silence the turn without adopting/delivering the occurrence.
+    # Hermes may queue a native auto-resume (NousResearch/hermes-agent#137358).
+    # Cadence blocks the stale envelope before another model call or delivery.
     assert not rig.new_visible(visible_before), "crash-resumed turn emitted visible text"
     assert rig.occurrence(second)["delivered"] == 0
-    assert next(w for w in rig.rows("wakes") if w["id"] == second)["status_reason"] == "resumed_after_restart"
+    recovered=next(w for w in rig.rows('wakes') if w['id']==second)
+    assert recovered['status_reason']=='interrupted:restart'
+    assert recovered['model_turns']==1  # The interrupted turn is never replayed into another model call.
     assert sum("WAKE-DELIVERED" in t for t in rig.texts()) == 1
 
 

@@ -34,7 +34,7 @@ def handle(raw, runtime):
             return 'Cadence: ' + json.dumps({'scheduler':e.status(), 'execution': manager.budgets.available(*manager.global_scope()),
                 'notification_tokens': manager.notification_balance(), 'enabled':session.enabled,
                 'settings': e.settings_notice(), 'injection_allowed':e.injection_allowed(),
-                'consent_help':None if e.injection_allowed() else 'Enable gateway injection in owner configuration'}, ensure_ascii=False) + '\n' + manager.desk(session) + ('' if e.injection_allowed() else '\nplugins:\n  entries:\n    cadence:\n      allow_gateway_injection: true')
+                'consent_help':None if e.injection_allowed() else 'Enable gateway injection in owner configuration'}, ensure_ascii=False) + '\n' + manager.desk(session) + ('\n'+e.settings_notice() if e.settings_notice() else '') + ('' if e.injection_allowed() else '\nplugins:\n  entries:\n    cadence:\n      allow_gateway_injection: true')
         if action == 'name': return runtime.request({'action':'rename','name':rest})
         if action in {'responsibility','trigger'}:
             try: args = json.loads(rest)
