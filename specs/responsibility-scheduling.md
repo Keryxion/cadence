@@ -2,207 +2,316 @@
 
 ## Purpose
 
-Cadence gives an agent time in its own conversation to work on standing
-responsibilities and to react to time or events. The monolithic `pulse` tool is
-retired. The `responsibility` tool assigns and manages standing responsibilities and their general
-charters. The separate `trigger` tool schedules a responsibility's next run by
-time or activates it based on an event. A short-term continuation is separate
-from both. Tool
-schemas and detailed trigger semantics remain to be specified.
+Cadence gives an agent time in its own conversation to own standing work,
+respond to events, follow a question, or think something through without waiting
+for another message. Every wake is a normal turn on that conversation's model,
+with its tools and memory. There are no hidden side models deciding what the
+agent should do.
 
-This contract supersedes the role and agent-tool portions of
-[v0.3 agency](v0.3-AGENCY.md) and the `pulse` interface in older specs where
-they conflict. Those documents describe earlier designs; this spec does not
-claim that the new interface is implemented.
+The `responsibility` tool manages standing charters and their working notes.
+The separate `trigger` tool schedules the next run by time or activates work
+from an event. `follow_up` provides a short continuation of work already underway.
+`request` handles conversation-to-conversation communication; it does not
+schedule work in another conversation directly.
+
+This specification describes the required behavior at merge. Its acceptance
+cases are requirements for that behavior.
 
 ## Responsibilities
 
-A responsibility is a standing responsibility in the conversation, with a title, general
-charter and persistent working notes. It survives a new session in that
-conversation and lasts until the owner removes it or the agent finishes it.
-The `responsibility` tool can assign, inspect, change and delete responsibilities; the owner can
-stop a responsibility, and the agent can finish it. Responsibilities may be requested by the owner
-or created proactively by the agent; both are welcome. Owner-requested responsibilities
-have higher priority than agent-created responsibilities. How that priority affects
-scheduling, contention and resource allocation remains open; it does not
-eliminate agent-created responsibilities. Managing a responsibility does not require creating a
-trigger or specifying a recurring schedule.
+A responsibility has a title, a general charter describing what it owns and
+what good looks like, and persistent working notes. The agent can inspect and
+refine its charter, record progress, and carry findings forward between checks.
+A responsibility survives compaction, a new session in the same conversation,
+and gateway restarts. It has no automatic lifetime expiry: it lasts until the
+owner removes it or the agent finishes it and records why.
 
-Each responsibility has a minimum and a maximum number of checks per day, set
-at creation within the owner's limits; the minimum cannot exceed the maximum.
-The supported maximum includes at least
-30 checks per day when the owner permits it. These counts apply to full model
-turns, not notifications. The minimum provides an adaptive heartbeat and backstop:
-if triggers have not produced enough runs, Cadence calculates the next automatic
-check from the time remaining in the day and the remaining minimum wakeups, so
-the responsibility is not neglected. This is not a fixed heartbeat or a delivery
-guarantee: the global execution bucket, the responsibility's own bucket, busy or
-offline conversations, consent, or the owner's cost limit can prevent the minimum
-from being met. A missed minimum is visible to the owner.
-The maximum is an execution limit: once spent,
-the responsibility rests until the next daily period. The owner can change the
-minimum and maximum; the agent cannot widen the owner's limits.
+The `responsibility` tool can create, inspect, edit and delete responsibilities,
+record check results and update working notes. The owner can stop any
+responsibility. Listing returns compact current entries with active work first,
+next-check timestamps, latest results and hold reasons; detailed inspection also
+provides full records and finished history.
 
-An initial check time may be supplied when adding a responsibility. Without one, Cadence
-arranges an initial opportunity without requiring a separate schedule. After a
-check, the agent can use `trigger` to schedule a useful next opportunity by time
-or activate one based on an event. Cadence's adaptive minimum backstop operates
-alongside triggers, within the maximum.
-A due time is an opportunity, not a delivery guarantee: a busy conversation,
-unavailability, consent, the execution bucket or the owner's cost limit can delay
-or prevent a turn.
-The agent can do useful work silently and keep its notes for the next check.
+Responsibilities may be requested by the owner or created proactively by the
+agent; both are welcome. Owner-requested responsibilities have higher priority.
+The priority policy for scheduling, contention and resource allocation is not
+prescribed here. Priority does not exclude agent-created responsibilities or
+bypass any limit. The owner is told when the agent takes on a responsibility,
+what it owns, and how to stop it. Where owner approval is required, creation is
+a proposal and no work starts until approval.
 
-## Checks and notifications
+Managing a responsibility does not require creating a trigger or specifying a
+recurring schedule. The agent can create supporting wakes and watchers during
+a responsibility check, within the owner's active-item and per-turn child
+limits. A standing responsibility does not accumulate wake-chain depth merely
+by continuing to exist. Supporting work follows its own consent and lifecycle
+rules; it cannot evade limits through repeated re-arming.
 
-A check is a model turn that counts toward the responsibility's daily minimum and
-maximum. A notification is a
-message delivered to the owner. They are not the same: a check can make silent
-progress or find nothing to report, and does not spend a notification token just
-for running. The agent notifies only when useful. A notification hold does not
-stop a responsibility check; the agent retains anything worth reporting in its notes.
+## Daily checks and the adaptive minimum
 
-The global agent-turn start token bucket limits execution independently of the
-overall user-interruption notification bucket. Every agent-initiated turn,
-including a silent responsibility check, consumes an execution token when it
-starts. If no execution token is available, triggered work is delayed until one
-is available, not discarded; it remains subject to the other applicable limits
-and guardrails when it can run. The notification bucket governs interruptions
-independently: a turn does not consume a notification token merely by starting.
-Keep the owner's cost limit distinct from both buckets: it limits spend on
-agent-initiated work. Neither bucket changes a responsibility's daily check limits.
+Each responsibility has a minimum and maximum number of checks per day, set at
+creation within the owner's limits. The minimum cannot exceed the maximum.
+The supported maximum includes at least 30 checks per day when the owner
+permits it. The owner can change these limits; the agent can tighten its own
+limits but cannot widen the owner's.
 
-Each responsibility has its own token bucket, separate from both global buckets.
-Its burst capacity and ongoing refill rate are configured when the responsibility
-is created, within the owner's limits. The bucket starts full and supports a large
-initial burst capacity, allowing concentrated initial work before the ongoing refill
-rate paces subsequent runs. Refill cannot raise the balance above the configured
-capacity. No numeric capacity or refill defaults are prescribed here.
+A check is a full model turn for the responsibility. It counts toward both the
+minimum and maximum when it starts, whether it makes silent progress, reports
+a finding, finds nothing to do, or subsequently fails. Pending or deferred work
+is not a check and does not count toward either daily limit. Once the maximum
+is reached, further checks wait until the next daily period.
+
+The minimum provides an adaptive automatic backstop. Cadence calculates the
+next automatic opportunity from the time remaining in the day and the remaining
+minimum wakeups. As triggered checks start, the backstop adapts to the reduced
+number still needed. It is not a fixed-interval heartbeat. Pending triggers do
+not satisfy the minimum or stand in for checks that have started.
+
+An initial check time may be supplied at creation. Without one, Cadence arranges
+an initial opportunity without requiring a separate schedule. After a check,
+the agent can use `trigger` to arrange the next useful opportunity. The adaptive
+backstop operates alongside those triggers, within the daily maximum.
+
+A due time is an opportunity, not a delivery guarantee. Execution tokens,
+responsibility tokens, busy or offline conversations, consent, emergency stop,
+provider availability and the owner's cost limit can delay or prevent a check.
+A missed minimum is visible to the owner with the reason; it never authorizes
+bypassing a constraint or a burst of overdue checks.
+
+## Execution, responsibility and notification budgets
+
+Cadence uses three independent token-bucket controls:
+
+| Bucket | Scope | Token consumed |
+|---|---|---|
+| Execution | Global agent-turn starts | One for every agent-initiated turn when it starts, including silent checks and continuations |
+| Responsibility | One responsibility | One when a check for that responsibility starts |
+| Notification | Global user interruptions | For a delivered interruption, independently of turn execution |
 
 A responsibility check starts only when both its own bucket and the global
-execution bucket have a token and the other applicable limits and guardrails allow
-it. On start it consumes one token from each bucket and counts toward both daily
-limits; a deferred check consumes neither token and does not count toward either
-limit. If either token is unavailable, eligible work is delayed, not discarded,
-and remains subject to all limits and guardrails when it can run. The adaptive
-backstop accounts for checks that have started, not pending work. The responsibility
-bucket does not replace or change the daily minimum or maximum. Notification
-capacity and refill details remain unspecified.
+execution bucket have a token and all other limits and guardrails permit it.
+Starting consumes one token from each execution bucket and increments the daily
+check count. Admission must reserve both tokens together: failure to obtain one
+must not spend the other. Pending, queued or refused injections consume neither
+execution token and do not increment daily check counts.
 
-## Simplify the controls
+If either execution bucket lacks a token, eligible triggered work remains
+pending until capacity is available, rather than being discarded. On retry,
+Cadence evaluates the daily maximum and every other applicable guardrail again.
+Exhausting one responsibility's bucket does not prevent another responsibility
+with tokens from using available global execution capacity. Deferred work can
+still end through cancellation, expiry or another lifecycle rule; its disposition
+must be visible.
 
-For responsibility checks, the daily minimum and maximum and triggers replace the
-stack of recurring-trigger interval floors, pacing bounds, wake spacing and
-automatic no-change slowdown or pause. Do not require the owner or agent to
-configure an interval alongside the daily limits. Repeated quiet checks do not by
-themselves stop a standing responsibility; the agent can decide to check less often.
-This does not remove the execution, responsibility or notification buckets or the owner's cost limit, and
-does not bypass consent, session isolation, one turn at a time in a busy chat,
-or delivery and error handling. Limits specific to other wake or watcher
-kinds are not silently removed by this responsibility contract.
+Each responsibility's burst capacity and ongoing refill rate are configured at
+creation within the owner's limits. Its bucket starts full and supports a large
+initial capacity for concentrated work before refill paces subsequent checks.
+Refill never raises the balance above capacity. No numeric bucket capacities or
+refill defaults are prescribed here.
 
-## Triggers, other time and events
+The owner's cost limit independently bounds spend on agent-initiated work. It
+is distinct from all three buckets and from daily responsibility limits. The
+agent cannot widen it. Each started turn and its available usage and cost data
+are recorded, including silent work.
 
-The separate `trigger` tool schedules the next run for a responsibility by time
-or activates it based on an event. Event sources include processes,
-the web and WebSocket connections. This supports proactive response to events,
-not just periodic polling. Triggered runs count toward both the daily minimum and
-maximum and are subject to both execution and responsibility buckets and the same
-consent, cost and conversation boundaries. An unavailable execution or
-responsibility token delays triggered work rather than discarding it; a delayed
-run counts when it starts, not when triggered.
-The minimum does not bypass those boundaries. A scheduled or activated run is
-an opportunity, not a delivery guarantee. The details of
-sources and WebSocket behavior are not specified here.
+## Silent work and notifications
 
-Scheduling remains available for time-based wakes and reminders, deterministic
-watchers, and the existing own-time behavior. Responsibility management does not absorb
-those capabilities. Their existing purpose, owner-requested reminder treatment,
-consent and session boundaries remain intact when `pulse` is retired; the exact
-replacement interface for other work is not fixed here. Conversation-to-conversation
-`request` remains separate and does not schedule another chat directly.
+A check can research, write files, maintain notes or prepare something without
+sending a message. Silent progress is useful work and consumes execution capacity.
+It does not consume a notification token merely by running.
 
-`follow_up` remains the separate short-term continuation facility. It gives
-the agent another opportunity to act on the current conversation, including
-intervening messages; it is not a responsibility check or a notification. Its
-turns are subject to the global execution bucket; its existing eligibility,
-bounds, cancellation and lifecycle are otherwise unchanged by this spec.
+The agent records a structured result with an outcome, a summary, updated notes
+and an explicit notification decision. Outcomes distinguish useful progress,
+nothing to do, completion, blockage and a need for owner attention. Completion
+ends the responsibility with a reason; silence or a quiet check does not.
+Results must belong to the check running in that conversation, and failed turns
+must not commit an uncompleted notes or scheduling update as successful work.
 
-## Transition
+The agent notifies only when useful, with a short message leading with the
+result or question. It must not guilt, pester or repeatedly repeat itself.
+An empty notification bucket or an unanswered-message hold does not prevent an
+otherwise eligible responsibility check. The check runs silently and retains
+anything worth reporting in its notes. Daily check allowances never authorize
+an interruption. Human activity clears the unanswered hold; agent turns and bot
+messages do not count as owner replies.
 
-Today `pulse` creates a role as an `every`, `cron` or `self` wake; the
-configured role maximum defaults to 12. Role dispatches count against that
-budget, while delivered notifications spend from the per-chat interruption
-bucket. For recurring role work, an empty bucket holds messages rather than
-the check. Other wake kinds can instead be held or dropped by that bucket.
-Interval floors, per-chat wake spacing and the idle governor currently also
-influence when a responsibility runs. The new contract changes those responsibility-specific
-controls, not the present behavior of every wake kind.
+A silent check suppresses its final reply through the gateway's structured
+silence handling. The agent does not type a sentinel or emit commentary alongside
+tool calls that would expose a supposedly silent check. Duplicate summaries do
+not become repeated notifications. Requested short continuations do not consume
+notification tokens merely by resuming work.
 
-Retiring `pulse` must not silently discard active roles, their charters, notes,
-budgets or ownership, or existing reminders, wakes and watchers. Carry them
-forward with their intended behavior, or make any item that cannot be carried
-forward visible to its owner rather than silently losing or duplicating it.
-Existing roles using fixed rhythms need an explicit transition to triggers and
-the adaptive backstop under their daily minimum and maximum; a saved rhythm must not become an additional
-mandatory interval constraint on the new responsibility model. Preserve pending work and
-avoid duplicate checks during the cutover. Update agent guidance, commands and
-consumers with the new interface in the same rollout.
+Responsibility pacing is controlled by triggers, the adaptive daily minimum,
+the daily maximum and the two execution buckets. No additional recurring
+interval floor, pacing bound, wake spacing or automatic no-change slowdown is
+required for a responsibility. Repeated quiet checks do not automatically pause
+it; the agent can choose a later next check. Error backoff and safety stops still
+apply.
 
-The open rename issue #10 describes renaming the monolithic tool to `cadence`.
-This design replaces that tool rather than merely renaming it; it names
-`responsibility` and `trigger` but does not settle slash-command naming or a
-compatibility alias.
+## Triggers and supporting work
+
+The `trigger` tool schedules a responsibility's next run by time or activates it
+from an event. Sources include processes, the web and WebSocket connections.
+Their detailed source behavior and tool schemas are not prescribed here.
+Triggered checks use the same daily counts, execution buckets, cost limits,
+consent and conversation boundaries as automatic checks. A pending event or due
+time does not consume capacity or satisfy the adaptive minimum.
+
+Cadence also supports time-based wakes and reminders, deterministic watchers,
+and own time. A watcher evaluates its configured condition without a model call
+and starts a turn only when there is something to act on. Sources include files,
+processes, web resources, allowlisted read-only commands and Hermes events.
+Supporting work has its own cancellation, expiry, active-item and error limits;
+responsibility daily counts apply only when a responsibility check starts.
+Every agent-initiated turn consumes a global execution token, including work
+started by a watcher or own-time opportunity.
+
+Owner-requested reminders are identified as such and are not muted as unanswered
+agent outreach. Their receipts distinguish confirmed scheduling from proposals
+and state timing, holds and expiry truthfully. A host queue receipt proves queue
+acceptance, not that a turn started or a message was delivered.
+
+Own time is settings-controlled and off by default. When enabled, it offers the
+agent time to reflect, consolidate memory, work on responsibilities, follow a
+question or rest. Its timing is cache-aware. The owner controls enabling and
+stopping it; the agent may adjust timing within the owner's bounds. It has no
+automatic lifetime expiry. A silent useful turn is recorded as progress.
+
+`request` is a separate communication facility. Scheduled work always belongs
+to the conversation that armed it and fires there. Asking another conversation
+to take something on does not itself create a schedule there: the recipient
+must accept and arrange its own work with its own tools and permissions.
+
+## Short continuations
+
+`follow_up` gives the agent one further opportunity to act on the current
+conversation, including any intervening messages. It is neither a responsibility
+check nor a notification. Only a verified owner turn or one of its continuations
+may arm it. Each call creates an independent timer; replacing one requires
+cancelling its ID explicitly.
+
+The tool accepts a relative delay from 15 seconds through 15 minutes inclusive,
+or a timer ID to cancel. Arming returns an ID and an absolute UTC due timestamp.
+Cancellation is scoped to this conversation, is safe to repeat, and reports if
+the timer already started. Timers retain their originating chat, session and
+turn identity, survive gateway restarts, and are orphaned by a new session so
+that they cannot resume work there.
+
+On firing, the continuation receives the scheduled and current timestamps and
+the current conversation history. It may arm another continuation. If the chat
+already has a turn underway when the timer becomes due, the timer is consumed
+without queuing another turn. Otherwise its start requires a global execution
+token and the applicable consent, availability and cost checks. It does not
+consume a responsibility token or count toward a responsibility's daily limits.
+
+## Conversation, consent and delivery boundaries
+
+- Work runs in the messaging-gateway conversation that armed it, on that
+  conversation's model and tools. Scheduling and responsibility tools have no
+  destination parameter. IDs from another conversation cannot reveal or change
+  its records. Profile state and configuration are isolated.
+- Arming requires plugin enablement, gateway injection consent and session
+  consent. Agent creation policy can forbid creation or require owner approval.
+  Tools report refusals and clamps and cannot write settings or grant consent.
+- Messaging DMs are supported. Recognized gateway groups require the owner to
+  disable the DM-only restriction. Unknown chat types and CLI, TUI, Desktop,
+  API-server and cron arming are refused with a clear reason.
+- Emergency stop, provider unavailability and a busy conversation block starts
+  before a model call. There is at most one scheduled turn in flight per
+  conversation. A responsibility's new session binding follows that conversation;
+  it never retargets another chat.
+- Deadlines, triggers, pending occurrences, notes and accounting are durable.
+  Restarts, sleep, clock changes and competing scheduler processes must not
+  duplicate a check. Missed recurring opportunities coalesce instead of replaying
+  a burst. One-shots outside their catch-up window are visibly missed.
+- Claims and retries distinguish queued, started and completed work. A started
+  but interrupted turn is recorded rather than blindly rerun. Injection failures
+  and provider failures use bounded retries and backoff; persistent errors are
+  visible and can pause work. Scheduler status exposes stalled or unavailable
+  execution and its reason.
+- Watchers honor read restrictions and command allowlists, use bounded payloads
+  and timeouts, and treat source data as untrusted. File access is checked at
+  creation and use, including rotation. Commands use argv without a shell and a
+  sanitized environment. Web access blocks cloud metadata and blocks private
+  addresses unless explicitly permitted, checking redirects and connect targets.
+  Untrusted payloads cannot grant consent or create unbounded recurring work.
+- Notes, summaries, payloads and accounting stay in the owning profile's local
+  state. They may contain plaintext; receipts and guidance disclose that model
+  turns are billed and configured probes access their sources. Cadence adds no
+  telemetry.
+
+## Visibility and owner control
+
+Responsibility and own-time turns open with a compact desk view, also available
+to the owner. It shows:
+
+- Each responsibility's title, charter context, latest work, next opportunity,
+  daily checks against its minimum and maximum, and any hold or missed minimum.
+- Other active wakes and watchers and their next due opportunity.
+- Execution and notification holds, responsibility capacity, the owner's last
+  message, unanswered messages, and available usage and cost totals.
+
+The owner can inspect, stop or remove work and see why it is waiting. Agent
+receipts, commands, bundled guidance and tool descriptions describe the same
+responsibility and trigger model and the same limits. Exact command spelling
+and numeric bucket defaults are not prescribed here.
+
+All active scheduled work, its charters, notes, ownership, limits and pending
+occurrences must be accounted for when this model is installed. Supported work
+is available without duplicate checks. Anything that cannot be represented is
+visible to its owner with an explanation instead of being silently lost. Saved
+recurring timing is expressed through triggers; it does not add a mandatory
+interval constraint to a responsibility's daily limits and adaptive backstop.
 
 ## Acceptance cases
 
-- Add, inspect, edit and delete a responsibility without supplying a recurring trigger;
-  its charter and notes remain available across a new session.
-- Set a minimum and a permitted maximum of 30 checks per day at creation; reject
-  a minimum above the maximum. Optionally set an initial check; without an
-  initial time the responsibility still gets an initial opportunity. The maximum
-  prevents further checks until the next daily period.
-- With too few triggered runs, Cadence calculates the next automatic check using
-  the time left in the day and remaining minimum wakeups. As triggered checks
-  occur, they count toward both limits and the backstop adapts to the remaining
-  minimum; it is not a fixed-interval heartbeat.
-- If either execution or responsibility bucket, busy, offline, consent or cost constraints prevent the minimum from being
-  met, the missed minimum is visible to the owner; no constraint is bypassed.
-- Owner-requested and agent-created responsibilities are both supported; the
-  former have higher priority, without prescribing a contention policy.
-- Schedule the next run with `trigger` by time or activate it from an event source, including
-  processes, the web or WebSocket connections, so the agent can respond
-  proactively within the responsibility's daily maximum and safety boundaries.
-- Every agent-initiated turn, including a silent check, consumes a global execution
-  token on start. A silent responsibility check counts toward its daily limits but
-  spends no notification token. With an empty notification bucket and an available
-  execution token, a responsibility can still check silently; a useful message is
-  held and the finding remains available for later reporting.
-- With no execution token, triggered work remains pending rather than being
-  discarded and is delayed until a token is available; it starts only if the
-  applicable daily maximum, consent, busy state and cost limits also allow it.
-  The delayed check counts when started, and the adaptive backstop accounts for
-  started checks rather than treating a pending trigger as a check.
-- At creation, configure each responsibility's own burst capacity and refill rate
-  without requiring any prescribed numeric defaults. A full, sufficiently large
-  initial bucket permits concentrated checks while global capacity, daily maximum
-  and other guardrails permit; after its tokens are spent, later checks wait for
-  refill, which never raises the balance above capacity.
-- Exhaust one responsibility's bucket while another has tokens: the first's
-  eligible work remains pending without consuming a global token or counting as a
-  check, while the second can start if global capacity and other limits permit.
-  Once refilled, the first can start only when both tokens and all guardrails allow;
-  it then consumes one token from each bucket and counts against both daily limits.
-- With an empty responsibility bucket, eligible work for that responsibility is
-  deferred until a token is available, not discarded. A started check consumes
-  both its responsibility token and a global execution token; its daily limits
-  and the adaptive backstop count starts, not pending work. The independent
-  notification bucket and consent, busy state and cost guardrails still apply.
-- Repeated `no_change` checks alone do not automatically pause a responsibility or impose
-  another interval; the agent can choose a later check itself.
-- A due responsibility check respects consent, conversation busy state and the owner's
-  cost limit. Daily check limits do not authorize a notification or bypass them.
-- Existing roles and other active scheduled work remain visible and are not
-  silently lost or duplicated at transition. Existing reminders and watchers
-  retain their purpose and guardrails, subject to the global execution bucket;
-  `follow_up` remains separate and is also subject to that bucket.
+- Create, inspect, edit and delete a responsibility without supplying a recurring
+  trigger. Its charter and notes survive compaction, a new session in the same
+  conversation and a restart. Owner removal or agent completion ends it visibly.
+- Support both owner-requested and agent-created responsibilities, prioritize
+  the former, and require approval before running a proposed responsibility.
+- Set a minimum and a permitted maximum of 30 checks per day at creation. Reject
+  a minimum above the maximum and agent attempts to widen owner limits. Honor an
+  optional initial check time and arrange an initial opportunity when omitted.
+- With too few triggered starts, calculate the next automatic check from the
+  time left in the day and remaining minimum wakeups. Recalculate as checks start;
+  pending work does not satisfy the minimum. The maximum blocks further starts
+  until the next daily period.
+- Make a missed minimum and its cause visible when tokens, consent, cost,
+  availability or busy state prevent it. Do not bypass a constraint to catch up.
+- Schedule the next check by time or activate it from process, web or WebSocket
+  events. Each started check counts toward both daily limits.
+- Every agent-initiated turn, including a silent check, own-time turn, watcher
+  turn or continuation, consumes a global execution token on start. A pending
+  injection consumes none. A responsibility check additionally consumes one
+  responsibility token, with both tokens admitted together.
+- Exhaust either execution bucket: eligible triggered work stays pending and
+  consumes neither token nor daily check allowance. When capacity returns, start
+  only if both tokens and all other guardrails permit it.
+- Exhaust one responsibility's bucket while another has tokens: the second can
+  still start within global capacity. Configure a large initial burst within
+  owner limits; subsequent refill never exceeds capacity.
+- Exhaust notification capacity or reach the unanswered hold while execution
+  capacity is available: responsibility checks still run silently, record useful
+  progress and retain findings. No notification token is spent just for running.
+- Record check outcomes and notes, suppress silent final replies, and avoid
+  duplicate notifications. Quiet checks alone neither end a responsibility nor
+  impose another interval or automatic pause.
+- Show the same compact desk information to the agent and owner, including next
+  opportunities, daily counts, holds, missed minimums and available costs.
+- Create supporting work within child and active-item limits. Deterministic
+  watchers make no model call for unchanged sources. Own time is off by default
+  and, when enabled, permits useful silent work within execution and cost limits.
+- Arm and cancel independent short continuations only from a verified owner turn
+  or its continuation. Enforce the delay bounds, preserve timers through restart,
+  orphan them on a new session, consume a due timer if the chat is busy, and
+  include intervening messages when a continuation runs.
+- Refuse missing consent, prohibited platforms, cross-conversation IDs and
+  attempts to choose a scheduling destination. Respect emergency stop and allow
+  at most one scheduled turn in flight in a conversation.
+- Restart or run competing schedulers without duplicate starts or spending tokens
+  on unstarted work. Coalesce missed recurring opportunities, expose missed
+  one-shots and interrupted turns, and apply bounded error backoff.
+- Keep active work, notes, limits, ownership and pending occurrences accounted
+  for on installation, without silent loss or duplicate checks. Show any item
+  that cannot be represented and its reason to the owner.
