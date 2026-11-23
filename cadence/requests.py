@@ -363,11 +363,13 @@ class Requests:
                 key = self.engine.tool.session_key_fn()
                 text = kw.get('user_message', '')
                 self.origins.pop(sid, None)
-                self.turns.pop(sid, None)
+                previous=self.turns.pop(sid,None)
                 if not isinstance(text, str) or not text.startswith(PREFIX):
                     if sid and tid: self.origins[sid] = (key, tid)
                     return None
                 def refuse(reason):
+                    if previous and previous[2]==tid:
+                        self.turns[sid]=previous
                     # Say why in the log: a silently dropped turn is otherwise undiagnosable.
                     LOG.info('cadence request envelope refused in %s: %s', key, reason)
                     return {'action': 'block', 'message': '[SILENT]'}

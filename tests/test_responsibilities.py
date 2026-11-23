@@ -420,3 +420,51 @@ def test_attached_trigger_inherits_updated_charter_without_stale_instruction(mod
     assert 'Own the revised release plan.' in text
     assert 'Own release readiness.' not in text
     finish(e)
+
+
+def test_provider_recovery_trial_can_start_and_clear_backoff(modern):
+    e=modern;rid=create(e);e.tick();start(e)
+    e.provider_failure('quota')
+    e.intake.on_session_end(session_id='sid',turn_id='turn',failed=True)
+    trigger(e,rid,when={'kind':'at','at':'in 1m'})
+    e.clock.advance(60);e.tick()
+    assert len(e.ctx.calls)==1
+    e.clock.advance(240);e.tick()
+    assert len(e.ctx.calls)==2
+    start(e)
+    assert e.store.get_wake(rid).fires==2
+    e.intake.post_api_request(session_id='sid',turn_id='turn',usage={'prompt_tokens':1,'completion_tokens':1})
+    assert e.store.get_meta('provider_health')==''
+
+
+def test_native_tool_metadata_is_separate_from_validated_arguments(modern):
+    e=modern
+    result=e.responsibilities.handle('responsibility',{'action':'create','title':'Work','charter':'Own it.',
+        'checks':{'min_per_24h':1,'budget_per_24h':30}},session_id='sid',task_id='native-task',tool_call_id='call-1')
+    assert result.get('ok'),result
+    e.tick();start(e)
+    result=e.responsibilities.handle('respond',{'outcome':'progress','notify':False},session_id='sid',task_id='native-task')
+    assert result.get('ok'),result
+
+
+def test_requested_continuation_is_not_silenced_by_empty_notification_bucket(modern):
+    from test_follow_up import owner,call as continuation,start as start_continuation
+    e=modern;e.policy=replace(e.policy,interruption_capacity=0,interruption_initial=0)
+    owner(e,'owner-turn','Continue this work')
+    tid=continuation(e,{'at':'15s'})['id']
+    e.intake.on_session_end(session_id='sid',turn_id='owner-turn')
+    e.clock.advance(15);e.tick();start_continuation(e)
+    assert e.intake.transform_llm_output(session_id='sid',turn_id='turn',response_text='Continuation result') is None
+    e.intake.on_session_end(session_id='sid',turn_id='turn')
+    assert e.store.list_occurrences(tid)[0].delivered
+
+
+def test_pausing_queued_responsibility_releases_its_reserved_turn(modern):
+    e=modern;e.policy=replace(e.policy,execution_capacity=1)
+    rid=create(e)
+    tid=trigger(e,rid,when={'kind':'at','at':'in 1m'})
+    e.clock.advance(60);e.tick()
+    assert call(e,'responsibility',action='pause',id=rid).get('ok')
+    assert not e.store.list_occurrences(state='claimed')
+    with e.store.atomic(): assert e.responsibilities.budgets.available(*e.responsibilities.global_scope())==1
+    assert balance(e,rid)==30

@@ -11,7 +11,7 @@ class Finding(AssertionError):
     """Only a reproduced named product defect may satisfy an expected-failure gate."""
 
 
-# One Hermes tool-progress bubble for the pulse tool, nothing else.
+# One Hermes tool-progress bubble for the invoked tool, nothing else.
 PROGRESS_BUBBLE = re.compile(r"⚙️ (?:trigger|respond)(?:\.\.\.|: [^\n]*)?")
 
 
@@ -120,7 +120,7 @@ def test_silent_verdict_shows_nothing(make_rig, loud):
     shown = [t for t in rig.new_visible(before) if "Cadence:" not in t]
     if loud:
         # README "Silence covers the final reply": with tool progress on, Hermes may
-        # post its own progress bubble for the wake's pulse call (timing-dependent;
+        # post its own progress bubble for the wake's tool call (timing-dependent;
         # upstream NousResearch/hermes-agent#136825). No reply or reasoning text may show.
         shown = [t for t in shown if not PROGRESS_BUBBLE.fullmatch(t)]
     assert shown == [], shown
@@ -500,7 +500,7 @@ def test_cache_stays_in_receipt_and_wake_starts_with_metadata(make_rig):
     assert usage and all(u["prompt_tokens"] > 0 for u in usage), usage
     results = [json.loads(m["content"]) for body in requests
                for m in body["messages"] if m.get("role") == "tool"]
-    created = [r for r in results if r.get("wake", {}).get("id") == wid]
+    created = [r for r in results if r.get("id") == wid]
     assert len(created) == 1, created
     cache_lines = [line for line in created[0]["cache"].splitlines() if line.startswith("Cache:")]
     assert len(cache_lines) == 1 and len(cache_lines[0]) <= 220, created

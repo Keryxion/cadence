@@ -257,6 +257,10 @@ class Poller:
         return self.store.daily_counts(key,self.policy.resolved_timezone())
 
     def cancel_occurrences(self,wid,reason,*,preserve_started=False):
+        manager=getattr(self,'responsibilities',None)
+        wake=self.store.get_wake(wid)
+        if manager and wake and wake.managed and wake.responsibility_id and not wake.role:
+            manager.invalidate_snapshot(wid)
         for o in self.store.list_occurrences(wid):
             if reason=='paused' and o.state=='pending' and o.held_since is not None:
                 self.store.update_occurrence(wid,o.dedupe_key,'pending',error='held_paused',held_reason='held_paused')
@@ -605,6 +609,7 @@ class Poller:
     def message_hold_reason(self,w,s):
         """Agent recurring work may continue while its messages are held."""
         if getattr(self, 'responsibilities', None) and s is not None:
+            if 'continuation' in w.trigger_json or not w.role and owner_class(w) and one_shot(w): return ''
             if s.unanswered_count >= self.policy.max_unanswered and not w.owner_requested: return 'unanswered'
             return 'interruption_limit' if not self.interruption_tokens(s.session_key) else ''
         if s is None or not holds_messages(w):
@@ -738,6 +743,7 @@ class Poller:
             if not s.update_occurrence(w.id,o.dedupe_key,'pending',force_silent=False,held_reason=''): return
         with s.atomic():
             if not s.claim(w.id,o.dedupe_key,epoch=self.epoch,pid=os.getpid()): return
+            if 'bucket' in held_by: s.set_meta('not_before:'+o.id,'')
             claimed = s.get_occurrence(w.id,o.dedupe_key)
             if getattr(self, 'responsibilities', None) and not self.responsibilities.reserve(claimed):
                 s.refund(w.id,o.dedupe_key,attempt=claimed.attempt,error='execution_bucket')
@@ -804,6 +810,7 @@ class Poller:
             else: s.refund(w.id,o.dedupe_key,attempt=o.attempt,error='inject_failed')
 
     def terminal_one_shot(self,w):
+        if w.managed and w.role: return
         if not one_shot(w) or w.status!='active' or w.next_due_at is not None: return
         occurrences=[o for o in self.store.list_occurrences(w.id) if o.state!='superseded']
         if not occurrences or any(o.state in {'pending','claimed','started'} for o in occurrences): return

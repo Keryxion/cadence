@@ -207,8 +207,14 @@ class Responsibilities:
     def start(self, o):
         w = self.store.get_wake(o.wake_id)
         session = self.store.get_session(w.session_key)
-        if (not session or not session.enabled or not self.engine.policy.enabled or
-                self.engine.paused() or not self.engine.injection_allowed()): return False
+        reason,_,_=self.gate(w,o,session,starting=True)
+        if reason: return False
+        for ref in json.loads(self.store.get_meta('contributors:' + o.id) or '[]'):
+            source=self.store.get_occurrence(ref['id'],ref['key'])
+            trigger=self.store.get_wake(ref['id'])
+            if not source or source.state!='claimed' or self.gate(trigger,source,session,source_only=True)[0]:
+                self.refund_sources(o)
+                return False
         if not self.budgets.start(self.ticket(o), self.scopes(w)):
             return False
         if w.role and w.managed:
@@ -287,7 +293,7 @@ class Responsibilities:
                 self.store.set_meta('reasons:' + w.id + '/' + key, json.dumps(payload))
                 if not pending: self.store.add_occurrence(w.id, key)
 
-    def gate(self, w, o, session, *, source_only=False):
+    def gate(self, w, o, session, *, source_only=False, starting=False):
         e, now = self.engine, self.engine.clock.now()
         if w.status == 'paused': return 'paused', True, None
         if w.status != 'active': return 'inactive', False, None
@@ -309,14 +315,22 @@ class Responsibilities:
         if session.paused_until and session.paused_until > now: return 'session_paused', True, session.paused_until
         origin = w.trigger_json.get('continuation')
         if origin:
-            if session.busy_since is not None: return 'continuation_busy', False, None
+            if session.busy_since is not None and not starting: return 'continuation_busy', False, None
             if (origin.get('chat') != session.session_key or not origin.get('turn') or
                     origin.get('session') != session.current_session_id and
                     e.compression_tip(origin.get('session')) != session.current_session_id):
                 return 'continuation_context_missing', False, None
         health = json.loads(self.store.get_meta('provider_health') or '{}')
-        if health.get('until', 0) > now or health.get('trial'):
-            return 'provider_unavailable', True, health.get('until')
+        trial=health.get('trial')
+        if trial:
+            wid,key=trial.split('/',1)
+            live=self.store.get_occurrence(wid,key)
+            if not live or live.state not in {'claimed','started'}:
+                health.pop('trial',None)
+                self.store.set_meta('provider_health',json.dumps(health))
+                trial=None
+        if health.get('until',0)>now or trial and not (starting and trial==o.id):
+            return 'provider_unavailable',True,health.get('until')
         from .policy import owner_class
         if ((w.role or not owner_class(w)) and e.policy.daily_cost_limit_usd > 0 and
             self.store.agent_cost_today(w.session_key, e.policy.resolved_timezone())['cost_microusd']/1e6 >= e.policy.daily_cost_limit_usd):
@@ -330,10 +344,10 @@ class Responsibilities:
                 return ('held_interruptions',True,None) if is_watcher(w) else ('interruption_limit',False,None)
         if not_before > now and 'bucket' not in o.error:
             return 'not_before', True, not_before
-        if session.busy_since is not None: return 'busy', True, None
-        if self.store.list_occurrences(session_key=w.session_key, state='claimed') or self.store.list_occurrences(session_key=w.session_key, state='started'):
+        if session.busy_since is not None and not starting: return 'busy', True, None
+        if not starting and (self.store.list_occurrences(session_key=w.session_key, state='claimed') or self.store.list_occurrences(session_key=w.session_key, state='started')):
             return 'in_flight', True, None
-        reason, until = self.hold(w)
+        reason, until = self.hold(w,ticket=self.ticket(o) if starting else None)
         return reason, bool(reason), until
 
     def inspect(self, w):
@@ -395,9 +409,12 @@ class Responsibilities:
         if child_key: self.store.set_meta(child_key, str(children+1))
         return gate.status
 
-    def handle(self, tool, args, *, session_id='', owner=False):
+    def handle(self, tool, args, *, session_id='', owner=False, **metadata):
         schemas = {'responsibility': RESPONSIBILITY_SCHEMA, 'trigger': TRIGGER_SCHEMA, 'respond': RESPOND_SCHEMA}
         try:
+            from .intake import delegated_child
+            if delegated_child(metadata.get('platform','')):
+                raise ValueError('Cadence tools belong to the parent conversation turn.')
             validate(args, schemas[tool]['parameters'])
             self.engine.refresh()
             if tool == 'respond': return self.respond(args, session_id)
@@ -468,6 +485,10 @@ class Responsibilities:
             if w.status not in {'done', 'cancelled'}:
                 self.end(w, 'done' if action == 'finish' else 'cancelled', a.get('reason', 'removed'))
         elif action == 'pause':
+            if is_r:
+                for queued in s.list_occurrences(w.id,state='claimed'):
+                    self.refund_sources(queued)
+                    s.refund(w.id,queued.dedupe_key,attempt=queued.attempt,error='paused')
             if w.status == 'active': s.cas_wake(w.id, w.status, status='paused', status_reason='owner' if owner else 'agent')
         elif action == 'resume':
             if w.status != 'paused': raise ValueError('Only paused work can be resumed; proposals require owner approval.')
@@ -556,7 +577,8 @@ class Responsibilities:
         if adjustments: receipt += ' Adjusted: ' + json.dumps(adjustments) + '.'
         if record.get('next_due_at'): receipt += ' Next due ' + record['next_due_at'] + '.'
         return {'ok': True, 'id': w.id, 'status': w.status, 'armed': w.status == 'active',
-                'receipt': receipt, 'record': record, 'adjustments':adjustments}
+                'receipt': receipt, 'record': record, 'adjustments':adjustments,
+                'cache':self.engine.tool.cache_result(w)}
 
     def invalidate_snapshot(self, trigger_id):
         """A queued envelope must not authorize work its owner has just changed."""
@@ -590,6 +612,7 @@ class Responsibilities:
         return self.engine.tool.respond(a, f)
 
     def finished(self, w, o):
+        if w.status not in {'active','paused'}: return
         if w.role:
             if o.outcome == 'done': self.end(w, 'done', o.summary)
         elif w.kind == 'at' or o.outcome == 'done':
