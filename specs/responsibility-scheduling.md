@@ -169,8 +169,57 @@ determines when it becomes eligible to run. Creation or editing without either
 is refused. The responsibility's automatic minimum backstop does not satisfy
 this requirement for a trigger.
 
-Sources include processes, the web and WebSocket connections.
-Their detailed source behavior and tool schemas are not prescribed here.
+The following trigger types are supported for responsibility checks and
+supporting work:
+
+| Type | Explicit time or condition |
+|---|---|
+| `at` | A one-time absolute timestamp or relative delay; local time expressions use the configured timezone |
+| `every` | A recurring duration, optionally anchored to a local time such as 9 a.m. |
+| `cron` | A cron expression evaluated in the configured timezone |
+| `self` | An agent-chosen explicit next time or delay, which the agent can revise after each check |
+| `owner_silent` | A specified duration without an owner message; at most one activation per silence episode |
+| `file` | A configured file changes, or an appended line matches a specified pattern |
+| `process` | A specified process exits, with process identity checked to avoid PID-reuse mistakes |
+| `url` | A configured web response changes or matches a specified pattern |
+| `command` | A configured allowlisted read-only command changes output, succeeds, fails, or returns a structured fire decision |
+| `startup` | The next gateway process startup after arming, including startup after a host reboot |
+| `kanban_completed` | A kanban task completes, optionally filtered by task or board |
+| `kanban_blocked` | A kanban task becomes blocked, optionally filtered by task or board |
+| `kanban_worker_exited` | A kanban worker exits, optionally filtered by task or board |
+| `subagent_done` | A subagent finishes |
+| `api_error` | A provider API error event occurs, with aggregation and cooldown to avoid an error flood |
+| `reaction` | A reaction occurs in the owning conversation, optionally filtered by emoji |
+| `message_edited` | A message is edited in the owning conversation |
+| WebSocket event | A specified event condition on a configured WebSocket connection is met |
+
+Selecting a named event such as `startup` or `subagent_done` is itself an
+explicit condition; no extra timestamp is required. A source address alone is
+not a condition: a watcher must specify what activates it, either through its
+type's defined condition or an explicit match rule. `self` requires an explicit
+next time or delay; the daily minimum cannot supply an omitted trigger time.
+Detailed tool schemas and WebSocket source behavior are not prescribed here.
+
+Time triggers support one-time and recurring work. A recurring trigger schedules
+opportunities within the responsibility's limits; its interval does not become
+an additional minimum-spacing constraint on checks activated by other triggers.
+The agent can revise its next useful check time without changing the owner's
+daily limits.
+
+Owner-silence episodes run from one human message to the next. Agent turns, bot
+replies and internal events do not reset them. Startup triggers fire for a new
+gateway process, not a plugin reload or scheduler-thread restart in that process.
+They can be limited to one activation or remain active for later startups within
+their configured lifecycle limits.
+
+Probe and event watchers support an optional explicit deadline as a one-time
+fallback when no matching event has occurred by that time. A deadline activation
+says that nothing happened; it must not imply success. The watcher can continue
+after that activation until its lifecycle ends. Source failures and timeouts
+are errors, not evidence that a condition matched. Probe polling intervals
+control deterministic source evaluation, not mandatory spacing between model
+checks for a responsibility.
+
 Triggered checks use the same daily counts, execution buckets, cost limits,
 consent and conversation boundaries as automatic checks. A pending event or due
 time does not consume capacity or satisfy the adaptive minimum.
@@ -309,6 +358,15 @@ interval constraint to a responsibility's daily limits and adaptive backstop.
   events. Require an explicit time or condition for every trigger; reject
   creation or editing that supplies neither, even when the responsibility has
   an automatic minimum backstop. Each started check counts toward both daily limits.
+- Support every trigger type in the trigger table, including recurring and
+  agent-paced timing, file and command watchers, owner silence, gateway startup
+  and all listed Hermes events, as well as WebSocket conditions. Require an
+  explicit next time or delay for `self`; selecting a named event supplies an
+  explicit condition without an extra timestamp.
+- Fire owner-silence triggers at most once per human-silence episode and startup
+  triggers only for new gateway processes. Apply configured filters and API-error
+  aggregation. A watcher's deadline can produce one truthful "nothing happened"
+  fallback without ending the watcher; a probe error must not produce a match.
 - Every agent-initiated turn, including a silent check, own-time turn, watcher
   turn or continuation, consumes a global execution token on start. A pending
   injection consumes none. A responsibility check additionally consumes one
