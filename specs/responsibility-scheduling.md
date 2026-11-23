@@ -5,8 +5,9 @@
 Cadence gives an agent time in its own conversation to work on standing
 responsibilities and to react to time or events. The monolithic `pulse` tool is
 retired. The `responsibility` tool assigns and manages standing responsibilities and their general
-charters. The separate `trigger` tool requests the next run for a responsibility, based
-on time or an event. A short-term continuation is separate from both. Tool
+charters. The separate `trigger` tool schedules a responsibility's next run by
+time or activates it based on an event. A short-term continuation is separate
+from both. Tool
 schemas and detailed trigger semantics remain to be specified.
 
 This contract supersedes the role and agent-tool portions of
@@ -31,17 +32,21 @@ Each responsibility has a minimum and a maximum number of checks per day, set
 at creation within the owner's limits; the minimum cannot exceed the maximum.
 The supported maximum includes at least
 30 checks per day when the owner permits it. These counts apply to full model
-turns, not notifications, and do not imply an evenly spaced schedule. The minimum
-is a desired service level, not a guarantee: busy or offline conversations,
-consent, or the owner's cost limit can prevent it from being met. A missed
-minimum is visible to the owner. The maximum is an execution limit: once spent,
+turns, not notifications. The minimum provides an adaptive heartbeat and backstop:
+if triggers have not produced enough runs, Cadence calculates the next automatic
+check from the time remaining in the day and the remaining minimum wakeups, so
+the responsibility is not neglected. This is not a fixed heartbeat or a delivery
+guarantee: busy or offline conversations, consent, or the owner's cost limit can
+prevent the minimum from being met. A missed minimum is visible to the owner.
+The maximum is an execution limit: once spent,
 the responsibility rests until the next daily period. The owner can change the
 minimum and maximum; the agent cannot widen the owner's limits.
 
 An initial check time may be supplied when adding a responsibility. Without one, Cadence
 arranges an initial opportunity without requiring a separate schedule. After a
-check, the agent uses `trigger` to request a useful next opportunity by time or
-an event, within the maximum and aiming for the minimum.
+check, the agent can use `trigger` to schedule a useful next opportunity by time
+or activate one based on an event. Cadence's adaptive minimum backstop operates
+alongside triggers, within the maximum.
 A due time is an opportunity, not a delivery guarantee: a busy conversation,
 unavailability, consent or the owner's cost limit can delay or prevent a turn.
 The agent can do useful work silently and keep its notes for the next check.
@@ -62,7 +67,7 @@ changes a responsibility's daily check limits.
 
 ## Simplify the controls
 
-For responsibility checks, the daily minimum and maximum and the agent's chosen next check replace the
+For responsibility checks, the daily minimum and maximum and triggers replace the
 stack of recurring-trigger interval floors, pacing bounds, wake spacing and
 automatic no-change slowdown or pause. Do not require the owner or agent to
 configure an interval alongside the daily limits. Repeated quiet checks do not by
@@ -74,13 +79,13 @@ kinds are not silently removed by this responsibility contract.
 
 ## Triggers, other time and events
 
-The separate `trigger` tool requests the next run for a responsibility. A
-trigger can be based on time or diverse event sources, including processes,
+The separate `trigger` tool schedules the next run for a responsibility by time
+or activates it based on an event. Event sources include processes,
 the web and WebSocket connections. This supports proactive response to events,
-not just periodic polling. Triggered runs are responsibility checks subject to
-the same daily maximum, consent, cost and conversation boundaries. The minimum
-does not bypass those boundaries. A trigger
-is a request for an opportunity, not a delivery guarantee. The details of
+not just periodic polling. Triggered runs count toward both the daily minimum and
+maximum and are subject to the same consent, cost and conversation boundaries.
+The minimum does not bypass those boundaries. A scheduled or activated run is
+an opportunity, not a delivery guarantee. The details of
 sources and WebSocket behavior are not specified here.
 
 Scheduling remains available for time-based wakes and reminders, deterministic
@@ -110,8 +115,8 @@ Retiring `pulse` must not silently discard active roles, their charters, notes,
 budgets or ownership, or existing reminders, wakes and watchers. Carry them
 forward with their intended behavior, or make any item that cannot be carried
 forward visible to its owner rather than silently losing or duplicating it.
-Existing roles using fixed rhythms need an explicit transition to agent-chosen
-checks under their daily minimum and maximum; a saved rhythm must not become an additional
+Existing roles using fixed rhythms need an explicit transition to triggers and
+the adaptive backstop under their daily minimum and maximum; a saved rhythm must not become an additional
 mandatory interval constraint on the new responsibility model. Preserve pending work and
 avoid duplicate checks during the cutover. Update agent guidance, commands and
 consumers with the new interface in the same rollout.
@@ -127,14 +132,17 @@ compatibility alias.
   its charter and notes remain available across a new session.
 - Set a minimum and a permitted maximum of 30 checks per day at creation; reject
   a minimum above the maximum. Optionally set an initial check; without an
-  initial time the responsibility still
-  gets an initial opportunity. The agent chooses later checks aiming for the
-  minimum; the maximum prevents further checks until the next daily period.
+  initial time the responsibility still gets an initial opportunity. The maximum
+  prevents further checks until the next daily period.
+- With too few triggered runs, Cadence calculates the next automatic check using
+  the time left in the day and remaining minimum wakeups. As triggered checks
+  occur, they count toward both limits and the backstop adapts to the remaining
+  minimum; it is not a fixed-interval heartbeat.
 - If busy, offline, consent or cost constraints prevent the minimum from being
   met, the missed minimum is visible to the owner; no constraint is bypassed.
 - Owner-requested and agent-created responsibilities are both supported; the
   former have higher priority, without prescribing a contention policy.
-- Request the next run with `trigger` for time or an event source, including
+- Schedule the next run with `trigger` by time or activate it from an event source, including
   processes, the web or WebSocket connections, so the agent can respond
   proactively within the responsibility's daily maximum and safety boundaries.
 - A silent check counts toward the daily limits but spends no notification token. With an
