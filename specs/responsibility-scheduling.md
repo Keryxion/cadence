@@ -25,17 +25,17 @@ there is no automatic lifetime expiry. Owner-requested work has higher priority
 than agent-created work; the contention policy is configurable rather than
 fixed by this spec. The owner can inspect and stop either.
 
-Each active responsibility has `min_per_24h` of at least one and `max_per_24h`,
-set at creation. The minimum cannot exceed the maximum. The maximum directly
-configures the responsibility's token bucket: capacity is `max_per_24h` tokens
-and continuous refill is `max_per_24h / 24` tokens per hour, capped at capacity.
+Each active responsibility has `min_per_24h` of at least one and `budget_per_24h`,
+set at creation. The minimum cannot exceed the budget. The budget directly
+configures the responsibility's token bucket: capacity is `budget_per_24h` tokens
+and continuous refill is `budget_per_24h / 24` tokens per hour, capped at capacity.
 The bucket starts full to permit concentrated initial work, then refill bounds
 the sustained rate. For example, 30 gives a capacity of 30 and refill of 1.25
 tokens per hour. This is a burst allowance and sustained rate, not a separate
 hard count reset at a daily boundary; refill can permit more than 30 starts in
-a particular 24-hour window. The supported maximum must include at least 30
+a particular 24-hour window. The supported budget must include at least 30
 when the owner permits it. The agent may narrow its operating bounds but cannot lower an
-owner-required minimum, raise an owner-permitted maximum or widen other owner
+owner-required minimum, raise an owner-permitted budget or widen other owner
 limits.
 
 The agent should explicitly schedule the next useful check. For daily work,
@@ -79,11 +79,11 @@ Field types and validation:
 - `id`, `title`, `charter`, `notes`, `reason`: strings; title, charter and reason
   must be nonempty when supplied. Notes default to empty; an update replaces
   them in full. Deleted and finished work retains an inspectable execution record.
-- `checks`: object with required integer `min_per_24h` and `max_per_24h`.
-  Validate `1 <= min_per_24h <= max_per_24h` against owner limits. Derive bucket
-  capacity and refill from the maximum; no separate bucket fields are accepted.
+- `checks`: object with required integer `min_per_24h` and `budget_per_24h`.
+  Validate `1 <= min_per_24h <= budget_per_24h` against owner limits. Derive bucket
+  capacity and refill from the budget; no separate bucket fields are accepted.
   An edit settles refill at the old rate up to the edit time, then applies the
-  new capacity and rate. Raising the maximum does not mint tokens; lowering it
+  new capacity and rate. Raising the budget does not mint tokens; lowering it
   caps the current balance. Pause/resume and accounting-period boundaries do
   not reset the balance.
 - `initial_at`: optional absolute timestamp or relative delay for the first
@@ -103,7 +103,7 @@ delete or pause requests are safe and report the resulting state. Resuming a
 finished or deleted item requires creating new work, not reviving its old queue.
 
 ```json
-{"action":"create","title":"Release readiness","charter":"Keep track of release blockers and move them toward resolution.","checks":{"min_per_24h":1,"max_per_24h":30},"owner_asked":true}
+{"action":"create","title":"Release readiness","charter":"Keep track of release blockers and move them toward resolution.","checks":{"min_per_24h":1,"budget_per_24h":30},"owner_asked":true}
 ```
 
 ## `trigger` tool
@@ -196,7 +196,7 @@ silent and a quiet owner should not prevent preparation or progress.
 | Control | Rule |
 |---|---|
 | Global execution bucket | Every agent-initiated turn consumes one token when it starts |
-| Per-responsibility bucket | Capacity `max_per_24h`, refill `max_per_24h / 24` per hour; a check consumes one token when it starts |
+| Per-responsibility bucket | Capacity `budget_per_24h`, refill `budget_per_24h / 24` per hour; a check consumes one token when it starts |
 | Global notification bucket | Controls delivered user interruptions independently of execution |
 | Owner cost limit | Independently bounds spend on agent-initiated work |
 
@@ -244,8 +244,8 @@ Verify the action and field tables, all trigger types and these interactions:
   pending triggers never satisfy it, and blocked minimums remain visible.
 - Creation, inspection, edits and removal preserve conversation isolation. Notes
   survive new sessions; finishing or deleting cancels attached pending work.
-- With `max_per_24h: 30`, derive a full 30-token bucket and refill of 1.25 tokens
-  per hour. Reject independent bucket fields. Editing the maximum changes both
+- With `budget_per_24h: 30`, derive a full 30-token bucket and refill of 1.25 tokens
+  per hour. Reject independent bucket fields. Editing the budget changes both
   capacity and refill without minting tokens; no daily boundary resets it.
 - Silent started checks consume both execution tokens and count toward the minimum;
   pending work consumes none. Exhaust either bucket, then refill: work waits and
