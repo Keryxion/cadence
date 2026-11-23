@@ -40,17 +40,24 @@ bypass any limit. The owner is told when the agent takes on a responsibility,
 what it owns, and how to stop it. Where owner approval is required, creation is
 a proposal and no work starts until approval.
 
-Managing a responsibility does not require creating a trigger or specifying a
-recurring schedule. The agent can create supporting wakes and watchers during
-a responsibility check, within the owner's active-item and per-turn child
+Creating an active responsibility immediately enables automatic scheduling to
+meet its minimum checks per 24-hour period. No explicit trigger or recurring
+schedule is needed to start that scheduling. A minimum of one check per 24 hours
+is sufficient for an instruction such as "check on this daily." The agent can
+also create supporting wakes and watchers during a responsibility check,
+within the owner's active-item and per-turn child
 limits. A standing responsibility does not accumulate wake-chain depth merely
 by continuing to exist. Supporting work follows its own consent and lifecycle
 rules; it cannot evade limits through repeated re-arming.
 
 ## Daily checks and the adaptive minimum
 
-Each responsibility has a minimum and maximum number of checks per day, set at
-creation within the owner's limits. The minimum cannot exceed the maximum.
+Each responsibility has a minimum and maximum number of checks per 24-hour
+period, set at creation within the owner's limits. References to a day or daily
+limits in this specification mean that 24-hour accounting period. The minimum
+is at least one and cannot exceed the maximum. Automatic minimum scheduling
+begins as soon as the responsibility becomes active, including after approval
+when creation requires it; it does not wait for the agent to create a trigger.
 The supported maximum includes at least 30 checks per day when the owner
 permits it. The owner can change these limits; the agent can tighten its own
 limits but cannot widen the owner's.
@@ -266,8 +273,11 @@ interval constraint to a responsibility's daily limits and adaptive backstop.
 ## Acceptance cases
 
 - Create, inspect, edit and delete a responsibility without supplying a recurring
-  trigger. Its charter and notes survive compaction, a new session in the same
-  conversation and a restart. Owner removal or agent completion ends it visibly.
+  trigger. As soon as it is active, automatic scheduling works toward its minimum
+  checks per 24-hour period. For "check on this daily," a minimum of one is valid
+  and requires no explicit trigger. Its charter and notes survive compaction,
+  a new session in the same conversation and a restart. Owner removal or agent
+  completion ends it visibly.
 - Support both owner-requested and agent-created responsibilities, prioritize
   the former, and require approval before running a proposed responsibility.
 - Set a minimum and a permitted maximum of 30 checks per day at creation. Reject
