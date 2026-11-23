@@ -59,6 +59,7 @@ def test_initial_check_counts_only_on_start_and_notes_survive(modern):
     assert balance(e,rid)==30
     assert e.store.get_wake(rid).fires==0
     assert 'Prior findings' in e.ctx.calls[-1][0]
+    assert "trigger='initial'" in e.ctx.calls[-1][0].splitlines()[0]
     assert 'Pre-start snapshot' in e.ctx.calls[-1][0]
     assert 'token charges and fallback reset are not included' in e.ctx.calls[-1][0]
     assert 'Pre-start snapshot' not in e.responsibilities.desk(e.store.get_session(KEY))
@@ -75,6 +76,7 @@ def test_minimum_is_elapsed_fallback_and_quiet_checks_never_pause(modern):
     for _ in range(8):
         e.clock.advance(3600)
         e.tick()
+        assert "trigger='fallback'" in e.ctx.calls[-1][0].splitlines()[0]
         finish(e,outcome='no_change',summary='Nothing due.')
         assert e.store.get_wake(rid).status=='active'
         assert e.responsibilities.load(rid)['fallback_credit']==0
@@ -91,6 +93,8 @@ def test_timer_event_and_fallback_share_one_started_check(modern):
     e.tick()
     assert len(e.ctx.calls)==1
     text=e.ctx.calls[0][0]
+    kinds = text.splitlines()[0].split("trigger='", 1)[1].split("'", 1)[0]
+    assert set(kinds.split(',')) == {'fallback', 'at', 'subagent_done'}
     assert all(value in text for value in (tid,event,'Review timed work.','Review completed child.','fallback'))
     finish(e)
     assert balance(e,rid)==29
@@ -99,6 +103,29 @@ def test_timer_event_and_fallback_share_one_started_check(modern):
     assert e.store.get_wake(event).fires==1
     e.tick()
     assert len(e.ctx.calls)==1
+
+
+@pytest.mark.parametrize('with_timer', [False, True])
+def test_responsibility_header_uses_startup_contributors(modern, monkeypatch, with_timer):
+    e = modern
+    rid = create(e, initial_at='in 24h')
+    startup = trigger(e, rid, when={'kind': 'startup'}, note='Review gateway startup.')
+    if with_timer:
+        timer = trigger(e, rid, when={'kind': 'at', 'at': 'in 1m'}, note='Review scheduled work.')
+    e.clock.advance(60)
+    birth = e.clock.now()
+    monkeypatch.setattr('cadence.poller.gateway_process_start', lambda: ('restart-1', birth))
+    e.tick()
+    assert len(e.ctx.calls) == 1
+    text = e.ctx.calls[0][0]
+    kinds = text.splitlines()[0].split("trigger='", 1)[1].split("'", 1)[0]
+    assert set(kinds.split(',')) == ({'startup', 'at'} if with_timer else {'startup'})
+    assert startup in text and 'Review gateway startup.' in text
+    if with_timer:
+        assert timer in text and 'Review scheduled work.' in text
+    finish(e)
+    assert balance(e, rid) == 29
+    assert e.store.get_wake(startup).fires == 1
 
 
 def test_empty_bucket_defers_without_spending_global_then_refills(modern):

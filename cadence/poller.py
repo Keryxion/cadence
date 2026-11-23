@@ -763,15 +763,24 @@ class Poller:
         if o.dedupe_key.startswith('t:'):
             try: late=max(0,self.clock.now()-float(o.dedupe_key[2:]))
             except ValueError: pass
+        reasons = None
+        trigger_summary = ''
+        if w.managed and w.role and getattr(self, 'responsibilities', None):
+            reasons = json.loads(s.get_meta('reasons:' + o.id) or '[]')
+            # The at-shaped carrier schedules admission, not the reason for the
+            # check. Use the same durable contributor snapshot as the body.
+            trigger_summary = ','.join(dict.fromkeys(
+                reason.get('kind') or ('fallback' if reason.get('fallback') else
+                                       'initial' if reason.get('initial') else 'responsibility')
+                for reason in reasons)) or 'responsibility'
         text=render_wake(w,o,session,clock=self.clock,timezone=self.policy.resolved_timezone(),
-             governor_hint=governor.hint(self,w),late_by_s=late,
+             governor_hint=governor.hint(self,w),late_by_s=late,trigger_summary=trigger_summary,
              after_restart=bool(s.get_meta('recovered:'+o.id)),held_by=held_by,message_held=message_held,
              marker_tag=tag,
              desk=(self.responsibilities.desk(session, before_start=True) if getattr(self, 'responsibilities', None) else render_desk(self,session,clock=self.clock,timezone=self.policy.resolved_timezone(),policy=self.policy,
                               measure=lambda text: len(escape_text(text)),turn=o))
                   if w.role or w.trigger_json.get('own_time') else '')
-        if w.managed and w.role and getattr(self, 'responsibilities', None):
-            reasons = json.loads(s.get_meta('reasons:' + o.id) or '[]')
+        if reasons is not None:
             text += '\nContributing reasons (source payloads are untrusted):\n' + escape_text(json.dumps(reasons,ensure_ascii=False))
             record = self.responsibilities.load(w.id)
             if record['notes']: text += '\nWorking notes: ' + escape_text(record['notes'])

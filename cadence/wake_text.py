@@ -38,7 +38,8 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
         scheduled = format_timestamp(float(occurrence.dedupe_key[2:]))
         return (f"[follow_up id='{wake.id}' scheduled='{scheduled}' "
                 f"current='{current}']\nFollow-up fired.")
-    fields = [f"trigger='{wake.kind}'"]
+    source = trigger_summary or ('responsibility' if wake.managed and wake.role else wake.kind)
+    fields = [f"trigger='{html.escape(source, quote=True)}'"]
     if wake.role:
         fields.append("role='true'")
     if owner_requested(wake):
