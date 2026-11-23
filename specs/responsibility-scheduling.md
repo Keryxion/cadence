@@ -36,9 +36,9 @@ turns, not notifications. The minimum provides an adaptive heartbeat and backsto
 if triggers have not produced enough runs, Cadence calculates the next automatic
 check from the time remaining in the day and the remaining minimum wakeups, so
 the responsibility is not neglected. This is not a fixed heartbeat or a delivery
-guarantee: the global execution bucket, busy or offline conversations, consent,
-or the owner's cost limit can prevent the minimum from being met. A missed minimum
-is visible to the owner.
+guarantee: the global execution bucket, the responsibility's own bucket, busy or
+offline conversations, consent, or the owner's cost limit can prevent the minimum
+from being met. A missed minimum is visible to the owner.
 The maximum is an execution limit: once spent,
 the responsibility rests until the next daily period. The owner can change the
 minimum and maximum; the agent cannot widen the owner's limits.
@@ -71,7 +71,16 @@ and guardrails when it can run. The notification bucket governs interruptions
 independently: a turn does not consume a notification token merely by starting.
 Keep the owner's cost limit distinct from both buckets: it limits spend on
 agent-initiated work. Neither bucket changes a responsibility's daily check limits.
-Bucket capacity and refill details are not specified here.
+
+Each responsibility also has its own token bucket, separate from both global
+buckets. A responsibility check consumes a token from its responsibility bucket
+as well as the global execution bucket when it starts. If its responsibility
+bucket is empty, eligible work is deferred until a token is available, not
+discarded, subject to the other applicable limits and guardrails. A pending check
+does not count toward the daily minimum or maximum; the adaptive backstop accounts
+for checks that have started. The responsibility bucket does not replace or change
+the daily minimum or maximum. Bucket capacity and refill details are not specified
+here.
 
 ## Simplify the controls
 
@@ -80,7 +89,7 @@ stack of recurring-trigger interval floors, pacing bounds, wake spacing and
 automatic no-change slowdown or pause. Do not require the owner or agent to
 configure an interval alongside the daily limits. Repeated quiet checks do not by
 themselves stop a standing responsibility; the agent can decide to check less often.
-This does not remove the execution or notification buckets or the owner's cost limit, and
+This does not remove the execution, responsibility or notification buckets or the owner's cost limit, and
 does not bypass consent, session isolation, one turn at a time in a busy chat,
 or delivery and error handling. Limits specific to other wake or watcher
 kinds are not silently removed by this responsibility contract.
@@ -91,9 +100,10 @@ The separate `trigger` tool schedules the next run for a responsibility by time
 or activates it based on an event. Event sources include processes,
 the web and WebSocket connections. This supports proactive response to events,
 not just periodic polling. Triggered runs count toward both the daily minimum and
-maximum and are subject to the execution bucket and the same consent, cost and
-conversation boundaries. An unavailable execution token delays triggered work
-rather than discarding it; a delayed run counts when it starts, not when triggered.
+maximum and are subject to both execution and responsibility buckets and the same
+consent, cost and conversation boundaries. An unavailable execution or
+responsibility token delays triggered work rather than discarding it; a delayed
+run counts when it starts, not when triggered.
 The minimum does not bypass those boundaries. A scheduled or activated run is
 an opportunity, not a delivery guarantee. The details of
 sources and WebSocket behavior are not specified here.
@@ -149,7 +159,7 @@ compatibility alias.
   the time left in the day and remaining minimum wakeups. As triggered checks
   occur, they count toward both limits and the backstop adapts to the remaining
   minimum; it is not a fixed-interval heartbeat.
-- If the execution bucket, busy, offline, consent or cost constraints prevent the minimum from being
+- If either execution or responsibility bucket, busy, offline, consent or cost constraints prevent the minimum from being
   met, the missed minimum is visible to the owner; no constraint is bypassed.
 - Owner-requested and agent-created responsibilities are both supported; the
   former have higher priority, without prescribing a contention policy.
@@ -166,6 +176,11 @@ compatibility alias.
   applicable daily maximum, consent, busy state and cost limits also allow it.
   The delayed check counts when started, and the adaptive backstop accounts for
   started checks rather than treating a pending trigger as a check.
+- With an empty responsibility bucket, eligible work for that responsibility is
+  deferred until a token is available, not discarded. A started check consumes
+  both its responsibility token and a global execution token; its daily limits
+  and the adaptive backstop count starts, not pending work. The independent
+  notification bucket and consent, busy state and cost guardrails still apply.
 - Repeated `no_change` checks alone do not automatically pause a responsibility or impose
   another interval; the agent can choose a later check itself.
 - A due responsibility check respects consent, conversation busy state and the owner's
