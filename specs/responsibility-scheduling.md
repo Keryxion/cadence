@@ -36,8 +36,9 @@ turns, not notifications. The minimum provides an adaptive heartbeat and backsto
 if triggers have not produced enough runs, Cadence calculates the next automatic
 check from the time remaining in the day and the remaining minimum wakeups, so
 the responsibility is not neglected. This is not a fixed heartbeat or a delivery
-guarantee: busy or offline conversations, consent, or the owner's cost limit can
-prevent the minimum from being met. A missed minimum is visible to the owner.
+guarantee: the global execution bucket, busy or offline conversations, consent,
+or the owner's cost limit can prevent the minimum from being met. A missed minimum
+is visible to the owner.
 The maximum is an execution limit: once spent,
 the responsibility rests until the next daily period. The owner can change the
 minimum and maximum; the agent cannot widen the owner's limits.
@@ -48,7 +49,8 @@ check, the agent can use `trigger` to schedule a useful next opportunity by time
 or activate one based on an event. Cadence's adaptive minimum backstop operates
 alongside triggers, within the maximum.
 A due time is an opportunity, not a delivery guarantee: a busy conversation,
-unavailability, consent or the owner's cost limit can delay or prevent a turn.
+unavailability, consent, the execution bucket or the owner's cost limit can delay
+or prevent a turn.
 The agent can do useful work silently and keep its notes for the next check.
 
 ## Checks and notifications
@@ -60,10 +62,16 @@ progress or find nothing to report, and does not spend a notification token just
 for running. The agent notifies only when useful. A notification hold does not
 stop a responsibility check; the agent retains anything worth reporting in its notes.
 
-The existing per-chat interruption token bucket regulates notifications, not
-responsibility execution. Keep the owner's cost limit distinct from both: it limits
-spend on agent-initiated work. Neither a full bucket nor a notification hold
-changes a responsibility's daily check limits.
+The global agent-turn start token bucket limits execution independently of the
+overall user-interruption notification bucket. Every agent-initiated turn,
+including a silent responsibility check, consumes an execution token when it
+starts. If no execution token is available, triggered work is delayed until one
+is available, not discarded; it remains subject to the other applicable limits
+and guardrails when it can run. The notification bucket governs interruptions
+independently: a turn does not consume a notification token merely by starting.
+Keep the owner's cost limit distinct from both buckets: it limits spend on
+agent-initiated work. Neither bucket changes a responsibility's daily check limits.
+Bucket capacity and refill details are not specified here.
 
 ## Simplify the controls
 
@@ -72,7 +80,7 @@ stack of recurring-trigger interval floors, pacing bounds, wake spacing and
 automatic no-change slowdown or pause. Do not require the owner or agent to
 configure an interval alongside the daily limits. Repeated quiet checks do not by
 themselves stop a standing responsibility; the agent can decide to check less often.
-This does not remove the notification bucket or the owner's cost limit, and
+This does not remove the execution or notification buckets or the owner's cost limit, and
 does not bypass consent, session isolation, one turn at a time in a busy chat,
 or delivery and error handling. Limits specific to other wake or watcher
 kinds are not silently removed by this responsibility contract.
@@ -83,7 +91,9 @@ The separate `trigger` tool schedules the next run for a responsibility by time
 or activates it based on an event. Event sources include processes,
 the web and WebSocket connections. This supports proactive response to events,
 not just periodic polling. Triggered runs count toward both the daily minimum and
-maximum and are subject to the same consent, cost and conversation boundaries.
+maximum and are subject to the execution bucket and the same consent, cost and
+conversation boundaries. An unavailable execution token delays triggered work
+rather than discarding it; a delayed run counts when it starts, not when triggered.
 The minimum does not bypass those boundaries. A scheduled or activated run is
 an opportunity, not a delivery guarantee. The details of
 sources and WebSocket behavior are not specified here.
@@ -97,8 +107,9 @@ replacement interface for other work is not fixed here. Conversation-to-conversa
 
 `follow_up` remains the separate short-term continuation facility. It gives
 the agent another opportunity to act on the current conversation, including
-intervening messages; it is not a responsibility check or a notification. Its existing
-eligibility, bounds, cancellation and lifecycle are not changed by this spec.
+intervening messages; it is not a responsibility check or a notification. Its
+turns are subject to the global execution bucket; its existing eligibility,
+bounds, cancellation and lifecycle are otherwise unchanged by this spec.
 
 ## Transition
 
@@ -138,20 +149,28 @@ compatibility alias.
   the time left in the day and remaining minimum wakeups. As triggered checks
   occur, they count toward both limits and the backstop adapts to the remaining
   minimum; it is not a fixed-interval heartbeat.
-- If busy, offline, consent or cost constraints prevent the minimum from being
+- If the execution bucket, busy, offline, consent or cost constraints prevent the minimum from being
   met, the missed minimum is visible to the owner; no constraint is bypassed.
 - Owner-requested and agent-created responsibilities are both supported; the
   former have higher priority, without prescribing a contention policy.
 - Schedule the next run with `trigger` by time or activate it from an event source, including
   processes, the web or WebSocket connections, so the agent can respond
   proactively within the responsibility's daily maximum and safety boundaries.
-- A silent check counts toward the daily limits but spends no notification token. With an
-  empty notification bucket, a responsibility can still check silently; a useful message
-  is held and the finding remains available for later reporting.
+- Every agent-initiated turn, including a silent check, consumes a global execution
+  token on start. A silent responsibility check counts toward its daily limits but
+  spends no notification token. With an empty notification bucket and an available
+  execution token, a responsibility can still check silently; a useful message is
+  held and the finding remains available for later reporting.
+- With no execution token, triggered work remains pending rather than being
+  discarded and is delayed until a token is available; it starts only if the
+  applicable daily maximum, consent, busy state and cost limits also allow it.
+  The delayed check counts when started, and the adaptive backstop accounts for
+  started checks rather than treating a pending trigger as a check.
 - Repeated `no_change` checks alone do not automatically pause a responsibility or impose
   another interval; the agent can choose a later check itself.
 - A due responsibility check respects consent, conversation busy state and the owner's
   cost limit. Daily check limits do not authorize a notification or bypass them.
 - Existing roles and other active scheduled work remain visible and are not
   silently lost or duplicated at transition. Existing reminders and watchers
-  retain their behavior; `follow_up` remains independent.
+  retain their purpose and guardrails, subject to the global execution bucket;
+  `follow_up` remains separate and is also subject to that bucket.
