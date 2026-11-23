@@ -45,8 +45,8 @@ Duplicate summaries must not cause repeated notifications.
 Messages lead with the result or question and do not guilt or pester the owner.
 Silent research, file changes and preparation count as progress. Neither silent
 progress nor repeated quiet checks automatically pause a responsibility. Recording
-a result does not spend execution tokens again: execution and daily counts were
-charged when the check started.
+a result does not spend execution tokens again: tokens were charged and the
+check counted toward its minimum when it started.
 
 ## Acceptance
 

@@ -25,10 +25,16 @@ there is no automatic lifetime expiry. Owner-requested work has higher priority
 than agent-created work; the contention policy is configurable rather than
 fixed by this spec. The owner can inspect and stop either.
 
-Each active responsibility has a minimum of at least one and a maximum number
-of checks per 24-hour accounting period, set at creation. The minimum cannot
-exceed the maximum. The supported maximum must include at least 30 when the
-owner permits it. The agent may narrow its operating bounds but cannot lower an
+Each active responsibility has `min_per_24h` of at least one and `max_per_24h`,
+set at creation. The minimum cannot exceed the maximum. The maximum directly
+configures the responsibility's token bucket: capacity is `max_per_24h` tokens
+and continuous refill is `max_per_24h / 24` tokens per hour, capped at capacity.
+The bucket starts full to permit concentrated initial work, then refill bounds
+the sustained rate. For example, 30 gives a capacity of 30 and refill of 1.25
+tokens per hour. This is a burst allowance and sustained rate, not a separate
+hard count reset at a daily boundary; refill can permit more than 30 starts in
+a particular 24-hour window. The supported maximum must include at least 30
+when the owner permits it. The agent may narrow its operating bounds but cannot lower an
 owner-required minimum, raise an owner-permitted maximum or widen other owner
 limits.
 
@@ -46,10 +52,10 @@ minimum; pending work does not. A fallback turn prompts the agent to review the
 work and fix its next scheduled time. Meeting the minimum alone does not
 establish the intended schedule.
 
-Only started checks count toward the minimum and maximum, including silent or
-subsequently failed turns. At the maximum, further work waits for the next
-period. A missed minimum and its reason are visible; the minimum never bypasses
-consent, availability, execution capacity or cost limits.
+Only started checks count toward the minimum and spend responsibility tokens,
+including silent or subsequently failed turns. With fewer than one token,
+further work waits for refill. A missed minimum and its reason are visible;
+the minimum never bypasses consent, availability, execution capacity or cost limits.
 
 ## `responsibility` tool
 
@@ -59,10 +65,10 @@ identity come from the current conversation; there is no destination field.
 
 | Action | Required fields | Optional fields | Effect |
 |---|---|---|---|
-| `create` | `title`, `charter`, `checks`, `bucket` | `notes`, `initial_at`, `owner_asked` | Create active work or a proposal if consent requires approval |
+| `create` | `title`, `charter`, `checks` | `notes`, `initial_at`, `owner_asked` | Create active work or a proposal if consent requires approval |
 | `list` | None | `detailed` | List current responsibilities; detailed mode includes full records and finished history |
 | `get` | `id` | None | Inspect one responsibility, its triggers and holds |
-| `update` | `id`, at least one mutable field | `title`, `charter`, `notes`, `checks`, `bucket` | Atomically replace the supplied fields, retaining omitted fields |
+| `update` | `id`, at least one mutable field | `title`, `charter`, `notes`, `checks` | Atomically replace the supplied fields, retaining omitted fields |
 | `pause` | `id` | None | Suspend triggers and the automatic minimum; record the pause visibly |
 | `resume` | `id` | None | Resume paused work and its minimum backstop within all limits |
 | `finish` | `id`, `reason` | None | End the responsibility as completed and cancel its pending checks and triggers |
@@ -74,11 +80,12 @@ Field types and validation:
   must be nonempty when supplied. Notes default to empty; an update replaces
   them in full. Deleted and finished work retains an inspectable execution record.
 - `checks`: object with required integer `min_per_24h` and `max_per_24h`.
-  Validate `1 <= min_per_24h <= max_per_24h` against owner limits.
-- `bucket`: object with required positive integer `capacity` and positive numeric
-  `refill_per_hour`, within owner limits. Creation starts it full; edits cannot
-  mint tokens and lowering capacity caps the balance. Large initial bursts are
-  supported. No numeric defaults are fixed here.
+  Validate `1 <= min_per_24h <= max_per_24h` against owner limits. Derive bucket
+  capacity and refill from the maximum; no separate bucket fields are accepted.
+  An edit settles refill at the old rate up to the edit time, then applies the
+  new capacity and rate. Raising the maximum does not mint tokens; lowering it
+  caps the current balance. Pause/resume and accounting-period boundaries do
+  not reset the balance.
 - `initial_at`: optional absolute timestamp or relative delay for the first
   opportunity. Without it, arrange an initial opportunity automatically.
 - `owner_asked`: boolean, default false. A true value requires verified evidence
@@ -96,7 +103,7 @@ delete or pause requests are safe and report the resulting state. Resuming a
 finished or deleted item requires creating new work, not reviving its old queue.
 
 ```json
-{"action":"create","title":"Release readiness","charter":"Keep track of release blockers and move them toward resolution.","checks":{"min_per_24h":1,"max_per_24h":30},"bucket":{"capacity":10,"refill_per_hour":2},"owner_asked":true}
+{"action":"create","title":"Release readiness","charter":"Keep track of release blockers and move them toward resolution.","checks":{"min_per_24h":1,"max_per_24h":30},"owner_asked":true}
 ```
 
 ## `trigger` tool
@@ -189,13 +196,12 @@ silent and a quiet owner should not prevent preparation or progress.
 | Control | Rule |
 |---|---|
 | Global execution bucket | Every agent-initiated turn consumes one token when it starts |
-| Per-responsibility bucket | A responsibility check additionally consumes one token when it starts |
+| Per-responsibility bucket | Capacity `max_per_24h`, refill `max_per_24h / 24` per hour; a check consumes one token when it starts |
 | Global notification bucket | Controls delivered user interruptions independently of execution |
-| Responsibility daily maximum | Counts started checks; blocks further checks until the next period |
 | Owner cost limit | Independently bounds spend on agent-initiated work |
 
 Admit both required execution tokens together; never spend one without the
-other. Pending or refused injections consume neither tokens nor daily allowance.
+other. Pending or refused injections consume no tokens and do not satisfy the minimum.
 If either bucket lacks capacity, eligible work waits and all limits are checked
 again before starting. One responsibility's empty bucket does not block another
 with capacity. Refill never exceeds capacity; no global capacity/refill defaults
@@ -204,8 +210,8 @@ are fixed by this spec. Cancellation or expiry of deferred work is visible.
 Notification holds and unanswered-message limits hold messages while eligible
 responsibility checks can run silently and keep findings in notes. Quiet checks
 alone never pause a responsibility or add recurring interval floors, wake spacing
-or no-change slowdown. The agent chooses its next useful check within the daily
-limits and buckets. Error backoff and safety stops still apply.
+or no-change slowdown. The agent chooses its next useful check within the
+minimum, buckets and owner limits. Error backoff and safety stops still apply.
 
 Consent, emergency stop, provider availability, cost and busy state are checked
 before a turn starts. At most one scheduled turn is in flight per conversation.
@@ -225,7 +231,7 @@ source content cannot grant consent or authorize unbounded work.
 ## Visibility and acceptance
 
 A compact desk view opens responsibility turns and is available to the owner:
-charters, latest work, next opportunities, started checks against daily limits,
+charters, latest work, next opportunities, started checks against the minimum,
 bucket/notification holds, missed minimums and available usage/cost. Active work,
 notes, ownership, limits and pending occurrences must survive installation
 without silent loss or duplicate checks; unsupported items are explained visibly.
@@ -238,12 +244,15 @@ Verify the action and field tables, all trigger types and these interactions:
   pending triggers never satisfy it, and blocked minimums remain visible.
 - Creation, inspection, edits and removal preserve conversation isolation. Notes
   survive new sessions; finishing or deleting cancels attached pending work.
-- Silent started checks consume both execution tokens and daily allowance;
+- With `max_per_24h: 30`, derive a full 30-token bucket and refill of 1.25 tokens
+  per hour. Reject independent bucket fields. Editing the maximum changes both
+  capacity and refill without minting tokens; no daily boundary resets it.
+- Silent started checks consume both execution tokens and count toward the minimum;
   pending work consumes none. Exhaust either bucket, then refill: work waits and
   starts only when both tokens and all guardrails permit it.
 - Exhaust one responsibility's bucket while another can run. Exhaust notification
-  capacity while checks can still make silent progress. Reach a daily maximum or
-  cost boundary without bypassing it to satisfy the minimum.
+  capacity while checks can still make silent progress. Exhaust responsibility
+  tokens or reach a cost boundary without bypassing either to satisfy the minimum.
 - Reject invalid/missing trigger conditions atomically with corrective feedback;
   preserve pending work on temporary holds; do not duplicate starts after edits,
   restarts, competing claims or repeated event matches.

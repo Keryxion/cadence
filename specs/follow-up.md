@@ -33,7 +33,7 @@ A continuation may arm another timer. If the chat already has a turn underway,
 consume the due timer without queuing a continuation. Otherwise starting requires
 a global execution token and applicable consent, availability and cost checks;
 lack of capacity defers eligible work. Starting is not a responsibility check
-and does not consume a responsibility token or its daily allowance. Resuming
+and does not consume a responsibility token or count toward its minimum. Resuming
 owner-requested work does not itself spend an interruption token.
 
 ## Acceptance
