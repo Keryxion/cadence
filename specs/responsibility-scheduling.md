@@ -177,7 +177,6 @@ supporting work:
 | `at` | A one-time absolute timestamp or relative delay; local time expressions use the configured timezone |
 | `every` | A recurring duration, optionally anchored to a local time such as 9 a.m. |
 | `cron` | A cron expression evaluated in the configured timezone |
-| `self` | An agent-chosen explicit next time or delay, which the agent can revise after each check |
 | `owner_silent` | A specified duration without an owner message; at most one activation per silence episode |
 | `file` | A configured file changes, or an appended line matches a specified pattern |
 | `process` | A specified process exits, with process identity checked to avoid PID-reuse mistakes |
@@ -196,15 +195,17 @@ supporting work:
 Selecting a named event such as `startup` or `subagent_done` is itself an
 explicit condition; no extra timestamp is required. A source address alone is
 not a condition: a watcher must specify what activates it, either through its
-type's defined condition or an explicit match rule. `self` requires an explicit
-next time or delay; the daily minimum cannot supply an omitted trigger time.
+type's defined condition or an explicit match rule. An `at` trigger requires an
+explicit time or delay; the daily minimum cannot supply an omitted trigger time.
 Detailed tool schemas and WebSocket source behavior are not prescribed here.
 
 Time triggers support one-time and recurring work. A recurring trigger schedules
 opportunities within the responsibility's limits; its interval does not become
 an additional minimum-spacing constraint on checks activated by other triggers.
-The agent can revise its next useful check time without changing the owner's
-daily limits.
+For agent-paced work, the agent sets an `at` trigger for its next useful check
+and can set the next one after that check. The responsibility carries the
+charter and notes between checks. Choosing or revising the next check time does
+not change the owner's daily limits.
 
 Owner-silence episodes run from one human message to the next. Agent turns, bot
 replies and internal events do not reset them. Startup triggers fire for a new
@@ -361,8 +362,10 @@ interval constraint to a responsibility's daily limits and adaptive backstop.
 - Support every trigger type in the trigger table, including recurring and
   agent-paced timing, file and command watchers, owner silence, gateway startup
   and all listed Hermes events, as well as WebSocket conditions. Require an
-  explicit next time or delay for `self`; selecting a named event supplies an
+  explicit next time or delay for `at`; selecting a named event supplies an
   explicit condition without an extra timestamp.
+- For agent-paced work, use `at` to choose the next check time after each run;
+  retain the charter and notes on the responsibility between checks.
 - Fire owner-silence triggers at most once per human-silence episode and startup
   triggers only for new gateway processes. Apply configured filters and API-error
   aggregation. A watcher's deadline can produce one truthful "nothing happened"
