@@ -574,3 +574,94 @@ def test_pausing_queued_responsibility_releases_its_reserved_turn(modern):
     assert not e.store.list_occurrences(state='claimed')
     with e.store.atomic(): assert e.responsibilities.budgets.available(*e.responsibilities.global_scope())==1
     assert balance(e,rid)==30
+
+
+def test_untrusted_event_cannot_convert_existing_trigger_to_recurring(modern):
+    e = modern
+    rid = create(e, initial_at='in 24h')
+    tid = trigger(e, rid, when={'kind': 'at', 'at': 'in 1h'})
+    trigger(e, rid, when={'kind': 'subagent_done'})
+    e.store.add_event('subagent_done', 'payload', {'summary': 'External data'}, session_key=KEY)
+    e.tick()
+    start(e)
+    assert e.intake.flights['sid'].untrusted is True
+    denied = call(e, 'trigger', action='create', responsibility_id=rid,
+                  when={'kind': 'every', 'every': '1m'})
+    assert 'untrusted_rearm' in denied.get('detail', ''), denied
+    before = e.store.get_wake(tid)
+    updated = call(e, 'trigger', action='update', id=tid,
+                   when={'kind': 'every', 'every': '1m'},
+                   until={'expires': 'in 365d'})
+    assert 'error' in updated, updated
+    after = e.store.get_wake(tid)
+    assert after.kind == before.kind
+    assert after.trigger_json == before.trigger_json
+    assert after.expires_at == before.expires_at
+
+
+def test_disabled_agent_creation_also_blocks_rearming_by_update(modern):
+    e = modern
+    rid = create(e, initial_at='in 24h')
+    tid = trigger(e, rid, when={'kind': 'at', 'at': 'in 1h'})
+    e.policy = replace(e.policy, agent_can_create='no')
+    denied = call(e, 'trigger', action='create', responsibility_id=rid,
+                  when={'kind': 'every', 'every': '1m'})
+    assert 'agent_create_disabled' in denied.get('detail', ''), denied
+    before = e.store.get_wake(tid)
+    updated = call(e, 'trigger', action='update', id=tid,
+                   when={'kind': 'every', 'every': '1m'})
+    assert 'error' in updated, updated
+    after = e.store.get_wake(tid)
+    assert after.kind == before.kind
+    assert after.trigger_json == before.trigger_json
+
+
+@pytest.mark.parametrize('subject', ['responsibility', 'standalone'])
+def test_instruction_edit_revokes_subjects_own_queued_envelope(modern, subject):
+    e = modern
+    original = 'Original instructions to be revoked.'
+    replacement = 'Read-only audit. Do not change production.'
+    if subject == 'responsibility':
+        wid = create(e, charter=original)
+        tool, changed = 'responsibility', {'charter': replacement}
+    else:
+        wid = trigger(e, when={'kind': 'at', 'at': 'in 1m'}, note=original)
+        e.clock.advance(60)
+        tool, changed = 'trigger', {'note': replacement}
+    e.tick()
+    old = e.ctx.calls[-1][0]
+    assert original in old and replacement not in old
+    assert e.store.list_occurrences(wid, state='claimed')
+    updated = e.responsibilities.handle(tool, {'action': 'update', 'id': wid, **changed},
+                                        session_id='sid', owner=True)
+    assert updated.get('ok'), updated
+    assert start(e, message=old) == {'action': 'block', 'message': '[SILENT]'}
+    assert e.store.get_wake(wid).fires == 0
+    if subject == 'responsibility':
+        assert balance(e, wid) == 30
+
+
+def test_pausing_standalone_releases_reserved_turn_for_another_chat(modern):
+    e = modern
+    e.policy = replace(e.policy, execution_capacity=1, execution_refill_per_hour=1)
+    tid = trigger(e, when={'kind': 'at', 'at': 'in 1m'})
+    e.clock.advance(60)
+    e.tick()
+    assert len(e.ctx.calls) == 1
+    assert e.store.list_occurrences(tid, state='claimed')
+    assert call(e, 'trigger', action='pause', id=tid).get('ok')
+    assert e.store.get_wake(tid).status == 'paused'
+    # Pausing unstarted work must free capacity, not wait for acknowledgement timeout.
+    with e.store.atomic():
+        assert e.responsibilities.budgets.available(*e.responsibilities.global_scope()) == 1
+    assert not e.store.list_occurrences(tid, state='claimed')
+    assert e.store.list_occurrences(tid, state='pending')
+    second_key = 'agent:telegram:dm:other'
+    e.store.upsert_session(Session(second_key, 'telegram', 'dm', 'other', 'other-sid',
+                                   e.clock.now(), e.clock.now(), 'episode'))
+    e.tool.session_key_fn = lambda: second_key
+    rid = create(e)
+    e.tick()
+    assert len(e.ctx.calls) == 2
+    assert e.ctx.calls[-1][1] == second_key
+    assert rid in e.ctx.calls[-1][0]
