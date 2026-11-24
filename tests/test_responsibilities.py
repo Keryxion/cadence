@@ -291,6 +291,42 @@ def test_finish_requires_reason_and_removes_attached_pending_work(modern):
     assert e.store.get_wake(tid).status=='cancelled'
 
 
+def test_recurring_triggers_follow_responsibility_lifetime(modern):
+    e = modern
+    e.clock.advance(86400 - e.clock.now() % 86400)
+    rid = create(e, initial_at='in 24h')
+    tids = [trigger(e, rid, when={'kind': 'cron', 'cron': f'0 {hour} * * *'})
+            for hour in (8, 9, 17)]
+    assert all(e.store.get_wake(tid).expires_at is None for tid in tids)
+    base = e.clock.now()
+    for day in range(e.policy.max_lifetime_days + 2):
+        for hour, tid in zip((8, 9, 17), tids):
+            target = (day * 86400 + hour * 3600)
+            e.clock.advance(base + target - e.clock.now())
+            e.tick()
+            assert tid in e.ctx.calls[-1][0]
+            finish(e)
+            assert e.store.get_wake(tid).fires == day + 1
+    assert call(e, 'responsibility', action='finish', id=rid, reason='Done').get('ok')
+    assert all(e.store.get_wake(tid).status == 'cancelled' for tid in tids)
+
+
+def test_recurring_attached_trigger_explicit_stops(modern):
+    e = modern
+    rid = create(e, initial_at='in 24h')
+    expiry = trigger(e, rid, when={'kind': 'every', 'every': '1h'}, until={'expires': 'in 3h'})
+    count = trigger(e, rid, when={'kind': 'every', 'every': '1h'}, until={'max_fires': 2})
+    for _ in range(3):
+        e.clock.advance(3600)
+        previous = len(e.ctx.calls)
+        e.tick()
+        if len(e.ctx.calls) > previous:
+            finish(e)
+    assert e.store.get_wake(expiry).status == 'expired'
+    assert e.store.get_wake(count).fires == 2
+    assert e.store.get_wake(count).status != 'active'
+
+
 def test_no_websocket_or_self_in_public_trigger_schema():
     assert set(WHEN_FIELDS)=={'at','every','cron','owner_silent','file','process','url','command','startup',
         'kanban_completed','kanban_blocked','kanban_worker_exited','subagent_done','api_error','reaction','message_edited'}

@@ -340,6 +340,10 @@ class Policy:
         reminder = owner_class(wake) and one_shot(wake) and self.max_reminder_days >= self.max_lifetime_days
         return 'max_reminder_days' if reminder else 'max_lifetime_days'
 
+    def parent_lifetime(self, wake):
+        return bool(wake.managed and wake.responsibility_id and not wake.role
+                    and wake.kind in RECURRING_KINDS)
+
     def max_life_s(self, wake):
         setting = self.lifetime_setting(wake)
         days = getattr(self, setting)
@@ -394,6 +398,8 @@ class Policy:
                 # permitted next scheduled time rather than a rewritten cron.
                 if value is None and wake.kind in {"cron", "self"}:
                     value = max(floor, 86400 // self.role_budget(wake)) if wake.role and wake.kind == 'self' else floor
+                if value == 0 and wake.kind == 'cron':
+                    continue
                 if value is not None:
                     value = parse_duration(value)
                     bounded = max(value, floor, minimum)
@@ -410,7 +416,10 @@ class Policy:
             if old != interval:
                 clamped["check_every"] = f"{old} → {interval} (probe_floor)"
         now = self.clock.now()
-        if not ((wake.role or wake.trigger_json.get('builtin')) and wake.expires_at is None):
+        if self.parent_lifetime(wake):
+            if wake.expires_at is not None and (not math.isfinite(wake.expires_at) or wake.expires_at <= now):
+                raise ValueError("expiry must be in the future")
+        elif not ((wake.role or wake.trigger_json.get('builtin')) and wake.expires_at is None):
             max_life = self.max_life_s(wake)
             # The implicit expiry stays max_lifetime_days for every wake; only a long owner
             # reminder outlives it, via the hard end and Tool.feasible's due-based grace.

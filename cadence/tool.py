@@ -346,6 +346,10 @@ class Tool:
             point=max(point,session.last_wake_turn_at+p.wake_spacing_minutes*60)
         if w.kind in {'at','owner_silent'} or watcher:
             point=max(point,e.clock.now())
+        if p.parent_lifetime(w):
+            if point >= w.expires_at:
+                raise Infeasible(f'{label} after expiry: {format_timestamp(point)} >= {format_timestamp(w.expires_at)}; set until.expires to extend it')
+            return w
         max_life=p.max_life_s(w)
         hard_end=(w.created_at or e.clock.now())+max_life
         due_bound=p.due_bound_s(w)
