@@ -85,7 +85,14 @@ def test_success(host):
     assert sum('restart' in c for c in calls) == 1
 
 
-@pytest.mark.parametrize('settings', [{'DIRTY': '1'}, {'DEPS': '1'}, {'FETCH_FAIL': '1'}])
+def test_manifest_change_deploys(host):
+    result, calls = host(DEPS='1')
+    assert result.returncode == 0, result.stderr
+    assert ['git', 'checkout', '-q', '--detach', SHA] in calls
+    assert sum('restart' in c for c in calls) == 1
+
+
+@pytest.mark.parametrize('settings', [{'DIRTY': '1'}, {'FETCH_FAIL': '1'}])
 def test_preflight_failure_does_not_restart_or_checkout(host, settings):
     result, calls = host(**settings)
     assert result.returncode != 0

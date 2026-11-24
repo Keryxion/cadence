@@ -44,13 +44,6 @@ if [[ $previous == "$sha" ]]; then
 fi
 
 git fetch -q origin "$sha"
-# Conservative dependency guard: no manifest change is automatically installed.
-old_manifest=$(git show "$previous:plugin.yaml")
-new_manifest=$(git show "$sha:plugin.yaml")
-[[ $old_manifest == "$new_manifest" ]] || {
-  echo 'plugin.yaml changed; manual manifest/dependency review and install required' >&2
-  exit 1
-}
 git checkout -q --detach "$sha"
 echo "$(date -Is) $previous -> $sha" >> .git/alpha-deploy.log
 if restart_and_check; then

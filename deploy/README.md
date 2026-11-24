@@ -21,9 +21,8 @@ returns failure even after a successful rollback. Deploys are serialized, not
 ordered by PR age: a queued older SHA can still deploy later. The log is
 `~/.hermes/plugins/cadence/.git/alpha-deploy.log`.
 
-No dependencies are installed. Any `plugin.yaml` change is conservatively refused
-before checkout/restart (including dependency, compatibility, and settings changes).
-Review/install those manually with separate approval. Rollback restores source
+Manifest changes deploy with the source. Dependencies are not installed by the
+deploy script; install any new dependencies separately. Rollback restores source
 only, not SQLite data or external effects; do not alpha-deploy incompatible data
 migrations. Restarting the gateway affects all its plugins and conversations.
 
@@ -84,7 +83,7 @@ here creates labels, secrets, SSH keys, sudo permissions or a host installation.
 
 Reference pattern: the four Converse alpha files at
 `Keryxion/hermes-converse` commit `a4732709b81da3d68694e296ec08b98c9c262db4`.
-Cadence adds strict full-command validation, dirty/manifest guards, rollback on
+Cadence adds strict full-command validation, dirty-check guard, rollback on
 restart failure, and its own poller health check rather than Converse's route.
 
 ## Local checks
