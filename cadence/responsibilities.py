@@ -380,12 +380,18 @@ class Responsibilities:
         if not pending and r and self.fallback(r)<=now:
             from .model import Occurrence
             pending=[Occurrence(w.id,'inspect')]
+        reasons = []
+        bucket_until = None
         if pending:
+            bucket_reason, bucket_until = self.hold(w)
             gate, _, gate_until = self.engine.gate(w, pending[0], self.store.get_session(w.session_key))
             reason = gate or reason
-            until = max(until or now, gate_until or now) if until or gate_until else None
+            reasons = list(dict.fromkeys(filter(None, [gate, *bucket_reason.split(',')])))
+            until = max(until or now, gate_until or now, bucket_until or now) if until or gate_until or bucket_until else None
         record = {'id': w.id, 'status': w.status, 'title': w.title,
                   'owner_asked': w.owner_requested, 'hold_reason': reason or w.status_reason or None,
+                  'hold_reasons': reasons,
+                  'bucket_refill_at': format_timestamp(bucket_until) if bucket_until else None,
                   'next_eligible_at': format_timestamp(until) if until else None,
                   'started_checks': w.fires, 'latest_result': None,
                   'usage':{name:getattr(w,name) for name in ('model_turns','tokens_in','tokens_out','cache_read_tokens','cache_write_tokens','cost_microusd','unpriced_calls')},

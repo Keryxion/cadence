@@ -144,6 +144,46 @@ def test_empty_bucket_defers_without_spending_global_then_refills(modern):
     assert e.store.get_wake(rid).fires==2
 
 
+def test_pending_trigger_reports_bucket_and_busy_holds(modern):
+    e = modern
+    rid = create(e, checks={'min_per_24h': 1, 'budget_per_24h': 1})
+    e.tick(); finish(e)
+    tid = trigger(e, rid, when={'kind': 'at', 'at': 'in 1m'})
+    session(e, busy_since=e.clock.now())
+    e.clock.advance(60); e.tick()
+    parent = call(e, 'responsibility', action='get', id=rid)['record']
+    child = call(e, 'trigger', action='get', id=tid)['record']
+    for record in (parent, child):
+        assert 'busy' in record['hold_reasons']
+        assert 'responsibility_bucket' in record['hold_reasons']
+        assert record['bucket_refill_at'] == record['next_eligible_at']
+    assert parent['bucket_refill_at'] == child['bucket_refill_at']
+    session(e, busy_since=None)
+    e.tick()
+    for tool, wid in (('responsibility', rid), ('trigger', tid)):
+        record = call(e, tool, action='get', id=wid)['record']
+        assert 'busy' not in record['hold_reasons']
+        assert 'responsibility_bucket' in record['hold_reasons']
+        assert record['bucket_refill_at'] == parent['bucket_refill_at']
+    e.clock.advance(86400 - 60); e.tick(); finish(e)
+    assert e.store.get_wake(tid).fires == 1
+
+
+def test_attached_event_follows_parent_lifetime_and_explicit_stops(modern):
+    e = modern
+    rid = create(e, initial_at='in 24h')
+    tid = trigger(e, rid, when={'kind': 'subagent_done'}, until={'max_fires': 1})
+    expired = trigger(e, rid, when={'kind': 'subagent_done'}, until={'expires': 'in 2d'})
+    assert e.store.get_wake(tid).expires_at is None
+    e.clock.advance((e.policy.max_lifetime_days + 1) * 86400)
+    e.store.add_event('subagent_done', 'child-late', {'summary': 'Done'}, session_key=KEY)
+    e.tick(); finish(e)
+    assert e.store.get_wake(tid).fires == 1
+    assert e.store.get_wake(tid).status != 'active'
+    assert e.store.get_wake(expired).status == 'expired'
+    assert e.store.get_wake(expired).fires == 0
+
+
 def test_global_budget_spans_conversations_and_reserves_queued_capacity(modern):
     e=modern
     e.policy=replace(e.policy,execution_capacity=1,execution_refill_per_hour=1)

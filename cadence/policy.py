@@ -342,7 +342,7 @@ class Policy:
 
     def parent_lifetime(self, wake):
         return bool(wake.managed and wake.responsibility_id and not wake.role
-                    and wake.kind in RECURRING_KINDS)
+                    and wake.kind in RECURRING_KINDS | EVENT_KINDS)
 
     def max_life_s(self, wake):
         setting = self.lifetime_setting(wake)

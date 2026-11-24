@@ -136,9 +136,13 @@ context. A standalone trigger requires its own nonempty title and instruction.
 rules as above. Owner priority on a responsibility comes from its own provenance.
 `until` has optional `expires` (timestamp), `max_fires` (positive integer started
 turns), and `owner_replies` (boolean cancellation condition). Omitted lifecycle
-fields use the owner's configured wake/watcher bounds. Unknown fields are
+fields on attached recurring timers and events follow the responsibility's
+lifetime. Other triggers use the owner's configured wake/watcher bounds. Unknown fields are
 rejected; responses use the same ID, status, receipt and inspection conventions
 as responsibilities, with `next_due_at` or the event condition and any deadline.
+Pending work exposes `hold_reasons` separately from `bucket_refill_at`, the
+earliest token availability rather than a promised delivery time. A busy chat
+and a depleted responsibility bucket can both be visible at once.
 
 `when` is an object with `kind` and the fields below. Fields marked optional
 may be omitted; all other listed fields are required. Time expressions are
