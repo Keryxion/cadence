@@ -398,8 +398,8 @@ def test_minimum_edits_settle_old_credit_and_cannot_widen_owner_limits(modern):
     assert result.get('ok'),result
     assert e.responsibilities.load(rid)['fallback_credit']==pytest.approx(.5)
     e.clock.advance(6*3600);e.tick();finish(e)
-    assert call(e,'responsibility',action='update',id=rid,checks={'min_per_24h':1,'budget_per_24h':30}).get('error')
-    assert call(e,'responsibility',action='update',id=rid,checks={'min_per_24h':2,'budget_per_24h':60}).get('error')
+    limit=e.policy.responsibility_budget_max
+    assert call(e,'responsibility',action='update',id=rid,checks={'min_per_24h':2,'budget_per_24h':limit+1}).get('error')
 
 
 @pytest.mark.parametrize('change',[{'enabled':False},{'dm_only':True}])
@@ -665,3 +665,34 @@ def test_pausing_standalone_releases_reserved_turn_for_another_chat(modern):
     assert len(e.ctx.calls) == 2
     assert e.ctx.calls[-1][1] == second_key
     assert rid in e.ctx.calls[-1][0]
+
+
+def test_agent_can_change_budget_on_request_within_owner_limit(modern):
+    e = modern
+    rid = create(e, initial_at='in 24h', checks={'min_per_24h': 1, 'budget_per_24h': 10})
+    updated = call(e, 'responsibility', action='update', id=rid,
+                   checks={'min_per_24h': 6, 'budget_per_24h': 24})
+    assert updated.get('ok'), updated
+    assert e.responsibilities.load(rid)['checks'] == {'min_per_24h': 6, 'budget_per_24h': 24}
+    lowered = call(e, 'responsibility', action='update', id=rid,
+                   checks={'min_per_24h': 1, 'budget_per_24h': 24})
+    assert lowered.get('ok'), lowered
+    limit = e.policy.responsibility_budget_max
+    capped = call(e, 'responsibility', action='update', id=rid,
+                  checks={'min_per_24h': 1, 'budget_per_24h': limit + 1})
+    assert 'error' in capped, capped
+    assert e.responsibilities.load(rid)['checks'] == {'min_per_24h': 1, 'budget_per_24h': 24}
+
+
+def test_untrusted_event_cannot_raise_responsibility_budget(modern):
+    e = modern
+    rid = create(e, initial_at='in 24h', checks={'min_per_24h': 2, 'budget_per_24h': 10})
+    trigger(e, rid, when={'kind': 'subagent_done'})
+    e.store.add_event('subagent_done', 'payload', {'summary': 'External data'}, session_key=KEY)
+    e.tick()
+    start(e)
+    assert e.intake.flights['sid'].untrusted is True
+    for checks in ({'min_per_24h': 2, 'budget_per_24h': 24}, {'min_per_24h': 1, 'budget_per_24h': 10}):
+        denied = call(e, 'responsibility', action='update', id=rid, checks=checks)
+        assert 'untrusted_rearm' in denied.get('detail', ''), denied
+    assert e.responsibilities.load(rid)['checks'] == {'min_per_24h': 2, 'budget_per_24h': 10}

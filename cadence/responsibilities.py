@@ -503,7 +503,7 @@ class Responsibilities:
             e.signal()
             return self.result(s.get_wake(wid))
         w = self.owned(a['id'], session, is_r)
-        if not is_r and action in {'update','pause','delete'}: self.invalidate_snapshot(w.id)
+        if action in {'update','pause','delete'}: self.invalidate_snapshot(w.id)
         if action == 'get': return self.result(w)
         if w.trigger_json.get('builtin'):
             raise ValueError('This opportunity is controlled by owner settings, not trigger mutations.')
@@ -532,14 +532,17 @@ class Responsibilities:
             if is_r:
                 if 'checks' in a:
                     self.check_limits(a['checks'])
-                    if not owner and (a['checks']['min_per_24h'] < r['checks']['min_per_24h'] or
-                                      a['checks']['budget_per_24h'] > r['checks']['budget_per_24h']):
-                        raise ValueError('Only the owner may lower the required minimum or raise this budget.')
+                    flight = e.intake.flight_for(sid, session.session_key)
+                    if not owner and flight and flight.untrusted and (
+                            a['checks']['min_per_24h'] < r['checks']['min_per_24h'] or
+                            a['checks']['budget_per_24h'] > r['checks']['budget_per_24h']):
+                        raise ValueError('untrusted_rearm: untrusted source data cannot lower the required minimum or raise this budget.')
                     old = r['checks']['budget_per_24h']
                     self.budgets.balance('responsibility:' + w.id, old, old/86400)
                     r['checks'] = a['checks']
                 if 'notes' in a: r['notes'] = a['notes']
             else:
+                if not owner and set(a) & {'when','until'}: self.rearm_gate(w, a, session, sid)
                 prepared = self.prepare(w, a)
                 if 'when' in a: self.engine.cancel_occurrences(w.id,'condition_changed',preserve_started=True)
                 if 'note' in a: s.set_meta('trigger_instruction:' + w.id,a['note'])
@@ -608,13 +611,23 @@ class Responsibilities:
                 'receipt': receipt, 'record': record, 'adjustments':adjustments,
                 'cache':self.engine.tool.cache_result(w)}
 
-    def invalidate_snapshot(self, trigger_id):
+    def rearm_gate(self, w, a, session, sid):
+        """Rescheduling an existing trigger is subject to the same agent limits as creating one."""
+        e = self.engine
+        kind = a['when']['kind'] if 'when' in a else w.kind
+        if e.policy.agent_can_create == 'no':
+            raise ValueError('agent_create_disabled: the owner has turned off agent-created work.')
+        flight = e.intake.flight_for(sid, session.session_key)
+        if flight and flight.untrusted and kind != 'at':
+            raise ValueError('untrusted_rearm: untrusted source data cannot make a trigger recurring or extend it.')
+
+    def invalidate_snapshot(self, wake_id):
         """A queued envelope must not authorize work its owner has just changed."""
         for o in self.store.list_occurrences(state='claimed'):
             w=self.store.get_wake(o.wake_id)
-            if not w.role or not w.managed: continue
+            if not w.managed: continue
             refs=json.loads(self.store.get_meta('contributors:' + o.id) or '[]')
-            if not any(ref['id']==trigger_id for ref in refs): continue
+            if o.wake_id != wake_id and not (w.role and any(ref['id']==wake_id for ref in refs)): continue
             self.refund_sources(o)
             self.store.refund(o.wake_id,o.dedupe_key,attempt=o.attempt,error='trigger_changed')
             self.store.set_meta('accepted:' + o.id,'0')
