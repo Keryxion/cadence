@@ -24,6 +24,11 @@ def agent_authored(wake) -> bool:
     return wake.creator == "agent" or wake.agent_edited
 
 
+def repeating(wake) -> bool:
+    """A follow-up that fires again each interval until it is cancelled."""
+    return 'continuation' in wake.trigger_json and bool(wake.trigger_json.get('every'))
+
+
 def new_wake_id() -> str:
     return "w_" + base64.b32encode(secrets.token_bytes(5)).decode().lower()
 

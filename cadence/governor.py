@@ -4,7 +4,7 @@ The no-op digest idea follows Hermes hermes_cli/loops.py::_digest_response;
 all value and pause decisions here use structured occurrence fields.
 """
 from dataclasses import replace
-from .model import RECURRING_KINDS, PROBE_KINDS
+from .model import RECURRING_KINDS, PROBE_KINDS, repeating
 from .schedule import local_day, next_cron, next_every, parse_duration
 
 VALUABLE = {'progress','done','needs_attention'}
@@ -155,7 +155,7 @@ def finish(engine,wake,occurrence):
         history=[o for o in s.list_occurrences(w.id) if o.state=='done']
         babysit_done=w.babysit and (occurrence.notify or
             len(history)>=3 and all(o.outcome=='no_change' for o in history[-3:]))
-        if babysit_done or w.kind=='at' or occurrence.outcome=='done':
+        if babysit_done or w.kind=='at' and not repeating(w) or occurrence.outcome=='done':
             w=s.get_wake(w.id)
             if w.status in {'active','paused'}: s.cas_wake(w.id,w.status,status='done',status_reason='completed')
 

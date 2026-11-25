@@ -14,7 +14,7 @@ import os
 import random
 import uuid
 
-from .model import Wake, RECURRING_KINDS, TIME_KINDS, PROBE_KINDS, EVENT_KINDS, agent_authored
+from .model import Wake, RECURRING_KINDS, TIME_KINDS, PROBE_KINDS, EVENT_KINDS, agent_authored, repeating
 from .policy import gateway_platform, owner_class, is_owner, is_watcher, one_shot, holds_messages
 from .schedule import time_due, local_day, parse_duration, next_every
 from . import governor
@@ -519,7 +519,7 @@ class Poller:
                 due=time_due(w,now=now,catch_up_s=self.policy.catch_up_hours*3600,
                              timezone=self.policy.resolved_timezone(),jitter_unit=self.jitter(),**self.timing(w))
                 if due:
-                    if not (w.kind in RECURRING_KINDS and due.state=='pending' and s.list_occurrences(w.id,state='pending')):
+                    if not ((w.kind in RECURRING_KINDS or repeating(w)) and due.state=='pending' and s.list_occurrences(w.id,state='pending')):
                         s.add_occurrence(w.id,due.dedupe_key,state=due.state)
                     if s.get_meta('restart_due:'+w.id):
                         for pending in s.list_occurrences(w.id,state='pending'):
@@ -820,10 +820,16 @@ class Poller:
 
     def terminal_one_shot(self,w):
         if w.managed and w.role: return
-        if not one_shot(w) or w.status!='active' or w.next_due_at is not None: return
+        again=repeating(w)
+        if not one_shot(w) or w.status!='active' or w.next_due_at is not None and not again: return
         occurrences=[o for o in self.store.list_occurrences(w.id) if o.state!='superseded']
+        if again:
+            # The next interval may already be queued behind the occurrence that just settled.
+            occurrences=[o for o in occurrences if o.state!='pending']
         if not occurrences or any(o.state in {'pending','claimed','started'} for o in occurrences): return
         o=occurrences[-1]
+        # A busy chat or an interrupted turn costs one interval, not the timer.
+        if again and (o.state=='interrupted' or o.state=='skipped' and o.error=='continuation_busy'): return
         if o.state == 'skipped' and o.error == 'continuation_busy':
             self.store.cas_wake(w.id,'active',expected_version=w.version,
                                 status='done',status_reason='skipped:continuation_busy')

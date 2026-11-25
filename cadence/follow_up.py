@@ -1,7 +1,7 @@
 """One continuation bound to a verified owner turn in this chat."""
 from .clock import format_timestamp
 
-from .model import Wake
+from .model import Wake, repeating
 from .schedule import parse_duration
 
 DESCRIPTION = ("Resume work already underway in this conversation once, in 15 seconds to 15 minutes. "
@@ -34,11 +34,12 @@ def handle(tool, args, *, session_id='', **kwargs):
             w = e.store.get_wake(wid) if isinstance(wid, str) else None
             if not w or w.session_key != key or 'continuation' not in w.trigger_json:
                 return {'error': 'unknown_timer'}
-            if w.fires:
+            if w.fires and not (repeating(w) and w.status == 'active'):
                 return {'id': wid, 'status': 'already_started'}
             if w.status in {'active', 'paused', 'proposed'}:
                 e.store.cas_wake(wid, w.status, expected_version=w.version, status='cancelled', status_reason='owner_cancelled')
-                e.cancel_occurrences(wid, 'cancelled')
+                # Cancelling from the timer's own turn must not silence that turn.
+                e.cancel_occurrences(wid, 'cancelled', preserve_started=True)
             return {'id': wid, 'status': e.store.get_wake(wid).status}
 
         try:
@@ -56,7 +57,7 @@ def handle(tool, args, *, session_id='', **kwargs):
         session = e.store.get_session(key)
         if session.current_session_id != session_id:
             return {'error':'wrong_session'}
-        origin = None
+        origin = replaced = None
         if flight and flight.session_id == session_id and not flight.invalid:
             parent = e.store.get_wake(flight.wake_id)
             occurrence = e.store.get_occurrence(flight.wake_id, flight.dedupe_key)
@@ -65,6 +66,8 @@ def handle(tool, args, *, session_id='', **kwargs):
                     origin = e.intake.owner_turn_refs[session_id]
                 else:
                     origin = parent.trigger_json.get('continuation')
+                if repeating(parent) and parent.status == 'active':
+                    replaced = parent
         elif not flight and verified_owner(e, session_id, key):
             origin = e.intake.owner_turn_refs[session_id]
         if not origin or origin['chat'] != key:
@@ -76,11 +79,16 @@ def handle(tool, args, *, session_id='', **kwargs):
         if not gate.allowed or gate.status != 'active':
             return {'error': gate.reason or 'needs_owner_ok'}
         origin = {field: origin[field] for field in ('chat', 'session', 'turn')}
+        if replaced:
+            # Arming again from a follow-up's own turn re-times it; the timers must not stack.
+            e.store.cas_wake(replaced.id, 'active', expected_version=replaced.version, next_due_at=None,
+                             trigger_json={k: v for k, v in replaced.trigger_json.items() if k != 'every'})
+            e.cancel_occurrences(replaced.id, 'replaced', preserve_started=True)
         w = e.store.create_wake(Wake(key, 'Follow-up fired', 'at',
             managed=bool(getattr(e,'responsibilities',None)),
             platform=session.platform, chat_type=session.chat_type, chat_id=session.chat_id,
             armed_session_id=session_id, next_due_at=e.clock.now()+seconds, owner_requested=True,
-            trigger_json={'kind': 'at', 'continuation': origin}))
+            trigger_json={'kind': 'at', 'continuation': origin, 'every': seconds}))
     e.signal()
     return {'id': w.id, 'armed': True,
             'due_at': format_timestamp(w.next_due_at)}

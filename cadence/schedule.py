@@ -159,7 +159,11 @@ def time_due(wake: Wake, *, now: float, catch_up_s: float,
         return None
     key = f"t:{due:.17g}"
     if wake.kind == "at":
-        return DueTime("missed" if now - due > catch_up_s else "pending", key, due, None)
+        missed = now - due > catch_up_s
+        every = wake.trigger_json.get("every") if "continuation" in wake.trigger_json else None
+        # A follow-up keeps its own interval; a late tick never queues a burst.
+        again = None if missed or not every else due + every if due + every > now else now + every
+        return DueTime("missed" if missed else "pending", key, due, again)
     if wake.kind == "cron":
         next_due = next_cron(wake.trigger_json["cron"], now=now, timezone=timezone,
                              minimum_interval_s=wake.eff_interval_s or 0)
