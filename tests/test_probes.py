@@ -207,3 +207,21 @@ def test_command_timeout_is_error_without_state(tmp_path,monkeypatch):
     monkeypatch.setattr(probes,'_run_command',timeout)
     result=probes.check(wake('command',command=['git','status']),policy=Policy(),home=tmp_path)
     assert result=={'fire':False,'error':'TimeoutExpired'}
+
+
+def test_refused_command_watcher_names_cwd_and_the_allowlist(engine, tmp_path):
+    from test_v0114 import create
+    e = engine
+    result = create(e, {'kind': 'command', 'command': ['git', '-C', str(tmp_path), 'rev-parse', 'HEAD']})
+    assert result.get('error') == 'invalid_request', result
+    detail = result['detail']
+    assert detail.startswith('command probe is not allowlisted; drop git -C and set the cwd field to the repository')
+    assert '(allowed: gh pr, gh run, git ls-remote, git status, git log)' in detail
+    plain = create(e, {'kind': 'command', 'command': ['rm', 'file']})['detail']
+    assert plain.startswith('command probe is not allowlisted (allowed: ') and 'git -C' not in plain
+    e.policy = replace(e.policy, probe_commands='mytool --token SECRET123 report, git log')
+    shown = create(e, {'kind': 'command', 'command': ['git', '-C', str(tmp_path), 'log']})['detail']
+    assert '(allowed: mytool --token, git log)' in shown and 'SECRET123' not in shown
+    e.policy = replace(e.policy, source_command=False)
+    off = create(e, {'kind': 'command', 'command': ['git', '-C', str(tmp_path), 'log']})
+    assert off.get('error') == 'source_disabled' and 'git -C' not in str(off), off
