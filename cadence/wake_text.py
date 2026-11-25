@@ -36,8 +36,15 @@ def render_wake(wake: Wake, occurrence: Occurrence, session: Session, *, clock: 
     tag = f" n:{marker_tag}" if marker_tag is not None else ""
     if 'continuation' in wake.trigger_json:
         scheduled = format_timestamp(float(occurrence.dedupe_key[2:]))
-        return (f"[follow_up id='{wake.id}' scheduled='{scheduled}' "
+        text = (f"[follow_up id='{wake.id}' scheduled='{scheduled}' "
                 f"current='{current}']\nFollow-up fired.")
+        every = wake.trigger_json.get('every')
+        if every:
+            minutes, seconds = divmod(int(every), 60)
+            interval = (f"{minutes}m" if minutes else "") + (f"{seconds}s" if seconds else "")
+            text += (f" It fires again every {interval} while the work is underway; "
+                     f"when the work is finished, cancel it with follow_up cancel='{wake.id}'.")
+        return text
     source = trigger_summary or ('responsibility' if wake.managed and wake.role else wake.kind)
     fields = [f"trigger='{html.escape(source, quote=True)}'"]
     if wake.role:

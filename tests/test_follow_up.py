@@ -45,7 +45,6 @@ def test_follow_up_cancel_and_context_chain(engine):
     assert history == expected_history
     assert e.ctx.calls[-1][0].startswith("[follow_up id='")
     assert 'text' not in e.store.get_wake(timer).trigger_json['continuation']
-    assert call(e,{'cancel':timer})['status']=='already_started'
     next_id=call(e,{'at':'15s'})['id']
     assert e.store.get_wake(next_id).trigger_json['continuation']['turn']=='original'
     assert e.intake.transform_llm_output(response_text='Build complete.',session_id='sid') is None
@@ -185,12 +184,12 @@ def test_busy_timer_is_consumed_and_new_orphans_other_timers(engine):
     assert not e.ctx.calls
     assert e.store.list_occurrences(first)[0].error == 'continuation_busy'
     assert e.store.list_occurrences(first)[0].state == 'skipped'
-    assert e.store.get_wake(first).status == 'done'
+    assert e.store.get_wake(first).status == 'active'
     e.intake.on_session_end(session_id='sid', turn_id='original')
     e.tick()
     assert not e.ctx.calls
     e.intake.on_session_reset(old_session_id='sid', new_session_id='new')
-    assert e.store.get_wake(second).status == 'orphaned'
+    assert e.store.get_wake(first).status == e.store.get_wake(second).status == 'orphaned'
     e.clock.advance(90)
     e.tick()
     assert not e.ctx.calls
@@ -316,6 +315,7 @@ def test_gateway_worker_acknowledges_follow_up_after_intervening_turn(engine):
         worker.intake.transform_llm_output(response_text='Finished', session_id='sid')
         worker.intake.on_session_end(session_id='sid', turn_id='turn', completed=True)
         assert e.store.list_occurrences(timer)[0].delivered
+        assert call(e, {'cancel': timer})['status'] == 'cancelled'
         e.clock.advance(601)
         e.tick()
         assert len(e.ctx.calls) == 1
@@ -348,3 +348,85 @@ def test_admitted_continuation_with_missing_ack_is_never_reinjected(engine, rest
         if restart:
             e.close()
             e.store.close()
+
+
+def finish(e, text='Still building.'):
+    assert e.intake.transform_llm_output(response_text=text, session_id='sid') is None
+    e.intake.on_session_end(session_id='sid', turn_id='turn', completed=True)
+
+
+def test_follow_up_fires_every_interval_until_cancelled(engine):
+    e = engine
+    owner(e, 'original', 'Check the build')
+    timer = call(e, {'at':'30s'})['id']
+    e.intake.on_session_end(session_id='sid', turn_id='original')
+    for fired in (1, 2, 3):
+        e.clock.advance(29)
+        e.tick()
+        assert len(e.ctx.calls) == fired - 1
+        e.clock.advance(1)
+        e.tick()
+        assert len(e.ctx.calls) == fired
+        assert f"cancel='{timer}'" in e.ctx.calls[-1][0] and 'every 30s' in e.ctx.calls[-1][0]
+        start(e)
+        if fired < 3:
+            finish(e)
+            assert e.store.get_wake(timer).status == 'active'
+    # Cancelling from the timer's own turn stops the repeat without silencing that turn.
+    assert call(e, {'cancel':timer}) == {'id':timer, 'status':'cancelled'}
+    finish(e, 'Build complete.')
+    assert e.store.list_occurrences(timer)[-1].delivered
+    e.clock.advance(300)
+    e.tick()
+    assert len(e.ctx.calls) == 3 and e.store.get_wake(timer).status == 'cancelled'
+
+
+def test_arming_again_from_a_follow_up_turn_retimes_it(engine):
+    e = engine
+    owner(e, 'original', 'Check the build')
+    timer = call(e, {'at':'30s'})['id']
+    e.intake.on_session_end(session_id='sid', turn_id='original')
+    e.clock.advance(30)
+    e.tick()
+    start(e)
+    replacement = call(e, {'at':'1m'})['id']
+    finish(e)
+    assert e.store.get_wake(timer).status == 'done'
+    e.clock.advance(30)
+    e.tick()
+    assert len(e.ctx.calls) == 1
+    e.clock.advance(30)
+    e.tick()
+    assert len(e.ctx.calls) == 2 and f"id='{replacement}'" in e.ctx.calls[-1][0]
+
+
+def test_busy_chat_costs_one_interval_and_never_queues_a_burst(engine):
+    e = engine
+    owner(e, 'original', 'Check the build')
+    timer = call(e, {'at':'15s'})['id']
+    e.clock.advance(60)
+    e.tick()
+    assert not e.ctx.calls
+    e.intake.on_session_end(session_id='sid', turn_id='original')
+    e.tick()
+    assert not e.ctx.calls
+    e.clock.advance(15)
+    e.tick()
+    assert len(e.ctx.calls) == 1
+    assert [o.state for o in e.store.list_occurrences(timer)] == ['skipped', 'claimed']
+
+
+def test_interrupted_follow_up_turn_keeps_the_timer(engine):
+    e = engine
+    owner(e, 'original', 'Check the build')
+    timer = call(e, {'at':'15s'})['id']
+    e.intake.on_session_end(session_id='sid', turn_id='original')
+    e.clock.advance(15)
+    e.tick()
+    start(e)
+    e.intake.on_session_end(session_id='sid', turn_id='turn', interrupted=True,
+                            turn_exit_reason='interrupted_by_user')
+    assert e.store.get_wake(timer).status == 'active'
+    e.clock.advance(15)
+    e.tick()
+    assert len(e.ctx.calls) == 2

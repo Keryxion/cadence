@@ -696,3 +696,20 @@ def test_untrusted_event_cannot_raise_responsibility_budget(modern):
         denied = call(e, 'responsibility', action='update', id=rid, checks=checks)
         assert 'untrusted_rearm' in denied.get('detail', ''), denied
     assert e.responsibilities.load(rid)['checks'] == {'min_per_24h': 2, 'budget_per_24h': 10}
+
+
+def test_requested_continuation_repeats_until_cancelled(modern):
+    from test_follow_up import owner,call as continuation,start as start_continuation
+    e=modern
+    owner(e,'owner-turn','Continue this work')
+    tid=continuation(e,{'at':'15s'})['id']
+    e.intake.on_session_end(session_id='sid',turn_id='owner-turn')
+    for fired in (1,2):
+        e.clock.advance(15);e.tick();start_continuation(e)
+        assert len(e.ctx.calls)==fired
+        if fired==2: assert continuation(e,{'cancel':tid})=={'id':tid,'status':'cancelled'}
+        assert e.intake.transform_llm_output(session_id='sid',turn_id='turn',response_text='Continuation result') is None
+        e.intake.on_session_end(session_id='sid',turn_id='turn')
+    assert [o.delivered for o in e.store.list_occurrences(tid)]==[True,True]
+    e.clock.advance(60);e.tick()
+    assert len(e.ctx.calls)==2 and e.store.get_wake(tid).status=='cancelled'

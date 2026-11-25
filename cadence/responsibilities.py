@@ -10,7 +10,7 @@ import uuid
 
 from .budgets import Budgets
 from .clock import format_timestamp
-from .model import Wake, KINDS, PROBE_KINDS, EVENT_KINDS, FINISHED_WAKE_STATUSES
+from .model import Wake, KINDS, PROBE_KINDS, EVENT_KINDS, FINISHED_WAKE_STATUSES, repeating
 from .schedule import parse_at, parse_duration
 
 
@@ -656,7 +656,7 @@ class Responsibilities:
         if w.status not in {'active','paused'}: return
         if w.role:
             if o.outcome == 'done': self.end(w, 'done', o.summary)
-        elif w.kind == 'at' or o.outcome == 'done':
+        elif w.kind == 'at' and not repeating(w) or o.outcome == 'done':
             self.store.cas_wake(w.id, w.status, status='done', status_reason='completed')
 
     def notification_scope(self):
