@@ -42,7 +42,7 @@ def test_g3_watch_refuses_recurring_responsibilities(engine, monkeypatch, kind):
     w = arm(e, 'self', role=True, next_due_at=e.clock.now()+3600) if kind == 'role' else own(e)
     before = e.store.get_wake(w.id)
     assert command(e, monkeypatch, 'watch '+w.id) == (
-        'Error: roles and own time stay recurring; use /pulse slow, /pulse budget or /pulse cancel')
+        'Error: roles and own time stay recurring; use /cadence slow, /cadence budget or /cadence cancel')
     assert e.store.get_wake(w.id) == before
     ordinary = arm(e)
     assert not command(e, monkeypatch, 'watch '+ordinary.id).startswith('Error:')

@@ -70,7 +70,7 @@ def test_R8_F1_outage_one_trial_per_backoff_step(engine):
         gate=json.loads(e.store.get_meta('provider_health'))
         assert gate['step']==step and gate['until']==now+delay
         # A later turn is an earlier, definitive failure settlement (G5).
-        e.intake.pre_llm_call(session_id='sid',turn_id='next',platform='telegram',user_message='/pulse status')
+        e.intake.pre_llm_call(session_id='sid',turn_id='next',platform='telegram',user_message='/cadence status')
         e.intake.on_session_end(session_id='sid',turn_id='next',completed=True)
         assert json.loads(e.store.get_meta('provider_health'))==gate
         session(e,last_wake_turn_at=None)

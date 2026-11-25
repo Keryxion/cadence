@@ -30,6 +30,17 @@ def scenarios(round=2):
     return data
 
 
+def trigger_call(arguments):
+    """Translate stored benchmark scenario inputs to the current tool contract."""
+    a=dict(arguments)
+    when=a.pop('trigger',a.pop('when',None))
+    result={k:v for k,v in a.items() if k in {'action','id','note','title','until','owner_asked'}}
+    if when is not None: result['when']=when
+    if result.get('action')=='create': result.setdefault('title',str(result.get('note','Benchmark'))[:80])
+    if result.get('action')=='cancel': result['action']='delete'
+    return result
+
+
 def fake_reply(scenario, record):
     from tests.fakes.fake_llm_provider import Text, ToolCall
 
@@ -40,26 +51,31 @@ def fake_reply(scenario, record):
     last = messages[-1]
     if scenario.get('type') == 'capture':
         if last['role'] == 'tool':
+            if scenario['id']=='N7':
+                try: items=json.loads(str(last.get('content'))).get('items',[])
+                except ValueError: items=[]
+                if items: return ToolCall('trigger',{'action':'delete','id':items[0]['id']})
+                return Text('Stopped checking.')
             if scenario['id'] == 'T2':
-                return Text('It awaits approval; please approve it with /pulse ok.')
+                return Text('It awaits approval; please approve it with /cadence approve.')
             if scenario['id'] == 'T1' and '"error"' in str(last.get('content')):
                 return Text('I cannot set that reminder.')
             return Text('The tool returned the reported bounds.')
         if scenario['id'] == 'N7':
-            return ToolCall('pulse', {'action': 'cancel', 'id': 'all'})
+            return ToolCall('trigger', {'action':'list'})
         if scenario['label'] == 'MUST_NOT_ARM':
             return Text('Blue was the logo choice.' if scenario['id'] == 'N4' else 'Understood.')
-        return ToolCall('pulse', scenario['_create'])
+        return ToolCall('trigger',trigger_call(scenario['_create']))
     if stop:
         if last['role'] != 'tool':
-            ids = re.findall(r'"id"\s*:\s*"(w_[^"]+)"', ' '.join(str(t['content']) for t in tools))
-            return ToolCall('pulse', {'action': 'cancel', 'id': ids[-1]})
+            ids = re.findall(r'"id"\s*:\s*"(t_[^"]+)"', ' '.join(str(t['content']) for t in tools))
+            return ToolCall('trigger', {'action': 'delete', 'id': ids[-1]})
         return Text('I have stopped checking in.')
     if scenario['id'] == 'L9' and last['role'] != 'tool':
         return ToolCall('lookup', {'topic': 'report'})
     if last['role'] != 'tool' or '"result"' in str(last.get('content')):
         notify = scenario['label'] == 'MUST_NOTIFY'
-        return ToolCall('pulse', {'action': 'respond', 'notify': notify,
+        return ToolCall('respond', {'notify': notify,
                                   'outcome': 'progress' if notify else 'no_change',
                                   'summary': 'fake plumbing verdict'})
     return Text(' '.join(token.split('|')[0] for token in scenario['expect']) or 'Nothing new.')
@@ -90,11 +106,13 @@ def prearm(rig, spec):
         engine = Poller(ctx, store, Policy.from_settings(entry.get('settings', {}), clock=clock),
                         clock, session_key_fn=lambda: session['session_key'])
         try:
-            created = engine.tool.handle({'action': 'create', 'note': spec['note'],
-                'trigger': {k: v for k, v in spec.items() if k != 'note'}},
+            from cadence.responsibilities import Responsibilities
+            engine.responsibilities=Responsibilities(engine)
+            created = engine.responsibilities.handle('trigger',trigger_call({'action': 'create', 'note': spec['note'],
+                'trigger': {k: v for k, v in spec.items() if k != 'note'}}),
                 session_id=session['current_session_id'])
-            assert created.get('ok') and created['wake']['creator'] == 'agent', created
-            return created['wake']['id']
+            assert created.get('ok'),created
+            return created['id']
         finally:
             engine.close()
 
@@ -240,9 +258,9 @@ def cell(args, scenario, rep):
             if arm.get('prior_wake'):
                 director.scripted_wakes = True
                 director.final = 'Any update on the draft?'
-                director.script('arm', ToolCall('pulse', {'action': 'create', 'note': arm['note'],
-                    'trigger': {'kind': 'at', 'at': 'in 5s'}}),
-                    ToolCall('pulse', {'action': 'create', 'note': arm['note'], **create}), Text('ARMED'))
+                director.script('arm', ToolCall('trigger', trigger_call({'action':'create','note':arm['note'],
+                    'trigger':{'kind':'at','at':'in 5s'}})),
+                    ToolCall('trigger',trigger_call({'action':'create','note':arm['note'],**create})), Text('ARMED'))
                 rig.owner('arm the check-ins [in:arm]', 'ARMED')
                 wakes = sorted(rig.rows('wakes'), key=lambda w: w['next_due_at'])
                 rig.settled(wakes[0]['id'])
@@ -276,7 +294,7 @@ def cell(args, scenario, rep):
             before = rig.visible_ids()  # owner stop acknowledgement is not a wake delivery.
             rig.tick_barrier(arm['observe_seconds'])
             rig.gateway.wait_idle(timeout=30)
-            rig.owner('/pulse status', 'Cadence:')
+            rig.owner('/cadence status', 'Cadence:')
         else:
             rig.settled(wid)
         texts = [t for t in rig.new_visible(before) if not t.startswith('Cadence:')]
@@ -298,7 +316,7 @@ def cell(args, scenario, rep):
         calls = rig.llm.main_requests()
         pulse = {c['id']: tool_arguments(c) for b in calls
             for m in b.get('messages', []) if m['role'] == 'assistant'
-            for c in m.get('tool_calls', []) if c['function']['name'] == 'pulse'}
+            for c in m.get('tool_calls', []) if c['function']['name'] in {'responsibility','trigger','respond'}}
         result['pulse_calls'] = list(pulse.values())
         if scenario.get('type') == 'capture':
             result['pulse_calls'], result['pulse_results'] = turn_pulse(upstream.rows)
@@ -307,7 +325,7 @@ def cell(args, scenario, rep):
         history = upstream.rows[0]['request']['messages'] if upstream.rows else []
         result['history_rows'] = [{'role': m['role'], 'content': re.sub(r'\s*\[in:[^]]+\]', '',
             director._text(m))} for m in history if m['role'] in ('user', 'assistant') and
-            director._text(m) and '⟦pulse o:' not in director._text(m)][-6:]
+            director._text(m) and '⟦cadence o:' not in director._text(m)][-6:]
         result.update(model_calls=calls, upstream_rows=upstream.rows, evidence=str(rig.root))
         result['tokens'] = {k: sum(first_count(usage_of(r.get('usage')).get(k)) for r in upstream.rows)
                             for k in ('prompt_tokens', 'completion_tokens', 'total_tokens')}

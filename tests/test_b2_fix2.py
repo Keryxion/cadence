@@ -46,7 +46,7 @@ def test_n7_prearm_without_chat_turn(monkeypatch, tmp_path, usage):
             self.root = tmp_path / 'rig'
             self.root.mkdir()
             self.gateway = NS(home=self.root, hermes_home=self.root)
-            self.pulse_db = self.root / 'plugin-data/cadence/pulse.db'
+            self.pulse_db = self.root / 'plugin-data/cadence/cadence.db'
             config['plugins']['entries']['cadence']['allow_gateway_injection'] = True
             (self.root / 'config.yaml').write_text(yaml.safe_dump(config))
             self.director = director

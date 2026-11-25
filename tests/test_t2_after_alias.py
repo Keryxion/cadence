@@ -10,7 +10,7 @@ from test_v0113 import owner_turn
 from test_v0114 import create, receipt
 
 
-NOT_SET = ('If a result is proposed (armed=false and its receipt names a /pulse ok command), nothing is set yet: '
+NOT_SET = ('If a result is proposed (armed=false and its receipt names a /cadence approve command), nothing is set yet: '
            'say so first and ask the owner to send that command; never call it set, done or scheduled. ')
 
 
@@ -58,7 +58,7 @@ def test_after_proposal_matches_literal_at(engine):
         assert result['wake']['kind'] == 'at'
         assert result['wake']['trigger_json'] == {'kind':'at','at':'in 10m'}
         assert receipt(result).startswith('Not set yet:')
-        assert f'/pulse ok {result["wake"]["id"]}' in receipt(result)
+        assert f'/cadence approve {result["wake"]["id"]}' in receipt(result)
 
 
 @pytest.mark.parametrize('trigger', [

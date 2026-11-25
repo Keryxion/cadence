@@ -141,7 +141,7 @@ def test_packet_first_measured_system_prompt_and_parameters_verbatim(round, wake
 
 @pytest.mark.parametrize('suffix,measured', [
     ('', True),
-    ('\n\nCadence: 1 armed; /pulse shows status, /pulse off stops checks.', True),
+    ('\n\nCadence: 1 armed; /cadence shows status, /cadence off stops checks.', True),
     (' later', False),
     ('\nCadence: 1 armed;', False),
 ])

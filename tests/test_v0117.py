@@ -257,9 +257,10 @@ def test_owner_refusal_names_reminder_setting(engine):
 def test_no_chaining_and_release_metadata():
     import yaml
     root = Path(__file__).resolve().parents[1]
-    for text in (DESCRIPTION, (root/'skills/cadence-usage/SKILL.md').read_text()):
-        assert 'When a create is refused' in text
-        assert 'never arm a stand-in' in text.lower() and 're-arms' in text
+    assert 'When a create is refused' in DESCRIPTION
+    text=(root/'skills/cadence-usage/SKILL.md').read_text()
+    assert 'Report a refusal truthfully' in text
+    assert 'invent relay wakes to bypass a limit' in text
     assert '## 0.1.17 — 2026-10-14' in (root/'CHANGELOG.md').read_text()
     assert '`max_reminder_days`' in (root/'README.md').read_text()
     setting = yaml.safe_load((root/'plugin.yaml').read_text())['config_schema']['max_reminder_days']

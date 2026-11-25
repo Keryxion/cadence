@@ -77,6 +77,7 @@ def handle(tool, args, *, session_id='', **kwargs):
             return {'error': gate.reason or 'needs_owner_ok'}
         origin = {field: origin[field] for field in ('chat', 'session', 'turn')}
         w = e.store.create_wake(Wake(key, 'Follow-up fired', 'at',
+            managed=bool(getattr(e,'responsibilities',None)),
             platform=session.platform, chat_type=session.chat_type, chat_id=session.chat_id,
             armed_session_id=session_id, next_due_at=e.clock.now()+seconds, owner_requested=True,
             trigger_json={'kind': 'at', 'continuation': origin}))

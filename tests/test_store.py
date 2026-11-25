@@ -12,7 +12,7 @@ from cadence.store import Store
 
 @pytest.fixture
 def store(tmp_path, clock):
-    with Store(tmp_path / "pulse.db", clock) as value:
+    with Store(tmp_path / "cadence.db", clock) as value:
         yield value
 
 
@@ -24,7 +24,7 @@ def seed(store):
 
 
 def test_schema_migration_idempotence_durability_and_clock(tmp_path, clock):
-    path = tmp_path / "nested" / "pulse.db"
+    path = tmp_path / "nested" / "cadence.db"
     with Store(path, clock) as s:
         wake = seed(s)
         assert wake.created_at == clock.now()
@@ -41,7 +41,7 @@ def test_schema_migration_idempotence_durability_and_clock(tmp_path, clock):
 
 
 def test_future_schema_refused(tmp_path, clock):
-    path = tmp_path / "pulse.db"
+    path = tmp_path / "cadence.db"
     with Store(path, clock) as s:
         s.set_meta("schema_version", "99")
     with pytest.raises(ValueError, match="schema"):
@@ -70,7 +70,7 @@ def test_CAS_claim_start_refund_stale_attempt_and_finish(store, clock):
 
 
 def test_CAS_race_two_connections_threads(tmp_path, clock):
-    path = tmp_path / "pulse.db"
+    path = tmp_path / "cadence.db"
     with Store(path, clock) as s:
         wake = seed(s)
     barrier = threading.Barrier(2)
@@ -180,7 +180,7 @@ def test_response_and_usage_CAS_while_started(store):
 
 
 def test_one_shared_connection_claim_race_and_byte_coalesce(tmp_path, clock):
-    with Store(tmp_path / "pulse.db", clock) as s:
+    with Store(tmp_path / "cadence.db", clock) as s:
         wake = seed(s)
         barrier = threading.Barrier(2)
         def contender(pid):

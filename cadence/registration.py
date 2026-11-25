@@ -133,9 +133,11 @@ class Runtime:
                 from .store import Store
                 from .poller import Poller
                 with home_scope(self.home):
-                    store=Store(self.home/'plugin-data/cadence/pulse.db',self.clock)
+                    store=Store(self.home/'plugin-data/cadence/cadence.db',self.clock)
                     try:
                         self._engine=Poller(self.ctx,store,self.policy(),self.clock,boot_at=self.boot_at)
+                        from .responsibilities import Responsibilities
+                        self._engine.responsibilities=Responsibilities(self._engine)
                         if store.get_meta('settings_error')!=self.settings_error:
                             store.set_meta('settings_error',self.settings_error)
                     except BaseException:
@@ -177,7 +179,7 @@ class Runtime:
             LOG.warning('cadence hook adapter %s failed',name,exc_info=True)
             return None
 
-    def tool(self,args,*,continuation=False,**kwargs):
+    def tool(self,args,*,continuation=False,surface=None,**kwargs):
         try:
             reason=self.inactive()
             if reason: return json.dumps({'error':'engine_unavailable','reason':reason})
@@ -187,7 +189,10 @@ class Runtime:
                     from .follow_up import handle
                     self.get_engine().refresh()
                     return json.dumps(handle(tool,args,**kwargs),ensure_ascii=False)
-                result = tool.handle(args, **kwargs)
+                if surface:
+                    result = self.get_engine().responsibilities.handle(surface,args,**kwargs)
+                else:
+                    result = tool.handle(args, **kwargs)
                 # Convert stored wake records only at the model-facing JSON boundary.
                 records = list(result.get('wakes', ()))
                 records.extend(item['wake'] for item in result.get('results', [result]) if 'wake' in item)
@@ -205,7 +210,7 @@ class Runtime:
         reason=self.inactive()
         if reason: return f'Cadence is inactive here: {reason}.'
         with home_scope(self.home):
-            from .commands import handle
+            from .control import handle
             return handle(raw_args,self)
 
     def start(self):
@@ -259,6 +264,8 @@ class Runtime:
                         from .poller import Poller
                         e=self.get_engine()
                         runner=Poller(self.ctx,e.store,e.policy,self.clock,boot_at=self.boot_at)
+                        from .responsibilities import Responsibilities
+                        runner.responsibilities=Responsibilities(runner)
                         runner.interruption_buckets=e.interruption_buckets
                         runner.refresh_policy=self.policy
                         runner.process_start=not self._reconciled
@@ -306,11 +313,11 @@ class Runtime:
 
 
 def _register_surfaces(ctx,runtime):
-    from .tool import SCHEMA,DESCRIPTION
-    # RecordingContext audits registration without ever invoking these adapters.
-    def tool(args,**kwargs):
-        return runtime.tool(args,**kwargs) if runtime else json.dumps({'error':'engine_unavailable'})
-    ctx.register_tool(name='pulse',toolset='cadence',schema=SCHEMA,handler=tool,description=DESCRIPTION)
+    from .responsibilities import RESPONSIBILITY_SCHEMA, TRIGGER_SCHEMA, RESPOND_SCHEMA
+    for schema in (RESPONSIBILITY_SCHEMA, TRIGGER_SCHEMA, RESPOND_SCHEMA):
+        name=schema['name']
+        ctx.register_tool(name=name,toolset='cadence',schema=schema,description=schema['description'],
+            handler=lambda args,_name=name,**kw: runtime.tool(args,surface=_name,**kw) if runtime else json.dumps({'error':'engine_unavailable'}))
     from . import get_time, follow_up
     def read_clock(args, **kwargs):
         if runtime is None:
@@ -331,12 +338,12 @@ def _register_surfaces(ctx,runtime):
         # The available hold_stream registration buffers the entire profile.
         # Do not buffer ordinary replies; request setup speech is allowed.
         ctx.register_hook(name,callback)
-    ctx.register_command(name='pulse',handler=lambda args:runtime.command(args) if runtime else 'Error: no profile runtime.',
+    ctx.register_command(name='cadence',handler=lambda args:runtime.command(args) if runtime else 'Error: no profile runtime.',
                          description='Cadence wakes and watchers',args_hint='<action>')
     skill=getattr(ctx,'register_skill',None)
     if skill:
         skill('cadence-usage',Path(__file__).resolve().parents[1]/'skills/cadence-usage/SKILL.md',
-              'Your own time in this chat: roles you own, follow-ups, watchers and own-time turns, within the owner\'s budgets.')
+              'Own responsibilities and explicit triggers in this chat, within owner budgets.')
         skill('cadence-report-problem',Path(__file__).resolve().parents[1]/'skills/cadence-report-problem/SKILL.md',
               'Cadence: report a bug or problem')
 

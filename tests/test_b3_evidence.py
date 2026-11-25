@@ -47,7 +47,7 @@ def test_readonly_transcript_and_pulse(tmp_path, clock):
     assert transcript.turn_done('s', 100)
     transcript.now = lambda: 105
     assert not transcript.turn_done('s', 100)
-    db = tmp_path/'pulse.db'
+    db = tmp_path/'cadence.db'
     with Store(db, clock) as store:
         store.upsert_session(Session(session_key='chat', current_session_id='s'))
         store.create_wake(Wake(session_key='chat', note='bank', kind='at', id='w'))

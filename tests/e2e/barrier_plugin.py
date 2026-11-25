@@ -8,7 +8,7 @@ def register(ctx):
     root = Path(os.environ["HERMES_HOME"]).parents[1]
 
     def barrier(user_message="", **kwargs):
-        if "⟦pulse o:" not in user_message or (root / "barrier.release").exists():
+        if "⟦cadence o:" not in user_message or (root / "barrier.release").exists():
             return
         (root / "barrier.entered").touch()
         deadline = time.monotonic() + 35

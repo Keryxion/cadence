@@ -30,7 +30,7 @@ migrations. Restarting the gateway affects all its plugins and conversations.
 
 No Converse HTTP route or generic gateway endpoint is used. The separately
 installed `cadence-alpha-health` reads the existing default profile's
-`~/.hermes/plugin-data/cadence/pulse.db` using read-only SQLite queries; it does not
+`~/.hermes/plugin-data/cadence/cadence.db` using read-only SQLite queries; it does not
 load Cadence, create a runtime, arm a wake, or send a message. It requires:
 
 - A live system service MainPID matching Cadence's recorded `poller_pid` and a

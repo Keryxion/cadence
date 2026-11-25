@@ -151,7 +151,7 @@ def test_b_uses_only_current_row(engine):
     count(e)
 
 
-@pytest.mark.parametrize('text',[GOALS[0],'/pulse status'])
+@pytest.mark.parametrize('text',[GOALS[0],'/cadence status'])
 def test_b_skips_machine_and_command_even_with_id(engine,text):
     llm(engine,{'role':'user','content':text,'platform_message_id':'machine'})
     count(engine)
@@ -235,7 +235,7 @@ def test_stop_command_kwarg_at_both_pins(pin):
 def test_first_idle_owner_in_unknown_chat(tmp_path,clock,monkeypatch,platform,mid,age):
     env={'HERMES_SESSION_PLATFORM':platform,'HERMES_SESSION_CHAT_TYPE':'dm','HERMES_SESSION_CHAT_ID':'unit','HERMES_SESSION_ID':'sid'}
     monkeypatch.setattr(tool,'session_env',lambda name:env.get(name,''))
-    store=Store(tmp_path/'pulse.db',clock)
+    store=Store(tmp_path/'cadence.db',clock)
     e=Poller(GatewayCtx(tmp_path),store,Policy(clock=clock,timezone='UTC'),clock,session_key_fn=lambda:KEY,paused=lambda:False,jitter=lambda:0)
     try:
         e.intake.pre_gateway_dispatch(event=event(mid=mid,source_mid=mid,platform=platform))
@@ -257,7 +257,7 @@ def test_pending_stamp_respects_all_admission_skips(engine,skip):
     e=engine; ev=event(mid=None,source_mid=None,platform='signal')
     gateway=NS(_is_user_authorized_for_source=lambda src:skip!='unauthorized')
     if skip=='internal': ev.internal=True
-    elif skip=='pulse': ev.text='/pulse status'
+    elif skip=='pulse': ev.text='/cadence status'
     elif skip=='heartbeat': ev._heartbeat_session_id='sid'
     elif skip=='goal': ev.text=GOALS[0]
     elif skip=='origin': ev.text=idless()

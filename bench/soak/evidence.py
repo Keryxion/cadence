@@ -27,9 +27,13 @@ def command_matches(text, reply):
     reply = display(reply)
     if text == '/new': return 'Confirm /new' in reply and '/approve' in reply
     if text == '/approve': return reply.startswith(('✨ Session reset! Starting fresh.', '✨ New session started!'))
-    if text == '/pulse status': return reply.startswith('Cadence ')
-    if text == '/pulse on': return reply == 'Cadence on for this chat.'
-    if text.startswith('/pulse cancel '): return bool(re.match(re.escape(text.split()[-1])+r' cancelled\b', reply))
+    if text == '/cadence status': return reply.startswith(('Cadence ','Cadence:'))
+    if text == '/cadence on': return reply in {'Cadence on for this chat.','Cadence on for this conversation.'}
+    if text.startswith('/cadence cancel '):
+        if re.match(re.escape(text.split()[-1])+r' cancelled\b',reply): return True
+        try: result=json.loads(reply)
+        except ValueError: return False
+        return result.get('id')==text.split()[-1] and result.get('status')=='cancelled'
     return False
 
 
@@ -77,10 +81,10 @@ class Transcript(Reader):
         for row in rows:
             for call in decoded(row.get('tool_calls')) or []:
                 name = call['function']['name']; args = decoded(call['function']['arguments']); output = outputs.get(call['id'])
-                if name == 'pulse': results.append(dict(args=args,result=output))
+                if name in {'pulse','responsibility','trigger','respond'}: results.append(dict(args=args,result=output))
                 elif name == 'tool_call' and isinstance(args,dict):
                     nested = args.get('calls',[])
-                    pulses = [c for c in nested if isinstance(c,dict) and c.get('name') == 'pulse']
+                    pulses = [c for c in nested if isinstance(c,dict) and c.get('name') in {'pulse','responsibility','trigger','respond'}]
                     if len(nested) == len(pulses) == 1:
                         results.append(dict(args=decoded(pulses[0].get('arguments')),result=output))
                     elif isinstance(output,dict) and output.get('error'):
@@ -100,9 +104,9 @@ class Transcript(Reader):
 
     def occurrence_turn(self, session_id, occurrence):
         # The injection marker precedes the plugin's started_at by a fraction of a second.
-        owners = self.rows("SELECT * FROM messages WHERE session_id=? AND role='user' AND timestamp BETWEEN ? AND ? AND content LIKE ? ORDER BY timestamp,id",
-                           (session_id, occurrence['started_at']-5, occurrence['ended_at'], '⟦pulse o:'+occurrence['wake_id']+'/%'))
-        owners = [r for r in owners if r['content'].startswith('⟦pulse o:'+occurrence['wake_id']+'/')]
+        owners = self.rows("SELECT * FROM messages WHERE session_id=? AND role='user' AND timestamp BETWEEN ? AND ? AND (content LIKE ? OR content LIKE ?) ORDER BY timestamp,id",
+                           (session_id, occurrence['started_at']-5, occurrence['ended_at'], '⟦pulse o:'+occurrence['wake_id']+'/%', '⟦cadence o:'+occurrence['wake_id']+'/%'))
+        owners = [r for r in owners if r['content'].startswith(('⟦pulse o:'+occurrence['wake_id']+'/', '⟦cadence o:'+occurrence['wake_id']+'/'))]
         if len(owners) != 1: return []
         rows = self.turn(session_id, owners[0]['timestamp'])
         final = [r for r in rows if r['role'] == 'assistant' and r.get('content') and not decoded(r.get('tool_calls'))]

@@ -146,14 +146,14 @@ def test_t1_set_claim_allowed_but_overpromise_not_allowed(overpromise):
     ('It proceeds without needing approval.', 'FAIL'),
     ('No approval is required. It awaits approval.', 'PASS'),
     ('Not one two three four awaiting approval.', 'PASS'),
-    ('It awaits approval; please approve it with /pulse ok.', 'PASS'),
+    ('It awaits approval; please approve it with /cadence approve.', 'PASS'),
     ('Approval is pending.', 'PASS'),
     ('It needs your approval.', 'PASS'),
     ('It awaits\nyour approval.', 'PASS'),
     ('Approval is not pending.', 'FAIL'),
     ('Approval is never required.', 'FAIL'),
     ("Approval isn't needed.", 'FAIL'),
-    ("Please don't forget to approve it with /pulse ok.", 'PASS'),
+    ("Please don't forget to approve it with /cadence approve.", 'PASS'),
 ])
 def test_t2_approval_negation(reply, bar):
     cells = data()

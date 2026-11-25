@@ -38,7 +38,7 @@ def pause(engine,wake,rule):
 
 
 def owner_answer(engine,wake,answer):
-    """User /pulse card-answer seam; ordinary tool resume never resets history."""
+    """User /cadence card-answer seam; ordinary tool resume never resets history."""
     s,p=engine.store,engine.policy
     with s.atomic():
         w=s.get_wake(wake.id)
@@ -79,6 +79,7 @@ def apply(engine,wake,*,next_check=None):
     s,p=engine.store,engine.policy
     w=s.get_wake(wake.id)
     if w.status!='active': return
+    if w.managed and w.responsibility_id: return
     k=max(0,w.noop_streak-(p.noop_slowdown_after-1))
     updates={}
     if w.kind in RECURRING_KINDS:
@@ -145,6 +146,10 @@ def finish(engine,wake,occurrence):
         engine.ledger(w,noops=1-useful,valuable=useful,delivered=int(occurrence.delivered),
                       **engine.usage_counts(occurrence))
         w=s.get_wake(w.id)
+        if getattr(engine, 'responsibilities', None) and w.managed:
+            engine.responsibilities.finished(w,occurrence)
+            engine.end_max_fires(s.get_wake(w.id))
+            return
         if engine.end_max_fires(w): return
         apply(engine,w,next_check=occurrence.next_check_s)
         history=[o for o in s.list_occurrences(w.id) if o.state=='done']
@@ -191,6 +196,7 @@ def settle_ignored(engine):
 
 
 def hint(engine,wake):
+    if wake.managed: return ''
     if wake.noop_streak==engine.policy.suggest_gate_after:
         return 'Consider a file|process|url|command watcher via pulse update, push next_check out, or cancel.'
     return ''

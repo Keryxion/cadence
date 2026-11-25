@@ -103,7 +103,7 @@ def test_dm_thread_message_counts_under_its_own_session(tmp_path, clock, monkeyp
            'HERMES_SESSION_CHAT_ID': 'unit', 'HERMES_SESSION_ID': 'sid9'}
     monkeypatch.setattr(tool, 'session_env', lambda name: env.get(name, ''))
     from cadence.model import Session
-    store = Store(tmp_path / 'pulse.db', clock)
+    store = Store(tmp_path / 'cadence.db', clock)
     store.upsert_session(Session(KEY, 'telegram', 'dm', 'unit', 'sid', clock.now(), clock.now(), 'episode'))
     e = Poller(GatewayCtx(tmp_path), store, Policy(clock=clock, timezone='UTC'), clock,
                session_key_fn=lambda: keys['current'], paused=lambda: False, jitter=lambda: 0,

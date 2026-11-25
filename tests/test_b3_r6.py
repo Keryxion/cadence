@@ -83,7 +83,7 @@ def test_hard_failure_cleans_started_episode_without_active_pointer(tmp_path, mo
     store.close()
 
 
-@pytest.mark.parametrize('key,text', [('setup_cancel:missing', '/pulse cancel missing'), ('setup_on', '/pulse on')])
+@pytest.mark.parametrize('key,text', [('setup_cancel:missing', '/cadence cancel missing'), ('setup_on', '/cadence on')])
 def test_cleanup_client_error_never_voids_even_before_close(tmp_path, key, text):
     r, c, store, e = started(tmp_path)
     c.send = lambda _: (_ for _ in ()).throw(ClientError('synthetic'))
@@ -97,7 +97,7 @@ def test_cleanup_client_error_never_voids_even_before_close(tmp_path, key, text)
 def test_cleanup_unconfirmed_stays_pending_once_without_global_failure(tmp_path, target):
     r, c, store, e = started(tmp_path)
     w = store.list_wakes('chat')[0]
-    key, text = ('setup_cancel:'+w.id, '/pulse cancel '+w.id) if target == 'cancel' else ('setup_on', '/pulse on')
+    key, text = ('setup_cancel:'+w.id, '/cadence cancel '+w.id) if target == 'cancel' else ('setup_on', '/cadence on')
     c.send = lambda text: c.message(text, True)
     r.send(e, key, text, 'setup')
     r.clock.sleep(120); r.turns(); r.turns()
@@ -156,7 +156,7 @@ def test_cleanup_restart_gets_fresh_attempts_and_unique_keys(tmp_path):
 def test_cleanup_failed_aborts_run_with_bounded_terminal_cleanup(tmp_path):
     r, c, store, e = shape_rig(tmp_path)
     original = c.send
-    c.send = lambda text: c.message(text, True) if text.startswith('/pulse cancel ') else original(text)
+    c.send = lambda text: c.message(text, True) if text.startswith('/cadence cancel ') else original(text)
     assert r.run() == 3
     assert any(x['kind'] == 'abort' and x['reason'] == 'cleanup_failed' for x in r.rows)
     assert r.has('terminal_cleanup_incomplete', e['id']) and not r.has('setup_failed', None)

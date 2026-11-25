@@ -40,7 +40,7 @@ These same disclosure and exception paragraphs appear in README and the manifest
 ## Boundaries
 
 - The immutable session key comes from the invoking gateway, never from tool
-  parameters. `/pulse` reads and changes only that session's items. Unknown IDs
+  parameters. `/cadence` reads and changes only that session's items. Unknown IDs
   in another session do not reveal the note or permit mutation.
 - Cadence is intended for messaging-gateway DMs. With default `dm_only=true`,
   groups and unknown chat types are refused. Turning `dm_only=false` permits
@@ -100,34 +100,39 @@ These same disclosure and exception paragraphs appear in README and the manifest
   intentionally interpret the configured exit condition as a signal.
 - Fingerprints are hashes, but notes, scratch, event payloads, summaries and
   JSON observer state are stored as plaintext in SQLite WAL under
-  `<profile>/plugin-data/cadence/pulse.db`. Hermes filesystem permissions,
+  `<profile>/plugin-data/cadence/cadence.db`. Hermes filesystem permissions,
   backups and host access govern confidentiality. There is no encryption or
   independent OS permission boundary supplied by this plugin.
 
 ## Model and delivery
 
 A wake is a normal model turn in that conversation, billed like one; its size
-is your conversation's context size. `/pulse ledger` and `/pulse status` show
+is your conversation's context size. `/cadence status` and inspection show
 warm/cold wake counts and estimated cost when priced, or in/cached/written/out
 tokens, to track the running cost. These estimates are not a monetary bill.
 
 External payloads are fenced as untrusted data and bounded; this reduces prompt
 confusion, but cannot guarantee that a full model turn follows every instruction.
-A structured `pulse respond` with notify=false yields exactly `[SILENT]`; missing
+A structured `respond` with notify=false yields exactly `[SILENT]`; missing
 respond also defaults to silence. Hermes response trailers can break the final
 exact-marker match after transformation. Never treat fake-injector acceptance
 as proof of delivery. Enabled/settings/source gates, the
-optional daily cost limit, per-role turn budgets, busy checks, estop and the idle
-governor bound the engine's work and spend. The interruption token bucket and
+optional daily cost limit, profile-wide execution bucket, responsibility token
+budgets, busy checks and estop bound work and spend. Responsibility quiet checks
+do not automatically slow or pause the work. The interruption token bucket and
 the unanswered mute bound what reaches the owner: during them the agent's own
-recurring work and roles still run, silently, and their messages are not delivered.
-Roles and own-time turns are full model turns with the conversation's normal tools;
+responsibility checks still run, silently, and their messages are not delivered.
+Responsibility checks and own-time turns are full model turns with the conversation's normal tools;
 turn them on only in conversations whose tools you are happy to have run on their
 own.
 A deadline reports that nothing happened; it does not assert success.
 Hermes may auto-resume a wake turn interrupted by a crash; cadence keeps the
 replay silent, never counts it as a fire or delivery, and counts it as a model
 turn.
+
+Only priced calls contribute to monetary estimates; unpriced routes are counted
+separately and can still incur provider charges. Token and cost estimates are
+observations, not a provider invoice.
 
 ## Reporting
 

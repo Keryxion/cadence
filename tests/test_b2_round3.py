@@ -197,7 +197,7 @@ def test_trigger_mismatches(sid, trigger):
 
 @pytest.mark.parametrize('text,hit', [("I've set it; it awaits your approval", True),
     ('not set', False), ("I can't set it", False), ('Unable to set it.', False),
-    ("If you approve it, I'll remind you", False), ('Once /pulse ok happens, it is scheduled.', False),
+    ("If you approve it, I'll remind you", False), ('Once /cadence approve happens, it is scheduled.', False),
     ("It is armed. If you approve, I'll remind you.", True), ('I have never scheduled it', False),
     ('No reminder is on.', False), ('It is scheduled', True), ('It failed to be set', False),
     ("After approval, I'll remind you", False), ('No. It is set.', True),

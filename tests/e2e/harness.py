@@ -23,7 +23,7 @@ from tests.fakes.fake_llm_provider import Error, FakeLLMServer, Text, ToolCall
 from tests.fakes.platforms._standin import wait_until
 
 ROOT = Path(__file__).resolve().parents[2]
-MARKER = re.compile(r"⟦pulse o:(\S+) a:(\d+)⟧")
+MARKER = re.compile(r"⟦cadence o:(\S+) a:(\d+)⟧")
 
 
 def norm(text):
@@ -103,7 +103,7 @@ class WakeDirector(Director):
         return super().__call__(record)
 
     def respond(self):
-        return ToolCall("pulse", {"action": "respond", "outcome": "progress" if self.notify else "no_change",
+        return ToolCall("respond", { "outcome": "progress" if self.notify else "no_change",
                                   "notify": self.notify, "summary": "E2E verdict"})
 
     def auxiliary(self, record):
@@ -160,7 +160,7 @@ class PulseRig:
                 shutil.copytree(src, plugin / part, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
             else:
                 shutil.copyfile(src, plugin / part)
-        self.pulse_db = self.gateway.hermes_home / "plugin-data/cadence/pulse.db"
+        self.pulse_db = self.gateway.hermes_home / "plugin-data/cadence/cadence.db"
         if barrier:
             self.install_barrier()
         if poke:
@@ -256,9 +256,9 @@ class PulseRig:
 
     def owner(self, text, reply=None):
         # Hermes's contract barrier has the same bounded re-send for #121393's
-        # adapter-close window. Only a read-only /pulse status may be retried;
+        # adapter-close window. Only a read-only /cadence status may be retried;
         # model/arming/owner input is never sent twice or counted twice here.
-        attempts = 3 if text == "/pulse status" else 1
+        attempts = 3 if text == "/cadence status" else 1
         for attempt in range(attempts):
             before = self.visible_ids()
             inbound = self.driver.dm(text)
@@ -269,7 +269,7 @@ class PulseRig:
             except AssertionError:
                 if attempt == attempts - 1:
                     log = self.gateway.hermes_home / "logs/agent.log"
-                    if text == "/pulse status" and log.exists() and "flush-cancelled" in log.read_text():
+                    if text == "/cadence status" and log.exists() and "flush-cancelled" in log.read_text():
                         raise AssertionError("Hermes Telegram duplicate /stop wedge (upstream NousResearch/hermes-agent#137545)\n" + self.ctx()) from None
                     raise
         self.gateway.wait_idle(timeout=30)
@@ -296,7 +296,7 @@ class PulseRig:
 
     def arm(self, note="e2e-wake", delay="1m"):
         before = {r["id"] for r in self.rows("wakes")}
-        self.owner(f"/pulse add in {delay} {note}", "w_")
+        self.owner(f"/cadence add in {delay} {note}", "t_")
         created = self.rows("wakes")
         new = [w for w in created if w["id"] not in before]
         assert len(new) == 1 and new[0]["creator"] == "user", new
@@ -308,10 +308,10 @@ class PulseRig:
 
     def agent_arm(self, token, trigger, *, note=None, until=None):
         before = {w["id"] for w in self.rows("wakes")}
-        args = {"action": "create", "note": note or token, "trigger": trigger}
+        args = {"action": "create", "title": token, "note": note or token, "when": trigger}
         if until:
             args["until"] = until
-        self.director.script(token, ToolCall("pulse", args), Text(f"ARMED-{token}"))
+        self.director.script(token, ToolCall("trigger", args), Text(f"ARMED-{token}"))
         self.owner(f"arm the requested item [in:{token}]", f"ARMED-{token}")
         new = [w for w in self.rows("wakes") if w["id"] not in before]
         assert len(new) == 1 and new[0]["creator"] == "agent", new
@@ -324,8 +324,8 @@ class PulseRig:
             return row if row and row["state"] in states else None
         row = self.wait(terminal, f"{wid} settles as {states}", 110)
         self.gateway.wait_idle(timeout=30)
-        # /pulse status orders behind final send without changing human accounting.
-        self.owner("/pulse status", "Cadence:")
+        # /cadence status orders behind final send without changing human accounting.
+        self.owner("/cadence status", "Cadence:")
         return row
 
     def human_once(self, before_events, before_human):

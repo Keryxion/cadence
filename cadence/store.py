@@ -28,7 +28,7 @@ LEDGER_FIELDS = frozenset({"fires", "gated_skips", "governor_skips", "model_turn
     "noops", "valuable", "delivered", "engaged", "ignored", "tokens_in", "tokens_out", "errors", "provider_deferrals", "checks", "no_verdict"} | CACHE_FIELDS)
 _JSON_FIELDS = {"trigger_json", "probe_state_json", "payload_json"}
 _BOOL_FIELDS = {"babysit", "urgent", "cancel_on_reply", "notify", "force_silent",
-                "enabled", "first_notice_sent", "agent_edited", "owner_requested", "role"}
+                "enabled", "first_notice_sent", "agent_edited", "owner_requested", "role", "managed"}
 _TRANSITIONS = {
     "pending": { "skipped", "missed", "dead", "orphaned", "superseded"},
     "claimed": {"pending", "started", "dead", "interrupted", "orphaned", "superseded"},
@@ -176,7 +176,8 @@ class Store:
                     self.connection.execute("ALTER TABLE ledger ADD COLUMN provider_deferrals INTEGER NOT NULL DEFAULT 0")
                 additions = {'wakes': {'checks':'INTEGER NOT NULL DEFAULT 0', 'no_verdict':'INTEGER NOT NULL DEFAULT 0',
                                       'agent_edited':'INTEGER NOT NULL DEFAULT 0', 'owner_requested':'INTEGER NOT NULL DEFAULT 0',
-                                      'role':'INTEGER NOT NULL DEFAULT 0', 'budget_turns_per_day':'INTEGER'},
+                                      'role':'INTEGER NOT NULL DEFAULT 0', 'budget_turns_per_day':'INTEGER',
+                                      'managed':'INTEGER NOT NULL DEFAULT 0', 'responsibility_id':"TEXT NOT NULL DEFAULT ''"},
                     'ledger': {'checks':'INTEGER NOT NULL DEFAULT 0', 'no_verdict':'INTEGER NOT NULL DEFAULT 0'},
                     'occurrences': {'created_at':'REAL NOT NULL DEFAULT 0', 'matched_at':'REAL', 'held_since':'REAL',
                         'held_reason':"TEXT NOT NULL DEFAULT ''", 'held_matches':'INTEGER NOT NULL DEFAULT 0', 'api_calls':'INTEGER NOT NULL DEFAULT 0'}}

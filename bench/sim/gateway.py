@@ -68,7 +68,7 @@ class FakeGateway:
 
     def build(self,profile):
         ctx=self.contexts[profile]
-        store=Store(ctx._manager.home_path/'plugin-data/cadence/pulse.db',self.clock)
+        store=Store(ctx._manager.home_path/'plugin-data/cadence/cadence.db',self.clock)
         settings={'timezone':'UTC',**self.scenario.get('settings',{})}
         settings={k:self.expand(v) if isinstance(v,str) else v for k,v in settings.items()}
         settings.update(self.scenario.get('profile_settings',{}).get(profile,{}))
@@ -118,7 +118,7 @@ class FakeGateway:
                     conversation_history=[{'role':'user','content':text,'platform_message_id':mid}])
                 if context:
                     for line in context.get('context','').splitlines():
-                        if '/pulse watch' in line:self.cards.append({'t':self.t,'session_key':session['key'],'text':line})
+                        if '/cadence watch' in line:self.cards.append({'t':self.t,'session_key':session['key'],'text':line})
                 if finish:
                     transformed=e.intake.transform_llm_output(session_id=session['sid'],turn_id=turn,response_text=response_text)
                     answer=transformed if transformed is not None else response_text

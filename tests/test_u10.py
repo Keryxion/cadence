@@ -118,7 +118,7 @@ def test_R10_A2_non_tip_switch_orphans_and_notices_once(engine, kind):
         current = e.store.get_wake(old.id)
         assert (current.status, current.status_reason) == ('orphaned', 'session_switched')
     assert e.store.get_wake(builtin.id).armed_session_id == 'sid2'
-    notice = '3 wakes armed in your previous conversation were stopped; /pulse list'
+    notice = '3 wakes armed in your previous conversation were stopped; /cadence list'
     assert notice in context['context']
     admitted(e, 'owner-2')
     again = e.intake.pre_llm_call(session_id='sid2', turn_id='human2', user_message='hello', platform='telegram')
@@ -147,7 +147,7 @@ def test_R10_A2_marker_first_orphans_after_one_silent_turn(engine, kind):
     assert machine is None or 'previous conversation' not in machine.get('context', '')
     admitted(e)
     human = e.intake.pre_llm_call(session_id='sid2', turn_id='human', user_message='hi', platform='telegram')
-    assert '1 wakes armed in your previous conversation were stopped; /pulse list' in human['context']
+    assert '1 wakes armed in your previous conversation were stopped; /cadence list' in human['context']
 
 
 @pytest.mark.parametrize('marker_first', [False, True])
@@ -207,7 +207,7 @@ from cadence.poller import Poller
 from cadence.policy import Policy
 from cadence import probes
 home=Path(sys.argv[2]); home.mkdir(parents=True, exist_ok=True)
-clock=FakeClock(); store=Store(home/'pulse.db',clock)
+clock=FakeClock(); store=Store(home/'cadence.db',clock)
 store.upsert_session(Session(KEY,'telegram','dm','unit','sid',clock.now(),clock.now(),'episode'))
 e=Poller(GatewayCtx(home),store,Policy(clock=clock,timezone='UTC'),clock,
          session_key_fn=lambda:KEY,paused=lambda:False,compression_tip=lambda sid:sid)
@@ -456,7 +456,7 @@ def test_R10_B5_every_builtin_checkin_has_optout(engine):
     e = engine; session(e, first_notice_sent=True)
     e.policy = replace(e.policy, owner_silent_checkin=True)
     e.clock.advance(86401); e.tick()
-    assert 'stop checking in' in e.ctx.calls[-1][0] and '/pulse off' in e.ctx.calls[-1][0]
+    assert 'stop checking in' in e.ctx.calls[-1][0] and '/cadence off' in e.ctx.calls[-1][0]
 
 
 @pytest.mark.parametrize('kind', ['at', 'file'])
@@ -480,7 +480,9 @@ def test_R10_B6_skill_template_works_on_wake_and_watcher(engine, kind):
     e = engine; w = arm(e, kind, trigger_json={'path':'fake'} if kind=='file' else {})
     if kind=='file': e.probe_runner=lambda w:{'fire':True,'identity':'1','message':'changed'}
     e.tick(); start(e)
-    assert e.tool.handle(template, session_id='sid').get('ok')
+    from cadence.responsibilities import Responsibilities
+    e.responsibilities=Responsibilities(e)
+    assert e.responsibilities.handle('respond',template,session_id='sid').get('ok')
     o, = e.store.list_occurrences(w.id)
     assert o.outcome==template['outcome'] and o.notify==template['notify']
 
@@ -495,7 +497,7 @@ def test_R10_B7_watch_reply_tells_owner_to_ask_agent(runtime):
 def test_R10_Q2_owner_why_uses_you_asked(runtime):
     commands.handle('add in 2h Finish report', runtime)
     w, = runtime.get_engine().store.list_wakes()
-    assert 'Why: you asked (via /pulse add)' in commands.handle('why '+w.id, runtime)
+    assert 'Why: you asked (via /cadence add)' in commands.handle('why '+w.id, runtime)
 
 
 def test_R10_Q3_paused_list_has_no_next_due(runtime):

@@ -1,4 +1,4 @@
-"""Compact /pulse controls; gateway-bound session is the only authority."""
+"""Compact /cadence controls; gateway-bound session is the only authority."""
 from datetime import datetime, timedelta
 import json
 import re
@@ -14,7 +14,7 @@ from .tool import session_env, Infeasible
 DURATIONS = _DURATION.pattern+r'(?:\s*(?:,\s*)?(?:and\s*)?'+_DURATION.pattern+r')*'  # one way to split whitespace: linear
 LIST_RECENT_FINISHED = 10
 FINISHED_STATUSES = FINISHED_WAKE_STATUSES
-HELP = ('/pulse status | desk | list [all] | ledger [7d] | why <id> | add in 2h <note> | '
+HELP = ('/cadence status | desk | list [all] | ledger [7d] | why <id> | add in 2h <note> | '
         'add every 1d at 09:00 <note> | add when silent 24h <note> | '
         'role every 1d [at 09:00] <charter> | role self <charter> | budget <id> <n>/day | '
         'pause|resume|cancel <id|all> [for 3d] | off|on | '
@@ -28,7 +28,7 @@ def messages_count(delivered, in_flight):
 
 
 def _activation(engine, session, wake):
-    if not session.enabled: raise ValueError('this chat is off; use /pulse on')
+    if not session.enabled: raise ValueError('this chat is off; use /cadence on')
     gate = engine.policy.creation_gate(session_key=session.session_key, platform=session.platform,
         chat_type=session.chat_type, allow_gateway_injection=engine.injection_allowed(),
         creator='user', kind=wake.kind,
@@ -85,7 +85,7 @@ def _time(epoch):
 
 
 def _paused(engine, wake):
-    # Only a governor pause takes keep; only a timed /pulse pause resumes on its own (resume_timed).
+    # Only a governor pause takes keep; only a timed /cadence pause resumes on its own (resume_timed).
     if wake.status_reason.startswith('governor:'): return 'paused · resumes on keep/resume'
     until = float(engine.store.get_meta('resume_after:'+wake.id) or 0) if wake.status_reason == 'command' else 0
     return f'paused · resumes {_time(until)} or on resume' if until else 'paused · resumes on resume'
@@ -192,7 +192,7 @@ def _clamps(clamped):
 
 def handle(raw_args, runtime):
     key = session_env('HERMES_SESSION_KEY')
-    if not key or key == 'default': return 'Error: /pulse needs the invoking gateway session.'
+    if not key or key == 'default': return 'Error: /cadence needs the invoking gateway session.'
     try:
         engine = runtime.get_engine()
         engine.refresh()
@@ -210,8 +210,8 @@ def handle(raw_args, runtime):
                 engine.store.cas_session(key,{'platform':session.platform,'chat_type':session.chat_type,'chat_id':session.chat_id},**bound)
                 session=engine.store.get_session(key)
             if session is None or not gateway_platform(session.platform):
-                return 'Error: /pulse needs a known messaging-gateway session.'
-            if engine.policy.dm_only and session.chat_type != 'dm': return 'Error: /pulse requires a DM.'
+                return 'Error: /cadence needs a known messaging-gateway session.'
+            if engine.policy.dm_only and session.chat_type != 'dm': return 'Error: /cadence requires a DM.'
             if action == 'desk' and not rest:
                 from .desk import render_desk
                 return render_desk(engine,session,clock=engine.clock,timezone=engine.policy.resolved_timezone(),policy=engine.policy)
@@ -256,7 +256,7 @@ def handle(raw_args, runtime):
                 visible = wakes if rest=='all' else [w for w in wakes if w.status not in FINISHED_STATUSES or w.id in recent]
                 lines = [_item(engine,w) for w in visible]
                 hidden = len(wakes)-len(visible)
-                if hidden: lines.append(f'{hidden} older finished item{"s" if hidden!=1 else ""} hidden; /pulse list all')
+                if hidden: lines.append(f'{hidden} older finished item{"s" if hidden!=1 else ""} hidden; /cadence list all')
                 return '\n'.join(lines) or 'No wakes or watchers in this chat.'
             if action == 'ledger':
                 if not re.fullmatch(r'\d+d',rest or '7d'): raise ValueError('ledger expects 7d')
@@ -282,7 +282,7 @@ def handle(raw_args, runtime):
                 return f'Cadence {action} for this chat.'
             if action == 'quiet':
                 raise ValueError('Cadence no longer has quiet hours: wakes fire when they are due, at any hour. '
-                                 'Use /pulse pause all for 8h to hold this chat\'s wakes.')
+                                 'Use /cadence pause all for 8h to hold this chat\'s wakes.')
             if action not in {'why','pause','resume','cancel','ok','keep','slow','stop','watch'}:
                 raise ValueError(HELP)
             match = re.fullmatch(r'(\S+)(?: for (\S+))?',rest)
@@ -299,7 +299,7 @@ def handle(raw_args, runtime):
             lines = []
             for wake in wakes:
                 if action == 'why':
-                    reason=wake.reason or ('you asked (via /pulse add)' if wake.creator=='user' else 'you asked in chat' if owner_requested(wake) else 'the named task')
+                    reason=wake.reason or ('you asked (via /cadence add)' if wake.creator=='user' else 'you asked in chat' if owner_requested(wake) else 'the named task')
                     return f'{_item(engine,wake)}\nWhy: {reason}\nNote: {wake.note}\nStatus reason: {wake.status_reason or "none"}\nFires {wake.fires}, no-ops {wake.noop_streak}, ignored {wake.ignored_streak}, errors {wake.error_streak}\n'+_occurrences(engine,wake)
                 try:
                     with engine.store.atomic():
@@ -320,17 +320,17 @@ def _transition(engine,session,wake,action,seconds):
         raise ValueError('item is terminal')
     if action in {'keep','slow'}:
         if wake.status!='paused' or not wake.status_reason.startswith('governor:'):
-            raise ValueError('keep/slow answer a governor card; use /pulse resume')
+            raise ValueError('keep/slow answer a governor card; use /cadence resume')
         _activation(engine,session,wake)
         result=governor.owner_answer(engine,wake,action)
         if not result.get('ok'): raise ValueError(result.get('error','owner answer failed'))
         return _item(engine,engine.store.get_wake(wake.id)) + (f'\nNew cadence: {result["cadence_s"]:g} seconds.\n{result.get("cache","")}' if action=='slow' else '')
     if wake.status=='proposed' and action not in {'ok','cancel','stop'}:
-        raise ValueError('proposed item: approve with /pulse ok or cancel')
+        raise ValueError('proposed item: approve with /cadence approve or cancel')
     if action=='pause' and wake.status!='active': raise ValueError('pause needs an active item')
     if action=='watch' and wake.status not in {'active','paused'}: raise ValueError('watch needs an active or paused item')
     if action=='watch' and (wake.role or wake.trigger_json.get('own_time')):
-        raise ValueError('roles and own time stay recurring; use /pulse slow, /pulse budget or /pulse cancel')
+        raise ValueError('roles and own time stay recurring; use /cadence slow, /cadence budget or /cadence cancel')
     if action=='resume' and wake.status!='paused': raise ValueError('resume needs a paused item')
     if action=='ok' and wake.status!='proposed': raise ValueError('ok needs a proposed item')
     clamps={}

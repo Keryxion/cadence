@@ -209,8 +209,8 @@ def test_R3_R6_pulse_is_never_human_reply(engine,hook):
     session(e,unanswered_count=2)
     before=e.store.get_session(KEY)
     e.clock.advance(60)
-    if hook=='pre_gateway_dispatch':e.intake.pre_gateway_dispatch(event=SimpleNamespace(internal=False,text='/pulse status',message_id='cmd',source=SimpleNamespace(platform=SimpleNamespace(value='telegram'),chat_type='dm',chat_id='unit',is_bot=False)))
-    else:e.intake.pre_llm_call(session_id='sid',turn_id='cmd',user_message='/pulse status',platform='telegram')
+    if hook=='pre_gateway_dispatch':e.intake.pre_gateway_dispatch(event=SimpleNamespace(internal=False,text='/cadence status',message_id='cmd',source=SimpleNamespace(platform=SimpleNamespace(value='telegram'),chat_type='dm',chat_id='unit',is_bot=False)))
+    else:e.intake.pre_llm_call(session_id='sid',turn_id='cmd',user_message='/cadence status',platform='telegram')
     after=e.store.get_session(KEY)
     assert e.store.get_wake(w.id).status=='active'
     assert (after.last_human_at,after.episode_id,after.unanswered_count)==(before.last_human_at,before.episode_id,2)
@@ -219,7 +219,7 @@ def test_R3_R6_pulse_is_never_human_reply(engine,hook):
 def test_R3_R6_command_never_credits_engagement(engine):
     w=arm(engine); engine.tick(); start(engine); end(engine,'progress',True)
     engine.clock.advance(60)
-    engine.intake.pre_gateway_dispatch(event=SimpleNamespace(internal=False,text='/pulse status'))
+    engine.intake.pre_gateway_dispatch(event=SimpleNamespace(internal=False,text='/cadence status'))
     assert engine.store.get_wake(w.id).engaged==0
     assert engine.store.get_session(KEY).unanswered_count==1
 
@@ -255,7 +255,7 @@ def test_R3_M1_owner_card_history(runtime,monkeypatch,answer):
 @pytest.mark.parametrize('answer',['keep','slow'])
 def test_R3_M1_card_answers_refuse_plain_pause(runtime,answer):
     w=arm(runtime.get_engine(),'every',status='paused',status_reason='command',trigger_json={'every':'1h'})
-    assert 'keep/slow answer a governor card; use /pulse resume' in commands.handle(f'{answer} {w.id}',runtime)
+    assert 'keep/slow answer a governor card; use /cadence resume' in commands.handle(f'{answer} {w.id}',runtime)
 
 
 @pytest.mark.parametrize('action,state',[('pause','proposed'),('resume','proposed'),('pause','paused'),('resume','active'),('watch','proposed')])
@@ -305,12 +305,12 @@ def test_R3_R9_governor_card(runtime):
     e.store.set_meta('card:'+w.id,'noop')
     admit(e,'human')
     context=e.intake.pre_llm_call(session_id='sid',turn_id='human',user_message='hello',platform='telegram')['context']
-    assert f'/pulse watch {w.id}' in context
+    assert f'/cadence watch {w.id}' in context
 
 
 def test_R3_R9_event_docs():
     root=Path(__file__).resolve().parents[1]
-    assert 'selected by `trigger.kind`' in (root/'README.md').read_text()
+    assert '`subagent_done`' in (root/'README.md').read_text()
 
 
 def test_R3_R9_file_skill():
@@ -324,9 +324,9 @@ def test_R3_R9_file_skill():
 
 def test_R3_R10_recording_context_registers_everything(fake_ctx):
     registration.register(fake_ctx)
-    assert set(fake_ctx.tools)=={'pulse','request','follow_up','get_time'}
+    assert set(fake_ctx.tools)=={'responsibility','trigger','respond','request','follow_up','get_time'}
     assert set(fake_ctx.hooks)==set(registration.HOOKS)
-    assert set(fake_ctx.commands)=={'pulse'}
+    assert set(fake_ctx.commands)=={'cadence'}
     assert set(fake_ctx.skills)=={'cadence-usage','cadence-report-problem'}
 
 

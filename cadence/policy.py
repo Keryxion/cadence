@@ -90,6 +90,9 @@ class Policy:
     interruption_initial: int = 15
     interruption_refill_seconds: float = 300.0
     daily_cost_limit_usd: float = 0.0
+    execution_capacity: int = 30
+    execution_refill_per_hour: float = 1.25
+    responsibility_budget_max: int = 120
     own_time_hours: int = 0
     role_turns_per_day_default: int = 6
     role_turns_per_day_max: int = 12
@@ -172,6 +175,8 @@ class Policy:
                      profile_timezone=profile_timezone)
         if result.agent_can_create not in {"yes", "ask_first", "no"}:
             raise ValueError("agent_can_create must be yes, ask_first, or no")
+        if result.execution_capacity < 1 or result.execution_refill_per_hour <= 0 or result.responsibility_budget_max < 30:
+            raise ValueError('execution capacity/refill must be positive; responsibility budget maximum must be at least 30')
         role_max = max(1, result.role_turns_per_day_max)
         result = replace(result, role_turns_per_day_max=role_max,
                          role_turns_per_day_default=max(1, min(result.role_turns_per_day_default, role_max)),
@@ -322,6 +327,7 @@ class Policy:
         return Gate(True, status=wake.status)
 
     def interval_floor(self, wake: Wake, *, probe_gated: bool = False) -> float:
+        if wake.managed and wake.responsibility_id: return 0
         if wake.babysit:
             return max(300, self.min_interval_minutes * 60)
         floor = self.min_interval_minutes * 60
@@ -333,6 +339,10 @@ class Policy:
         # An owner reminder is never bounded below the general lifetime, so raising either keeps it valid.
         reminder = owner_class(wake) and one_shot(wake) and self.max_reminder_days >= self.max_lifetime_days
         return 'max_reminder_days' if reminder else 'max_lifetime_days'
+
+    def parent_lifetime(self, wake):
+        return bool(wake.managed and wake.responsibility_id and not wake.role
+                    and wake.kind in RECURRING_KINDS | EVENT_KINDS)
 
     def max_life_s(self, wake):
         setting = self.lifetime_setting(wake)
@@ -370,7 +380,7 @@ class Policy:
                 raise ValueError('budget.turns_per_day must be an integer')
             change('budget_turns_per_day', max(1, min(value, self.role_turns_per_day_max)),
                    'budget.turns_per_day', 'role_turns_per_day_max')
-        floor = self.interval_floor(wake, probe_gated=probe_gated)
+        floor = 0 if wake.managed and wake.responsibility_id else self.interval_floor(wake, probe_gated=probe_gated)
         floor_rule = "babysit_floor" if wake.babysit else ("agent_ungated_floor" if agent_authored(wake) and not probe_gated else "min_interval")
         if wake.kind in RECURRING_KINDS:
             if wake.pacing_min_s is not None:
@@ -388,6 +398,8 @@ class Policy:
                 # permitted next scheduled time rather than a rewritten cron.
                 if value is None and wake.kind in {"cron", "self"}:
                     value = max(floor, 86400 // self.role_budget(wake)) if wake.role and wake.kind == 'self' else floor
+                if value == 0 and wake.kind == 'cron':
+                    continue
                 if value is not None:
                     value = parse_duration(value)
                     bounded = max(value, floor, minimum)
@@ -404,7 +416,10 @@ class Policy:
             if old != interval:
                 clamped["check_every"] = f"{old} → {interval} (probe_floor)"
         now = self.clock.now()
-        if not ((wake.role or wake.trigger_json.get('builtin')) and wake.expires_at is None):
+        if self.parent_lifetime(wake):
+            if wake.expires_at is not None and (not math.isfinite(wake.expires_at) or wake.expires_at <= now):
+                raise ValueError("expiry must be in the future")
+        elif not ((wake.role or wake.trigger_json.get('builtin')) and wake.expires_at is None):
             max_life = self.max_life_s(wake)
             # The implicit expiry stays max_lifetime_days for every wake; only a long owner
             # reminder outlives it, via the hard end and Tool.feasible's due-based grace.

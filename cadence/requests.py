@@ -131,8 +131,19 @@ class Requests:
         key = row['target'] if kind == 'ask' else row['source']
         # True: the host scheduled it (admission is decided later, off this thread).
         # False: the host refused before scheduling anything. None: it raised, so nobody knows.
+        manager = getattr(self.engine, 'responsibilities', None)
+        ticket = 'request:' + row['id'] + ':' + kind
+        if manager:
+            with self.store.atomic():
+                if not manager.budgets.reserve(ticket, [manager.global_scope()]):
+                    self.store.set_meta('request_wait:' + ticket, json.dumps([row['id'],kind]))
+                    return True
+                self.store.set_meta('request_wait:' + ticket, '')
         try:
-            return bool(self.engine.ctx.inject_message(self._envelope(row, kind), session_key=key))
+            accepted = bool(self.engine.ctx.inject_message(self._envelope(row, kind), session_key=key))
+            if manager and not accepted:
+                with self.store.atomic(): manager.budgets.release(ticket)
+            return accepted
         except Exception:
             return None
 
@@ -269,6 +280,7 @@ class Requests:
 
     def flush(self):
         with self.lock:
+            self.flush_budget_holds()
             with self.store.atomic():
                 rows = self.store.connection.execute("SELECT * FROM session_requests WHERE outcome IS NOT NULL AND answer_state='pending'").fetchall()
                 for row in rows:
@@ -279,6 +291,25 @@ class Requests:
                 if not self._eligible() or not authorized or not self._send(row, 'answer'):
                     with self.store.atomic():
                         self.store.connection.execute("UPDATE session_requests SET answer_state='unknown' WHERE id=?", (row['id'],))
+
+    def flush_budget_holds(self):
+        manager = getattr(self.engine,'responsibilities',None)
+        if not manager: return
+        rows = self.store.connection.execute("SELECT key,value FROM meta WHERE key LIKE 'request_wait:%' AND value!=''").fetchall()
+        for held in rows:
+            rid,kind=json.loads(held['value'])
+            row=self._row(rid)
+            ticket='request:' + rid + ':' + kind
+            if not row or kind=='ask' and (row['outcome'] or row['request_sid']) or kind=='answer' and row['answer_sid']:
+                with self.store.atomic():
+                    self.store.set_meta(held['key'],'')
+                    manager.budgets.release(ticket)
+                continue
+            if not self._eligible() or not self._authorized(row): continue
+            if self._send(row,kind) is False:
+                with self.store.atomic():
+                    self.store.set_meta(held['key'],'')
+                    manager.budgets.release(ticket)
 
     def expire(self):
         with self.lock, self.store.atomic():
@@ -291,7 +322,36 @@ class Requests:
             self.store.connection.execute("UPDATE session_requests SET state='ended',outcome='unknown',summary=? "
                 'WHERE outcome IS NULL AND deadline<=?',
                 ('No answer within 60 seconds. The target may have acted. Check it before retrying or doing the work here.', now))
+        manager=getattr(self.engine,'responsibilities',None)
+        if manager:
+            with self.store.atomic():
+                for held in self.store.connection.execute("SELECT DISTINCT ticket FROM reservations WHERE ticket LIKE 'request:%'").fetchall():
+                    ticket=held['ticket']
+                    _,rid,kind=ticket.split(':',2)
+                    row=self._row(rid)
+                    if not row or kind=='ask' and (row['outcome'] or row['request_sid']) or kind=='answer' and row['answer_sid']:
+                        manager.budgets.release(ticket)
         self.flush()
+
+    def record_usage(self, kw, turn):
+        from . import cache
+        from .model import Wake
+        row=self._row(turn[0])
+        key=row['target'] if turn[1]=='ask' else row['source']
+        usage=kw.get('usage') or {}
+        def count(*names):
+            for name in names:
+                value=usage.get(name) if isinstance(usage,dict) else getattr(usage,name,None)
+                if value is not None: return max(0,int(value))
+            return 0
+        route=cache.route_key(kw.get('provider'),kw.get('model'),kw.get('base_url'))
+        try:
+            price=cache.cost(route,prompt=count('prompt_tokens','input_tokens'),read=count('cache_read_tokens'),
+                written=count('cache_write_tokens'),out=count('completion_tokens','output_tokens'),ttl=None)
+        except Exception: price=None
+        with self.store.atomic():
+            self.store.add_agent_spend(Wake(key,'Request turn','at'), 'request:' + turn[0] + ':' + turn[1],
+                self.engine.policy.resolved_timezone(),round(price*1e6) if price is not None else 0,int(price is None))
 
     def hook(self, name, **kw):
         with self.lock:
@@ -303,11 +363,13 @@ class Requests:
                 key = self.engine.tool.session_key_fn()
                 text = kw.get('user_message', '')
                 self.origins.pop(sid, None)
-                self.turns.pop(sid, None)
+                previous=self.turns.pop(sid,None)
                 if not isinstance(text, str) or not text.startswith(PREFIX):
                     if sid and tid: self.origins[sid] = (key, tid)
                     return None
                 def refuse(reason):
+                    if previous and previous[2]==tid:
+                        self.turns[sid]=previous
                     # Say why in the log: a silently dropped turn is otherwise undiagnosable.
                     LOG.info('cadence request envelope refused in %s: %s', key, reason)
                     return {'action': 'block', 'message': '[SILENT]'}
@@ -325,6 +387,16 @@ class Requests:
                     if not self._eligible(): return refuse('cadence is off, paused or not serving here')
                     if not self._authorized(row): return refuse('a participant is no longer named')
                     if key != row['target' if kind == 'ask' else 'source']: return refuse('delivered to the wrong conversation')
+                    if kind == 'ask' and (row['request_sid'] or row['outcome'] or self.engine.clock.now() >= row['deadline']):
+                        return refuse('request already started or ended')
+                    if kind == 'answer' and (row['answer_sid'] or not row['outcome']):
+                        return refuse('answer already started or not ready')
+                    manager = getattr(self.engine,'responsibilities',None)
+                    cost=self.store.agent_cost_today(key,self.engine.policy.resolved_timezone())['cost_microusd']/1e6
+                    cost_held=self.engine.policy.daily_cost_limit_usd>0 and cost>=self.engine.policy.daily_cost_limit_usd
+                    if manager and (cost_held or not manager.budgets.start('request:' + row['id'] + ':' + kind, [manager.global_scope()])):
+                        self.store.set_meta('request_wait:request:' + row['id'] + ':' + kind,json.dumps([row['id'],kind]))
+                        return refuse('execution capacity unavailable; request remains pending')
                     if kind == 'ask':
                         if row['request_sid']: return refuse('request already delivered')
                         if row['outcome']: return refuse('request already ended')
@@ -350,6 +422,27 @@ class Requests:
                         'do not retry or perform the work again without checking. Summary (quoted data): ' + json.dumps(row['summary'])}
             turn = self.turns.get(sid)
             if not turn or (tid and turn[2] != tid): return None
+            manager=getattr(self.engine,'responsibilities',None)
+            if manager and name=='post_api_request':
+                self.record_usage(kw,turn)
+            if manager and turn[1]=='answer':
+                ticket='notification:request:' + turn[0] + ':answer'
+                if name=='transform_llm_output':
+                    with self.store.atomic():
+                        row=self._row(turn[0])
+                        session=self.store.get_session(row['source'])
+                        if not self._eligible() or not session.enabled or session.unanswered_count>=self.engine.policy.max_unanswered or not manager.budgets.reserve(ticket,[manager.notification_scope()]):
+                            return '[SILENT]'
+                if name=='on_session_end':
+                    with self.store.atomic():
+                        reserved=self.store.connection.execute('SELECT 1 FROM reservations WHERE ticket=?',(ticket,)).fetchone()
+                        if reserved and not (kw.get('failed') or kw.get('interrupted') or kw.get('completed') is False):
+                            manager.budgets.start(ticket,[manager.notification_scope()])
+                            row=self._row(turn[0])
+                            session=self.store.get_session(row['source'])
+                            self.store.cas_session(session.session_key,{'unanswered_count':session.unanswered_count},
+                                                   unanswered_count=session.unanswered_count+1)
+                        manager.budgets.release(ticket)
             if name == 'transform_llm_output' and turn[1] == 'ask': return '[SILENT]'
             if name == 'on_session_end':
                 self.turns.pop(sid, None)

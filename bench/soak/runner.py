@@ -67,7 +67,7 @@ class Runner:
         self.clock, self.until_day = clock or Clock(), until_day
         self.zone = ZoneInfo(schedule['tz'])
         self.hermes_source, self.hermes_version_file = hermes_source, hermes_version_file
-        self.pulse = pulse or Pulse(self.home/'plugin-data/cadence/pulse.db')
+        self.pulse = pulse or Pulse(self.home/'plugin-data/cadence/cadence.db')
         self.transcript = transcript or Transcript(self.home/'state.db', now=self.clock.now)
         self.rows = [json.loads(line) for line in self.path.read_text().splitlines()] if self.path.exists() else []
         self.episodes = deepcopy(schedule['episodes'])
@@ -153,9 +153,9 @@ class Runner:
                 text = message['text']; ok = bool(replies)
                 if text == '/new': ok &= sid is not None and sid == before.get('hermes_session_id')
                 elif text == '/approve': ok &= sid is not None and sid != before.get('hermes_session_id')
-                elif text.startswith('/pulse cancel '):
+                elif text.startswith('/cadence cancel '):
                     wake = self.pulse.wake(text.split()[-1]); ok &= bool(wake and wake['status'] == 'cancelled')
-                elif text == '/pulse on': ok &= bool(session and session['enabled'])
+                elif text == '/cadence on': ok &= bool(session and session['enabled'])
                 if ok:
                     self.emit('command_reply',eid,key=key,message_id=message['id'],replies=replies,session_id=sid,before=before,snapshot=self.snapshot())
                     self.pending.remove(item)
@@ -288,11 +288,11 @@ class Runner:
         for w in self.wakes(e,all_created=True):
             w = self.pulse.wake(w['id'])
             if w and w['status'] in ('active','proposed','paused'):
-                targets.append((f'setup_cancel:{w["id"]}', f'/pulse cancel {w["id"]}', 'wake_still_active'))
+                targets.append((f'setup_cancel:{w["id"]}', f'/cadence cancel {w["id"]}', 'wake_still_active'))
         if not targets and not self.has('cleanup_verified', eid): self.emit('cleanup_verified', eid, snapshot=self.snapshot())
         session = self.pulse.session(self.chat_key)
         if self.has('cleanup_verified', eid) and not (session and session['enabled']):
-            targets.append(('setup_on', '/pulse on', 'chat_disabled'))
+            targets.append(('setup_on', '/cadence on', 'chat_disabled'))
         # Unconfirmed commands stay in the evidence; only their first 120 s block retries.
         if any(item[0] == eid and (item[4] != 'setup' or now < epoch(item[2]['date'])+120) for item in self.pending): return False
         for target, text, reason in targets:
@@ -382,12 +382,12 @@ class Runner:
         if not self.preflight(): return False  # Recheck usage/wakes after waiting for active hours.
         preflight = next(r for r in reversed(self.rows) if r['kind'] == 'preflight')
         old_sid = preflight['session_id']
-        for key, text in [('new', '/new'), ('approve','/approve'), ('status', '/pulse status')]:
+        for key, text in [('new', '/new'), ('approve','/approve'), ('status', '/cadence status')]:
             if not self.setup_send(setup, key, text): return False
         for w in self.pulse.wakes(self.chat_key):
             if w['status'] in ('active', 'proposed', 'paused') and not (decoded(w['trigger_json']) or {}).get('builtin'):
-                if not self.setup_send(setup, 'cancel:'+w['id'], '/pulse cancel '+w['id']): return False
-        if not self.pulse.session(self.chat_key)['enabled'] and not self.setup_send(setup, 'on', '/pulse on'): return False
+                if not self.setup_send(setup, 'cancel:'+w['id'], '/cadence cancel '+w['id']): return False
+        if not self.pulse.session(self.chat_key)['enabled'] and not self.setup_send(setup, 'on', '/cadence on'): return False
         session = self.pulse.session(self.chat_key)
         state = self.pulse.baseline_state(self.chat_key, self.schedule['start'])
         sid = self.transcript.current_session(self.chat_key)
